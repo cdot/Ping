@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+    <PreferenceCategory android:title="@string/menuitem_settings">
+        <CheckBoxPreference
+            android:defaultValue="false"
+            android:key="Demo"
+            android:title="@string/demo_mode" />
+        <EditTextPreference
+            android:defaultValue="2"
+            android:digits="0123456789"
+            android:inputType="numberDecimal"
+            android:key="Sensitivity"
+            android:singleLine="true"
+            android:title="@string/sensitivity" />
+        <ListPreference
+            android:entries="@array/noise_options"
+            android:entryValues="@array/noise_values"
+            android:key="Noise"
+            android:title="@string/noise" />
+        <ListPreference
+            android:entries="@array/range_options"
+            android:entryValues="@array/range_values"
+            android:key="Range"
+            android:title="@string/range" />
+        <EditTextPreference
+            android:defaultValue="@string/sample_file"
+            android:inputType="textUri"
+            android:key="SampleFile"
+            android:title="@string/sample_file" />
+    </PreferenceCategory>
+</PreferenceScreen>

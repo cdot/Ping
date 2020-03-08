@@ -1,0 +1,87 @@
+<resources>
+    <string name="action_settings">Settings</string>
+    <string name="app_name">Ping</string>
+    <string name="battery">Battery</string>
+    <string name="cancel">Cancel</string>
+    <string name="cannot_bind_service">The system couldn\'t find the bluetooth service, or your client doesn\'t have permission to bind to it</string>
+    <string name="click_to_pair">Click to Pair</string>
+    <string name="connected_ok">Connect OK</string>
+    <string name="connecting">Trying to connect to Bluetooth %1$s device %2$s</string>
+    <string name="demo_mode">Demo Mode</string>
+    <string name="depth">Depth</string>
+    <string name="devices">Devices</string>
+    <string-array name="device_types">
+        <item>Unknown</item>
+        <item>Classic</item>
+        <item>LE</item>
+        <item>Dual</item>
+    </string-array>
+    <string name="fish_depth">Fish Depth</string>
+    <string name="fish_type">Fish Type</string>
+    <string name="land_flag">Land?</string>
+    <string name="OK">OK</string>
+    <string name="menuitem_clear_settings">Clear Settings</string>
+    <string name="menuitem_select_device">Select Device</string>
+    <string name="menuitem_settings">Settings</string>
+    <string name="noise">Noise</string>
+    <string-array name="noise_options">
+        <item>Off</item>
+        <item>Low</item>
+        <item>Medium</item>
+        <item>High</item>
+    </string-array>
+    <string-array name="noise_values">
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+        <item>3</item>
+    </string-array>
+    <string name="not_paired">Not paired</string>
+    <string-array name="disconnect_reason">
+        <item>Unable to connect to device</item>
+        <item>Device connection was lost</item>
+    </string-array>
+    <string name="no_device">No bluetooth device selected</string>
+    <string name="no_bluetooth">No bluetooth support on this device</string>
+    <string name="paired">Paired</string>
+    <string name="range">Range</string>
+    <string-array name="range_options">
+        <item>3m</item>
+        <item>6m</item>
+        <item>9m</item>
+        <item>18m</item>
+        <item>24m</item>
+        <item>36m</item>
+        <item>Auto</item>
+    </string-array>
+    <string-array name="range_values">
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+        <item>3</item>
+        <item>4</item>
+        <item>5</item>
+        <item>6</item>
+    </string-array>
+    <string-array name="rationales">
+        <item>Permission to access Bluetooth devices is required</item>
+        <item>Permission to administer Bluetooth devices is required</item>
+        <item>Permission to access the fine location of this device is required for Bluetooth</item>
+    </string-array>
+    <string-array name="required_permissions">
+        <item>android.permission.BLUETOOTH</item>
+        <item>android.permission.BLUETOOTH_ADMIN</item>
+        <item>android.permission.ACCESS_FINE_LOCATION</item>
+    </string-array>    <string name="sample_data">XX.XX</string>
+    <string name="sample_file">Sample File</string>
+    <string name="sensitivity">Sensitivity</string>
+    <string name="scan">Scan for devices</string>
+    <string name="scanning">Scanning for devices&#x2026;</string>
+    <string-array name="supported_device_names">
+        <item>TSBK Fish</item>
+        <item>Fish Helper</item>
+        <item>D1 Fish Finder</item>
+    </string-array>
+    <string name="strength">Strength</string>
+    <string name="temperature">Temperature</string>
+</resources>
