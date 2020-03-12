@@ -150,16 +150,20 @@ public class BluetoothLEService extends BluetoothService {
         // Once the connect state changes, service discovery should start
     }
 
+    // Disconnect the currently connected device
     @Override
     public void disconnect() {
-        if (mBluetoothGatt != null)
-            mBluetoothGatt.disconnect();
+        if (mBluetoothGatt == null)
+            return;
+        mBluetoothGatt.disconnect();
+        mBluetoothGatt = null;
     }
 
     @Override
     public void close() {
-        if (mBluetoothGatt != null)
-            mBluetoothGatt.close();
+        if (mBluetoothGatt == null)
+            return;
+        mBluetoothGatt.close();
         mBluetoothGatt = null;
     }
 

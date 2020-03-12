@@ -8,11 +8,11 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.res.Resources;
+import android.location.Location;
 import android.os.Bundle;
 
 import android.os.Handler;
 import android.os.Message;
-import android.preference.PreferenceManager;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.Menu;
@@ -26,13 +26,18 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
-import com.cdot.bluetooth.BluetoothClassicService;
 import com.cdot.bluetooth.BluetoothLEService;
 
+import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationCallback;
+import com.google.android.gms.location.LocationRequest;
+import com.google.android.gms.location.LocationResult;
+import com.google.android.gms.location.LocationServices;
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.google.android.material.snackbar.Snackbar;
+
 import java.lang.ref.WeakReference;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -40,27 +45,33 @@ import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
 
-import static com.cdot.ping.DeviceRecord.DEVICE_ADDRESS;
-
 /**
- * The main activity in the app, displays sonar data coming from the device
+ * The main activity in the app. This really should just be the UI, as all other activity should
+ * happen independently in services and background threads.
  */
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";
 
+    // Messages that have to be handled in onActivityResult/onRequestPermissionsResult
     private final static int REQUEST_ENABLE_BLUETOOTH = 1;
     private static final int REQUEST_PERMISSIONS = 2;
-    private static final int REQUEST_SELECT_DEVICE = 3;
-    private static final int REQUEST_AUTO_CONNECT = 4;
-    private static final int REQUEST_SETTINGS_CHANGED = 5;
+    private static final int REQUEST_SETTINGS_CHANGED = 3;
 
+    // Chatters talk to devices
     private Map<Integer, Chatter> mChatters = new HashMap<>();
 
-    private boolean mBluetoothIsStarting = false; // is bluetooth started?
+    BluetoothAdapter mBluetoothAdapter = null;
     private int mBluetoothStatus = Chatter.STATE_NONE;
+
+    // View for seeing sample effects
     private SonarView mSonarView;
 
-    private WeakReference<MainActivity> whiff = new WeakReference<>(this);
+    private WeakReference<MainActivity> weakThis = new WeakReference<>(this);
+
+    // Sample collation and serialisation
+    private Sampler mSampler = new Sampler();
+
+    private View mMainView = null;
 
     // Handler for messages coming from Chat interfaces
     static class ChatHandler extends Handler {
@@ -72,134 +83,107 @@ public class MainActivity extends AppCompatActivity {
 
         public void handleMessage(Message msg) {
             MainActivity act = mA.get();
+            Resources r = act.getResources();
             switch (msg.what) {
                 case Chatter.MESSAGE_STATE_CHANGE:
-                    Log.d(TAG, "Received state change " + msg.arg1);
-                    switch (msg.arg1) {
-                        case Chatter.STATE_NONE:
-                            break;
-                        case Chatter.STATE_DISCONNECTED:
-                            Log.d(TAG, "Received state change: disconnected");
-                            String[] reasons = act.getResources().getStringArray(R.array.disconnect_reason);
-                            Toast.makeText(act, reasons[msg.arg2], Toast.LENGTH_SHORT).show();
-                            break;
-                        case Chatter.STATE_CONNECTED:
-                            Log.d(TAG, "Received state change: connected");
-                            act.stopAutoConnect();
-                            if (!Ping.getInstance().Demo) {
-                                // Record when we last successfully connected
-                                String date = new SimpleDateFormat("MM-dd HH:mm", Locale.UK).format(new Date());
-                                SharedPreferences.Editor edit = PreferenceManager.getDefaultSharedPreferences(act).edit();
-                                edit.putString(Ping.getInstance().getDevice().address, date);
-                                edit.apply();
-                                Toast toast = Toast.makeText(act, R.string.connected_ok, Toast.LENGTH_SHORT);
-                                toast.setGravity(Gravity.CENTER, 0, 0);
-                                toast.show();
-                                Ping ping = Ping.getInstance();
-                                act.mChatters.get(ping.getDevice().type).configure(ping.Sensitivity, ping.Noise, ping.Range);
-                            }
-                            break;
+                    Log.d(TAG, "Received state change " + Chatter.stateName[msg.arg1]);
+                    if (msg.arg1 == Chatter.STATE_DISCONNECTED) {
+                        String[] reasons = r.getStringArray(R.array.disconnect_reason);
+                        Snackbar.make(act.mMainView, reasons[msg.arg2], Snackbar.LENGTH_SHORT)
+                                .show();
+                        act.stopLocationSampling();
+                        Ping.P.getSelectedDevice().isConnected = false;
+                    } else if (msg.arg1 == Chatter.STATE_CONNECTED) {
+                        // Don't need autoconnect any more, as we're connected
+                        act.stopAutoConnect();
+                        DeviceRecord dev = Ping.P.getSelectedDevice();
+                        dev.isConnected = true;
+                        Snackbar.make(act.mMainView, r.getString(R.string.connected_to,
+                                r.getStringArray(R.array.device_types)[dev.type], dev.name), Snackbar.LENGTH_SHORT)
+                                .show();
+                        act.mChatters.get(dev.type).configure(Ping.P.getInt("sensitivity"), Ping.P.getInt("noise"), Ping.P.getInt("range"));
+                        act.startLocationSampling();
                     }
                     act.mBluetoothStatus = msg.arg1;
                     break;
 
                 case Chatter.MESSAGE_SONAR_DATA:
-                    act.sample((SonarData) msg.obj);
+                    act.onSonarSample((SampleData) msg.obj);
                     break;
             }
         }
     }
 
-    private void sample(SonarData data) {
-        //Log.d(TAG, "Received sonar data " + data.toString());
-        mSonarView.sample(data);
-        TextView v = findViewById(R.id.battery);
-        Locale l = getResources().getConfiguration().locale;
-        v.setText(String.format(l, "%d", data.battery));
-        v = findViewById(R.id.waterDepth);
-        v.setText(String.format(l, "%.2f", data.depth));
-        v = findViewById(R.id.waterTemp);
-        v.setText(String.format(l, "%.2f", data.temperature));
-        v = findViewById(R.id.fishDepth);
-        v.setText(String.format(l, "%.2f", data.fishDepth));
-        v = findViewById(R.id.fishType);
-        v.setText(String.format(l, "%d", data.fishType));
-        v = findViewById(R.id.strength);
-        v.setText(String.format(l, "%d", data.strength));
-        v = findViewById(R.id.isLand);
-        v.setText(Boolean.toString(data.isLand));
-    }
+    // Keep an instance variable pointing at this, or it gets garbage collected
+    SharedPreferences.OnSharedPreferenceChangeListener mSPListener = new SharedPreferences.OnSharedPreferenceChangeListener() {
+        public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
+            TextView v;
+            switch (key) {
+                case "selectedDevice":
+                    v = findViewById(R.id.device);
+                    v.setText(Ping.P.getSelectedDevice().name);
+                    break;
+                case "sensitivity":
+                    v = findViewById(R.id.sensitivity);
+                    v.setText(Ping.P.getText("sensitivity"));
+                    break;
+                case "noise":
+                    v = findViewById(R.id.noise);
+                    v.setText(Ping.P.getText("noise"));
+                    break;
+                case "range":
+                    v = findViewById(R.id.range);
+                    v.setText(Ping.P.getText("range"));
+                    break;
+            }
+        }
+    };
 
     // Invoked when the activity is first created.
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        //Toolbar toolbar = findViewById(R.id.toolbar);
-        //setSupportActionBar(toolbar);
-        setContentView((int) R.layout.main_activity);
+        Ping.setContext(this);
 
-        /*LinearLayout viewlayout = findViewById(R.id.sonarViewLayout);
-        mSonarView = new SonarView(this);
-        viewlayout.addView(mSonarView);*/
+        setContentView(R.layout.main_activity);
+
+        mMainView = findViewById(R.id.contentLayout);
         mSonarView = findViewById(R.id.sonarView);
 
-        BluetoothAdapter bta = BluetoothAdapter.getDefaultAdapter();
-        if (bta == null) {
-            Toast toast = Toast.makeText(getApplicationContext(), (int) R.string.no_bluetooth, Toast.LENGTH_LONG);
-            toast.setGravity(Gravity.CENTER, 0, 0);
-            toast.show();
-            // Pile on, we can still play with settings and maybe some day do a demo
-        }
+        Ping.addActivity(this);
 
-        Ping ping = Ping.create();
-
-        ping.addActivity(this);
-        loadSettings();
+        updatePreferencesDisplay();
 
         // Create chat handlers for talking to different types of bluetooth device
-        final Handler earwig = new ChatHandler(whiff);
+        final Handler earwig = new ChatHandler(weakThis);
 
         // Map BluetoothDevice.DEVICE_TYPE_* to the relevant service
         Chatter demo = new DemoChat(earwig);
         mChatters.put(BluetoothDevice.DEVICE_TYPE_UNKNOWN, demo);
 
-        Chatter classic = new BluetoothChat(this, BluetoothClassicService.class, earwig);
-        mChatters.put(BluetoothDevice.DEVICE_TYPE_CLASSIC, classic);
+        // Classic not supported - not needed as yet, LE works just fine
+        // Chatter classic = new BluetoothChat(this, BluetoothClassicService.class, earwig);
+        // mChatters.put(BluetoothDevice.DEVICE_TYPE_CLASSIC, classic);
+        mChatters.put(BluetoothDevice.DEVICE_TYPE_CLASSIC, demo); // should never be used
 
         Chatter le = new BluetoothChat(this, BluetoothLEService.class, earwig);
         mChatters.put(BluetoothDevice.DEVICE_TYPE_LE, le);
         mChatters.put(BluetoothDevice.DEVICE_TYPE_DUAL, le);
 
-        // Immediately start trying to connect
-        getPermissionsAndStart();
-    }
+        final FloatingActionButton recordButton = findViewById(R.id.record);
+        recordButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                Ping.P.recordingOn = !Ping.P.recordingOn;
+                int dribble = (Ping.P.recordingOn) ? android.R.drawable.ic_media_pause : android.R.drawable.ic_media_play;
+                recordButton.setImageDrawable(getResources().getDrawable(dribble, getTheme()));
+            }
+        });
 
-    // Check is we have all required permissions. If we do, then start, otherwise re-try the
-    // permissions. We do this even if there is no bluetooth support and we are just in demo mode.
-    private void getPermissionsAndStart() {
-        List<String> missing = new ArrayList<>();
-        for (String perm : getResources().getStringArray(R.array.required_permissions)) {
-            if (checkSelfPermission(perm) != PackageManager.PERMISSION_GRANTED)
-                missing.add(perm);
-        }
-        if (missing.isEmpty())
-            haveRequiredPermissions();
-        else
-            requestPermissions(missing.toArray(new String[0]), REQUEST_PERMISSIONS);
-    }
+        Ping.P.mSP.registerOnSharedPreferenceChangeListener(mSPListener);
 
-    // Load new settings, either on startup or on return from the SettingsActivity
-    private void loadSettings() {
-        Ping ping = Ping.getInstance();
-        ping.loadSettings(this);
-        Resources r = getResources();
-        TextView v = findViewById(R.id.sensitivity);
-        v.setText(String.format(r.getConfiguration().locale, "%d", ping.Sensitivity * 10));
-        v = findViewById(R.id.noise);
-        v.setText(r.getStringArray(R.array.noise_options)[ping.Noise]);
-        v = findViewById(R.id.range);
-        v.setText(r.getStringArray(R.array.range_options)[ping.Range]);
+        startup1_getPermissions();
     }
 
     /**
@@ -237,151 +221,48 @@ public class MainActivity extends AppCompatActivity {
                         .setPositiveButton(getResources().getString(R.string.OK),
                                 new DialogInterface.OnClickListener() {
                                     public void onClick(DialogInterface dialog, int which) {
-                                        getPermissionsAndStart();
+                                        startup1_getPermissions();
                                     }
                                 })
-                        .setNegativeButton(getResources().getString(R.string.cancel),
-                                (DialogInterface.OnClickListener) null).create().show();
+                        .setNegativeButton(getResources().getString(R.string.cancel), null).create().show();
                 return;
             }
         }
         if (granted)
-            haveRequiredPermissions();
+            startup2_enableBluetooth();
         else
-            getPermissionsAndStart();
-    }
-
-    /**
-     * Required permissions have been granted
-     */
-    private void haveRequiredPermissions() {
-        BluetoothAdapter bta = BluetoothAdapter.getDefaultAdapter();
-        if (bta != null) {
-            if (mBluetoothIsStarting)
-                return;
-            mBluetoothIsStarting = true;
-            // We have bluetooth support
-            if (bta.isEnabled()) {
-                startAutoConnect();
-            } else
-                startActivityForResult(new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE), REQUEST_ENABLE_BLUETOOTH);
-        } else if (Ping.getInstance().Demo)
-            startAutoConnect();
+            // Try again to get permissions. We need them! They'll crack eventually.
+            startup1_getPermissions();
     }
 
     /**
      * Handle results from startActivityForResult.
-     *
-     * @param requestCode
-     * @param resultCode
-     * @param data
      */
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        switch (requestCode) {
-            case REQUEST_SELECT_DEVICE:
-                if (resultCode == Activity.RESULT_OK) {
-                    // A new device was selected
-                    Ping p = Ping.getInstance();
-                    p.selectDevice(p.getDevice(data.getExtras().getString(DEVICE_ADDRESS)));
-                    p.saveSettings(this);
+        if (requestCode == REQUEST_ENABLE_BLUETOOTH) {
+            Log.d(TAG, "REQUEST_ENABLE_BLUETOOTH received");
+            // Result coming from startup2_enableBluetooth/enable bluetooth
+            if (resultCode != Activity.RESULT_OK)
+                // Bluetooth was not enabled; we can still continue, in demo mode
+                Ping.P.set("selectedDevice", Ping.demoDevice);
+            startAutoConnect();
+        } else if (requestCode == REQUEST_SETTINGS_CHANGED) {
+            Log.d(TAG, "REQUEST_SETTINGS_CHANGED received");
+            // Result coming from SettingsActivity
+            if (resultCode == Activity.RESULT_OK) {
+                stopLocationSampling();
+                if (Ping.P.getSelectedDevice().isConnected)
+                    startLocationSampling();
+                else {
+                    // Selected device has changed
+                    for (Map.Entry<Integer, Chatter> entry : mChatters.entrySet())
+                        entry.getValue().disconnect();
+                    startAutoConnect(); // will restart location sampling when it connects
                 }
-                startAutoConnect();
-                break;
-            case REQUEST_ENABLE_BLUETOOTH:
-                // Result from haveRequiredPermissions/enable bluetooth
-                if (resultCode == Activity.RESULT_OK) {
-                    Log.d(TAG, "Bluetooth enabled");
-                    startAutoConnect();
-                } else {
-                    Log.d(TAG, "Bluetooth not enabled");
-                }
-                break;
-            case REQUEST_SETTINGS_CHANGED:
-                Ping.getInstance().saveSettings(this);
-                // Fall through deliberate
-            case REQUEST_AUTO_CONNECT:
-                loadSettings();
-                startAutoConnect();
-                break;
-        }
-    }
-
-    static class AutoConnectMessageHandler extends Handler {
-        WeakReference<MainActivity> mA;
-
-        AutoConnectMessageHandler(WeakReference<MainActivity> act) {
-            mA = act;
-        }
-
-        public void handleMessage(Message msg) {
-            int toast_message;
-            MainActivity self = mA.get();
-            DeviceRecord dev = Ping.getInstance().getDevice();
-            if (dev == null) {
-                toast_message = R.string.no_device;
-            } else if (self.mBluetoothStatus == Chatter.STATE_NONE
-                    || self.mBluetoothStatus == Chatter.STATE_DISCONNECTED) {
-
-                self.mChatters.get(dev.type).connect(dev);
-                Resources r = self.getResources();
-                Toast toast = Toast.makeText(self,
-                        r.getString(R.string.connecting,
-                                r.getStringArray(R.array.device_types)[dev.type], dev.name),
-                        Toast.LENGTH_SHORT);
-                toast.setGravity(Gravity.CENTER, 0, 0);
-                toast.show();
-            } else {
-                super.handleMessage(msg);
-                return;
             }
-            super.handleMessage(msg);
         }
-    }
-
-    private Handler mAutoConnectHandler;
-    private TimerTask mAutoConnectTask;
-    private Timer mAutoConnectTimer;
-
-    /**
-     * Start a task to try continually try to connect to the Bluetooth device identified
-     * by Ping.getDevice()
-     */
-    private void startAutoConnect() {
-        Log.d(TAG, "Starting autoConnect");
-        if (Ping.getInstance().Demo) {
-            Toast toast = Toast.makeText(this,
-                    getResources().getString(R.string.connecting,"Demo", ""),
-                    Toast.LENGTH_SHORT);
-            toast.setGravity(Gravity.CENTER, 0, 0);
-            toast.show();
-            mChatters.get(BluetoothDevice.DEVICE_TYPE_UNKNOWN).connect(null);
-        } else {
-            mAutoConnectTimer = new Timer();
-            mAutoConnectHandler = new AutoConnectMessageHandler(whiff);
-            mAutoConnectTask = new TimerTask() {
-                public void run() {
-                    Message message = new Message();
-                    message.what = 1;
-                    mAutoConnectHandler.sendMessage(message);
-                }
-            };
-            mAutoConnectTimer.schedule(mAutoConnectTask, 3000, 3000);
-        }
-    }
-
-    /**
-     * Shut down the automatic connection task
-     */
-    private void stopAutoConnect() {
-        Log.d(TAG, "Stopping autoConnect");
-        if (mAutoConnectTimer == null)
-            return;
-        mAutoConnectTimer.cancel();
-        mAutoConnectTimer = null;
-        mAutoConnectTask.cancel();
-        mAutoConnectTask = null;
     }
 
     /**
@@ -389,7 +270,9 @@ public class MainActivity extends AppCompatActivity {
      */
     @Override
     protected void onPause() {
+        Log.d(TAG, "onPause");
         super.onPause();
+        // TODO: stop autoconnect? Or leave it to gribble away in the background?
         for (Map.Entry<Integer, Chatter> entry : mChatters.entrySet())
             entry.getValue().onPause();
     }
@@ -400,9 +283,14 @@ public class MainActivity extends AppCompatActivity {
      */
     @Override
     protected void onResume() {
+        Log.d(TAG, "onResume");
         super.onResume();
+
         for (Map.Entry<Integer, Chatter> entry : mChatters.entrySet())
             entry.getValue().onResume();
+
+        // If we paused, did it ever get stopped?
+        startLocationSampling();
     }
 
     /**
@@ -410,22 +298,13 @@ public class MainActivity extends AppCompatActivity {
      */
     @Override
     protected void onDestroy() {
+        Log.d(TAG, "onDestroy");
         stopAutoConnect();
         for (Map.Entry<Integer, Chatter> entry : mChatters.entrySet())
-            entry.getValue().stopService();
-        Ping ping = Ping.getInstance();
-        ping.saveSettings(this);
-        ping.destroy();
+            entry.getValue().stopServices();
+        Ping.P.destroy();
         super.onDestroy();
 
-    }
-
-    /**
-     * Switch to the DeviceListActivity. Invoked by a click on the bluetooth button.
-     *
-     * @param view the view to switch to
-     */
-    public void openDeviceListActivity(View view) {
     }
 
     @Override
@@ -437,20 +316,207 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        // Handle action bar item clicks here. The action bar will
-        // automatically handle clicks on the Home/Up button, so long
-        // as you specify a parent activity in AndroidManifest.xml.
-        switch (item.getItemId()) {
-            case R.id.menu_settings:
-                stopAutoConnect();
-                startActivityForResult(new Intent(this, SettingsActivity.class), REQUEST_SETTINGS_CHANGED);
-                return true;
-            case R.id.menu_select_device:
-                stopAutoConnect();
-                startActivityForResult(new Intent(this, DeviceListActivity.class), REQUEST_SELECT_DEVICE);
-                return true;
+        if (item.getItemId() == R.id.menu_settings) {
+            startActivityForResult(new Intent(this, SettingsActivity.class), REQUEST_SETTINGS_CHANGED);
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
+    }
+
+    // Handler for a sample coming from a Chatter
+    private void onSonarSample(SampleData data) {
+        if (data == null)
+            return;
+
+        //Log.d(TAG, "Sonar sample received");
+
+        TextView v = findViewById(R.id.battery);
+        Locale l = getResources().getConfiguration().locale;
+        v.setText(String.format(l, "%d", data.battery));
+        v = findViewById(R.id.waterDepth);
+        v.setText(String.format(l, "%.2f", data.depth));
+        v = findViewById(R.id.waterTemp);
+        v.setText(String.format(l, "%.2f", data.temperature));
+        v = findViewById(R.id.fishDepth);
+        v.setText(String.format(l, "%.2f", data.fishDepth));
+        v = findViewById(R.id.fishType);
+        v.setText(String.format(l, "%d", data.fishType));
+        v = findViewById(R.id.strength);
+        v.setText(String.format(l, "%.2f", data.strength));
+        v = findViewById(R.id.isLand);
+        v.setText(Boolean.toString(data.isLand));
+
+        mSonarView.sample(data);
+
+        mSampler.addSonar(data, this);
+    }
+
+
+    // Check if we have all required permissions. If we do, then proceed, otherwise ask for the
+    // permissions. We do this even if there is no bluetooth support and we are just in demo mode.
+    private void startup1_getPermissions() {
+        List<String> missing = new ArrayList<>();
+        for (String perm : getResources().getStringArray(R.array.required_permissions)) {
+            if (checkSelfPermission(perm) != PackageManager.PERMISSION_GRANTED)
+                missing.add(perm);
+        }
+        if (missing.isEmpty())
+            startup2_enableBluetooth();
+        else
+            requestPermissions(missing.toArray(new String[0]), REQUEST_PERMISSIONS);
+    }
+
+    // Required permissions have been granted, try to enable bluetooth
+    private void startup2_enableBluetooth() {
+        if (mBluetoothAdapter == null) { // can we ever get here with it non-null? OnResume?
+            mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+            if (mBluetoothAdapter == null) {
+                Toast toast = Toast.makeText(getApplicationContext(), R.string.no_bluetooth, Toast.LENGTH_LONG);
+                toast.setGravity(Gravity.CENTER, 0, 0);
+                toast.show();
+                // Pile on, we can still play with settings and maybe some day do a demo
+            }
+            // We have bluetooth support
+            else if (!mBluetoothAdapter.isEnabled()) {
+                // Bluetooth is not enabled; prompt until it is
+                startActivityForResult(new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE), REQUEST_ENABLE_BLUETOOTH);
+                return;
+            }
+        }
+        startAutoConnect();
+    }
+
+    // Update display of current preferences
+    private void updatePreferencesDisplay() {
+        TextView v;
+        v = findViewById(R.id.device);
+        v.setText(Ping.P.getSelectedDevice().name);
+        v = findViewById(R.id.sensitivity);
+        v.setText(Ping.P.getText("sensitivity"));
+        v = findViewById(R.id.noise);
+        v.setText(Ping.P.getText("noise"));
+        v = findViewById(R.id.range);
+        v.setText(Ping.P.getText("range"));
+    }
+
+    /**
+     * Location sampling uses the FusedLocationProviderClient API to request location updates
+     * 2 times for each stored sample, ensuring we have a reasonably up-to-date location.
+     * Note that in our application, the location is not going to change rapidly - certainly less
+     * than 10m/s.
+     */
+    // Connect to location services
+    private FusedLocationProviderClient mLocationClient = null;
+    private LocationCallback mLocationCallback = new LocationCallback() {
+        @Override
+        public void onLocationResult(LocationResult locationResult) {
+            if (locationResult == null)
+                return;
+            //Log.d(TAG, "Location received");
+            for (Location location : locationResult.getLocations()) {
+                TextView v = findViewById(R.id.latitude);
+                Locale l = getResources().getConfiguration().locale;
+                v.setText(String.format(l, "%.5f", location.getLatitude()));
+                v = findViewById(R.id.longitude);
+                v.setText(String.format(l, "%.5f", location.getLongitude()));
+                mSampler.addLocation(location, MainActivity.this);
+            }
+        }
+    };
+    private boolean mIsLocationSampling = false;
+
+    private void startLocationSampling() {
+        if (mIsLocationSampling)
+            return;
+
+        if (mLocationClient == null)
+            mLocationClient = LocationServices.getFusedLocationProviderClient(this);
+
+        LocationRequest lr = LocationRequest.create();
+        lr.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
+
+        // Sample every second. Should be plenty.
+        lr.setInterval(1000);
+        //lr.setSmallestDisplacement(Ping.getMinimumPositionChange());
+
+        try {
+            mLocationClient.requestLocationUpdates(lr, mLocationCallback, null);
+            mIsLocationSampling = true;
+        } catch (SecurityException se) {
+            throw new Error("Unexpected security exception");
+        }
+    }
+
+    private void stopLocationSampling() {
+        if (!mIsLocationSampling)
+            return;
+        mLocationClient.removeLocationUpdates(mLocationCallback);
+        mIsLocationSampling = false;
+    }
+
+    /* Auto connect; a timer task that tries to connect to a bluetooth device */
+    static final int AUTO_CONNECT_RETRY_DELAY = 3000;
+
+    private Handler mAutoConnectTimerHandler;
+    private TimerTask mAutoConnectTask;
+    private Timer mAutoConnectTimer;
+
+    // Message handler on the main thread
+    private static class AutoConnectTimerHandler extends Handler {
+        WeakReference<MainActivity> mA;
+
+        AutoConnectTimerHandler(WeakReference<MainActivity> act) {
+            mA = act;
         }
 
-        return super.onOptionsItemSelected(item);
+        public void handleMessage(Message msg) {
+            MainActivity self = mA.get();
+            DeviceRecord dev = Ping.P.getSelectedDevice();
+            Resources r = self.getResources();
+            if (dev == null) {
+                Snackbar.make(self.mMainView, r.getString(R.string.no_device), Snackbar.LENGTH_SHORT)
+                        .show();
+
+            } else if (self.mBluetoothStatus == Chatter.STATE_NONE
+                    || self.mBluetoothStatus == Chatter.STATE_DISCONNECTED) {
+                self.mChatters.get(dev.type).connect(dev);
+                Snackbar.make(self.mMainView, r.getString(R.string.connecting,
+                        r.getStringArray(R.array.device_types)[dev.type], dev.name), Snackbar.LENGTH_SHORT)
+                        .show();
+            }
+            super.handleMessage(msg);
+        }
+    }
+
+    /**
+     * Start a task to try continually try to connect to the Bluetooth device identified
+     * by Ping.getDevice()
+     */
+    private void startAutoConnect() {
+        Log.d(TAG, "Starting autoConnect " + Ping.P.getSelectedDevice().name);
+        mAutoConnectTimer = new Timer();
+        mAutoConnectTimerHandler = new AutoConnectTimerHandler(weakThis);
+        mAutoConnectTask = new TimerTask() {
+            public void run() {
+                // Signal the main thread to do something. The content of the message is irrelevant.
+                Message message = new Message();
+                mAutoConnectTimerHandler.sendMessage(message);
+            }
+        };
+        mAutoConnectTimer.schedule(mAutoConnectTask, AUTO_CONNECT_RETRY_DELAY, AUTO_CONNECT_RETRY_DELAY);
+    }
+
+    /**
+     * Shut down the automatic connection timer/task
+     */
+    private void stopAutoConnect() {
+        Log.d(TAG, "Stopping autoConnect");
+        if (mAutoConnectTimer == null)
+            return;
+        mAutoConnectTimer.cancel();
+        mAutoConnectTimer = null;
+        // cancel() is moot, there are no loops inside the mAutoConnectTask
+        mAutoConnectTask.cancel();
+        mAutoConnectTask = null;
     }
 }

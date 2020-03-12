@@ -33,7 +33,7 @@ class BluetoothChat extends Chatter {
     private BluetoothService mService;
     private Class mServiceClass; // Java class of the service that talks to the device
     private boolean mServiceBound = false; // Is the service bound?
-    private DeviceRecord mDevice; // Device we want to connect to
+    private DeviceRecord mDevice = null; // Device this chatter is connected to
 
     // private short mReceivedSignalStrength = 0;
 
@@ -43,17 +43,17 @@ class BluetoothChat extends Chatter {
         public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();
             if (BluetoothService.ACTION_BT_CONNECTED.equals(action)) {
-                Log.d(TAG, "Connected to " + Ping.getInstance().getDevice().name);
+                Log.d(TAG, "Connected to " + Ping.P.getSelectedDevice().name);
                 mListener.obtainMessage(MESSAGE_STATE_CHANGE, STATE_CONNECTED, -1).sendToTarget();
 
             } else if (BluetoothService.ACTION_BT_DISCONNECTED.equals(action)) {
                 int reason = intent.getIntExtra(BluetoothService.EXTRA_DATA, BluetoothService.CANNOT_CONNECT);
-                Log.d(TAG, "Disconnected from " + Ping.getInstance().getDevice().name + " reason " + reason);
+                Log.d(TAG, "Disconnected from " + Ping.P.getSelectedDevice().name + " reason " + reason);
                 mListener.obtainMessage(MESSAGE_STATE_CHANGE, STATE_DISCONNECTED, reason).sendToTarget();
 
             } else if (BluetoothService.ACTION_BT_DATA_AVAILABLE.equals(action)) {
                 byte[] bytes = intent.getByteArrayExtra(BluetoothService.EXTRA_DATA);
-                SonarData data = new SonarData(bytes);
+                SampleData data = new SampleData(bytes);
                 mListener.obtainMessage(Chatter.MESSAGE_SONAR_DATA, data).sendToTarget();
 
 /*            } else if (BluetoothDevice.ACTION_FOUND.equals(intent.getAction())
@@ -80,26 +80,11 @@ class BluetoothChat extends Chatter {
         mContext = context;
         mServiceConnection = new ServiceConnection() {
             public void onServiceConnected(ComponentName componentName, IBinder service) {
-                String missing;
                 mService = ((BluetoothService.LocalBinder) service).getService();
-                if (mService != null) {
+                if (mService != null)
                     mServiceBound = true;
-                    if (mDevice != null) {
-                        BluetoothAdapter bta = BluetoothAdapter.getDefaultAdapter();
-                        if (bta != null) {
-                            BluetoothDevice btd = bta.getRemoteDevice(mDevice.address);
-                            if (btd != null) {
-                                mService.connect(btd);
-                                return;
-                            }
-                            missing = "bluetooth device '" + mDevice.name + "'";
-                        } else
-                            missing = "default bluetooth adapter";
-                    } else
-                        missing = "device selected";
-                } else
-                    missing = "service";
-                Log.e(TAG, "No " + missing + ".  Unable to connect.");
+                else
+                    Log.e(TAG, "No service. Unable to connect.");
             }
 
             public void onServiceDisconnected(ComponentName componentName) {
@@ -135,7 +120,7 @@ class BluetoothChat extends Chatter {
     void configure(int sensitivity, int noise, int range) {
         byte[] data = new byte[]{
                 // http://ww1.microchip.com/downloads/en/DeviceDoc/50002466B.pdf
-                SonarData.ID0, SonarData.ID1,
+                SampleData.ID0, SampleData.ID1,
                 0, 0, COMMAND_CONFIGURE, // SF?
                 3, // size
                 (byte) sensitivity, (byte) noise, (byte) range,
@@ -151,8 +136,8 @@ class BluetoothChat extends Chatter {
 
     @Override
     void connect(DeviceRecord dev) {
+        mDevice = dev;
         if (!mServiceBound) {
-            mDevice = dev;
             if (!mContext.bindService(new Intent(mContext, mServiceClass), mServiceConnection, Context.BIND_AUTO_CREATE)) {
                 Toast toast = Toast.makeText(mContext.getApplicationContext(), R.string.cannot_bind_service, Toast.LENGTH_SHORT);
                 toast.setGravity(Gravity.CENTER, 0, 0);
@@ -163,18 +148,33 @@ class BluetoothChat extends Chatter {
             if (bta == null) {
                 Log.e(TAG, "No bluetooth adapter.  Unable to connect.");
             } else {
-                BluetoothDevice device = bta.getRemoteDevice(dev.address);
+                BluetoothDevice device = bta.getRemoteDevice(mDevice.address);
                 if (device == null) {
                     Log.e(TAG, "Device not found.  Unable to connect.");
                     return;
                 }
                 mService.connect(device);
+                mDevice.isConnected = true;
             }
         }
     }
 
-    void stopService() {
-        mService.disconnect();
-        mService.close();
+    @Override
+    void disconnect() {
+        if (mDevice != null) {
+            mDevice.isConnected = false;
+            mDevice = null;
+        }
+        if (mService != null)
+            mService.disconnect();
+    }
+
+    @Override
+    void stopServices() {
+        disconnect();
+        if (mService != null) {
+            mService.close();
+            mService = null;
+        }
     }
 }

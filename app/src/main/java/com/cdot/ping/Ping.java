@@ -4,72 +4,132 @@ import android.app.Activity;
 import android.bluetooth.BluetoothDevice;
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.content.res.Resources;
+import android.net.Uri;
 import android.preference.PreferenceManager;
-import android.util.Log;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 
 /**
- * Global Application State
+ * Global Application State. Singleton. Maintains a list of activities, and a set of preferences
+ * which includes a list of available bluetooth mDevices.
  */
 public class Ping {
     private static final String TAG = "Ping";
 
-    private static Ping mInstance;
+    // noise filtering is for turbid water or where there are suspended solids
+    static final int NOISE_OFF = 0;
+    static final int NOISE_LOW = 1;
+    static final int NOISE_MEDIUM = 2;
+    static final int NOISE_HIGH = 3;
 
-    // Raw values written to the device
-    static final int DEFAULT_NOISE = 0; // off
-    int Noise = DEFAULT_NOISE;
+    // Set as close to possible to the estimated bottom depth for best results.
+    static final int RANGE_3M = 0;
+    static final int RANGE_6M = 1;
+    static final int RANGE_9M = 2;
+    static final int RANGE_18M = 3;
+    static final int RANGE_24M = 4;
+    static final int RANGE_36M = 5;
+    static final int RANGE_AUTO = 6;
 
-    static final int DEFAULT_RANGE = 6; // auto
-    int Range = DEFAULT_RANGE;
+    // range (metres) indexed by range
+    static final int[] RANGE_DEPTH = {
+            3, 6, 9, 18, 24, 36, 36
+    };
 
-    // Divide by 10 before sending to device; 0..10
-    static final int DEFAULT_SENSITIVITY = 5;
-    int Sensitivity = DEFAULT_SENSITIVITY; // %
+    // Intensity of the sonar pulse. When the water is shallow, or there is noise in the water
+    // such as engine noise, select a lower sensitivity
+    // percent/10 i.e. 0..10
+    static final int SENSITIVITY_MIN = 1; // 10%
+    static final int SENSITIVITY_MAX = 10; // 100%
+    static final int SENSITIVITY_DEFAULT = 5; // 50%
 
-    static final boolean DEFAULT_DEMO = false;
-    boolean Demo = DEFAULT_DEMO;
+    static final int MAX_STRENGTH = 120;
+    static final float MAX_TEMPERATURE = 60.0f; // celcius
 
-    private List<Activity> mActivityList;
-    ArrayList<DeviceRecord> mDevices;
+    static final float MINIMUM_POSITION_CHANGE_MIN = 0.01f;
+    static final float MINIMUM_POSITION_CHANGE_MAX = 10f;
+    static final float MINIMUM_POSITION_CHANGE_DEFAULT = 0.5f;
 
-    private Ping() {
-        mActivityList = new LinkedList<>();
-        //mDatabaseAdapter = new DeviceDataBaseAdapter(context);
-        mDevices = new ArrayList<>();
-        mInstance = this;
-   }
+    static final float MINIMUM_DEPTH_CHANGE_MIN = 0.01f;
+    static final float MINIMUM_DEPTH_CHANGE_MAX = 5f;
+    static final float MINIMUM_DEPTH_CHANGE_DEFAULT = 0.25f;
 
-    /**
-     * Create the Ping singleton
-     * @return the new singleton
-     */
-    static Ping create() {
-        mInstance = new Ping();
-        return mInstance;
+    // List of activities
+    private static List<Activity> mActivityList = new LinkedList<>();
+
+    private static Map<String, String> sKeyDefault = new HashMap<String, String>() {{
+        put("sensitivity", Integer.toString(SENSITIVITY_DEFAULT));
+        put("noise", Integer.toString(NOISE_OFF));
+        put("range", Integer.toString(RANGE_AUTO));
+        put("minimumPositionChange", Float.toString(MINIMUM_POSITION_CHANGE_DEFAULT));
+        put("minimumDepthChange", Float.toString(MINIMUM_DEPTH_CHANGE_DEFAULT));
+    }};
+
+    // has the record button been pressed?
+    boolean recordingOn = false;
+
+    static final String DEMO_DEVICE = "DEMO";
+    static final DeviceRecord demoDevice = new DeviceRecord(DEMO_DEVICE, DEMO_DEVICE, BluetoothDevice.DEVICE_TYPE_UNKNOWN, false);
+
+    static Ping P = null; // Singleton for talking to prefs
+
+    Context mContext;
+    SharedPreferences mSP;
+    Resources mR;
+    private List<DeviceRecord> mDevices = new ArrayList<>();
+
+    Ping(Context context) {
+        mContext = context;
+        mR = context.getResources();
+        mSP = PreferenceManager.getDefaultSharedPreferences(context);
+        String devs = mSP.getString("devices", "");
+        List<DeviceRecord> res = new ArrayList<>();
+        if (devs != null && devs.length() > 0) {
+            String[] deviceSet = devs.split(",");
+            // Devices saved in REVERSE order so the first ends up last, restoring the original order
+            for (String s : deviceSet)
+                mDevices.add(new DeviceRecord(s));
+        }
+        mDevices.add(demoDevice);
+    }
+
+    // Factory method
+    static void setContext(Context context) {
+        P = new Ping(context);
     }
 
     /**
-     * return the Ping singleton
-     * @return
+     * Set the string value of a preference. All preferences are saved as strings.
+     *
+     * @param key   key for the preference
+     * @param value string value
      */
-    static Ping getInstance() {
-        return mInstance;
+    void set(String key, String value) {
+        SharedPreferences.Editor edit = mSP.edit();
+        edit.putString(key, value);
+        edit.apply();
+    }
+
+    void set(String key, DeviceRecord dr) {
+        set(key, dr.address);
     }
 
     /**
      * Add an activity to the list of activities
-     * @param activity
+     *
+     * @param activity the activity to add
      */
-    void addActivity(Activity activity) {
+    static void addActivity(Activity activity) {
         mActivityList.add(activity);
     }
 
     /**
-     * Remove this
+     * Remove the singleton
      */
     void destroy() {
         for (Activity activity : mActivityList)
@@ -77,110 +137,90 @@ public class Ping {
         clearDevices();
     }
 
-    /**
-     * Get the selected device
-     * @return the device record for the selected device
-     */
-    public DeviceRecord getDevice() {
-        if (mDevices.size() < 1)
+    int getInt(String key) {
+        String v = mSP.getString(key, sKeyDefault.get(key));
+        try {
+            return Integer.valueOf(v);
+        } catch (Error e) {
+            return Integer.valueOf(sKeyDefault.get(key));
+        }
+    }
+
+    float getFloat(String key) {
+        String v = mSP.getString(key, sKeyDefault.get(key));
+        try {
+            return Float.valueOf(v);
+        } catch (Error e) {
+            return Float.valueOf(sKeyDefault.get(key));
+        }
+    }
+
+    String getText(String key) {
+        return getText(key, getInt(key));
+    }
+
+    String getText(String key, Object val) {
+        float i;
+        switch (key) {
+            case "sensitivity":
+                i = Float.valueOf(val.toString());
+                return String.format(mR.getConfiguration().locale, "%d", (int)i * 10);
+            case "noise":
+                i = Float.valueOf(val.toString());
+                return mR.getStringArray(R.array.noise_options)[(int)i];
+            case "range":
+                i = Float.valueOf(val.toString());
+                return mR.getStringArray(R.array.range_options)[(int)i];
+            default:
+                return val.toString();
+        }
+    }
+
+    Uri getSampleFile() {
+        String sf = mSP.getString("sampleFile", "");
+
+        if (sf == null || sf.length() == 0)
             return null;
-        return mDevices.get(0);
+        return Uri.parse(sf);
     }
 
-    /**
-     * Save shared preferences
-     * @param context to context for which the singleton is being created
-     */
-    void saveSettings(Context context) {
-        SharedPreferences.Editor edit = PreferenceManager.getDefaultSharedPreferences(context).edit();
-        edit.putString("Sensitivity", Integer.toString(Sensitivity));
-        edit.putString("Noise", Integer.toString(Noise));
-        edit.putString("Range", Integer.toString(Range));
-        String devices = "";
-        // Note devices in REVERSE order, so the current device is LAST
-        for (DeviceRecord dr : mDevices) {
-            devices += dr.serialise() + (devices.length() == 0 ? devices : ("," + devices));
-        }
-        edit.putString("devices", devices);
-        edit.apply();
+    DeviceRecord getSelectedDevice() {
+        return getDevice(mSP.getString("selectedDevice", DEMO_DEVICE));
     }
 
-    /**
-     * Clear shared preferences
-     * @param context to context for which the singleton is being created
-     */
-    void clearSettings(Context context) {
-        SharedPreferences.Editor edit = PreferenceManager.getDefaultSharedPreferences(context).edit();
-        edit.clear();
-        edit.commit();
+    List<DeviceRecord> getDevices() {
+        return mDevices;
     }
 
-    /**
-     * Load settings from shared preferences
-     */
-    void loadSettings(Context context) {
-        SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(context);
-        Demo = sp.getBoolean("Demo", DEFAULT_DEMO);
-        try {
-            Sensitivity = Integer.valueOf(sp.getString("Sensitivity", Integer.toString(DEFAULT_SENSITIVITY)));
-        } catch (Exception rte) {
-            Log.d(TAG, "Exception1 while loading settings " + rte);
-        }
-        try {
-            Noise = Integer.valueOf(sp.getString("Noise", Integer.toString(DEFAULT_NOISE)));
-        } catch (Exception rte) {
-            Log.d(TAG, "Exception2 while loading settings " + rte);
-        }
-        try {
-            Range = Integer.valueOf(sp.getString("Range", Integer.toString(DEFAULT_RANGE)));
-        } catch (Exception rte) {
-            Log.d(TAG, "Exception3 while loading settings " + rte);
-        }
-        String devs = sp.getString("devices", "");
-        if (devs != null && devs.length() > 0) {
-            String[] deviceSet = devs.split(",");
-            // Devices added in REVERSE order so the first ends up last, restoring the original order
-            for (String s : deviceSet)
-                addDevice(new DeviceRecord(s));
-        }
-    }
-
-    /**
-     * Clear devices NOTE does not clear preferences
-     */
-    void clearDevices() {
-        mDevices.clear();
-    }
-
-    /**
-     * Move the selected device record to the head of the devices list
-     * @param dr the device record to add/move
-     */
-    void selectDevice(DeviceRecord dr) {
-        mDevices.remove(dr);
-        mDevices.add(0, dr);
-    }
-
-    /**
-     * Add a device to the device records. If the device is added, or the pairing status of
-     * a device is changed, or the position of a device is changed in the ordering, return true.
-     * Otherwise return false.
-     *
-     * @param mac address
-     * @param name name
-     * @param type classic, le, dual
-     * @param isPaired is it paired
-     * @return the device record for the created device
-     */
-    DeviceRecord addDevice(String mac, String name, int type, boolean isPaired) {
-        for (DeviceRecord dr : mDevices) {
-            if (mac.equalsIgnoreCase(dr.address)) {
-                dr.isPaired = isPaired;
-                // Promote it to the head of the list
-                selectDevice(dr);
-                return dr;
+    private void saveDeviceList() {
+        String comma = "", devs = "";
+        if (mDevices != null) {
+            for (DeviceRecord dr : mDevices) {
+                if (!DEMO_DEVICE.equals(dr.address)) {
+                    devs = dr.serialise() + comma + devs;
+                    comma = ",";
+                }
             }
         }
+        set("devices", devs);
+    }
+
+    void clearDevices() {
+        mDevices.clear();
+        saveDeviceList();
+        mDevices.add(demoDevice);
+    }
+
+    /**
+     * Add a device to the device records.
+     *
+     * @param mac      address
+     * @param name     name
+     * @param type     BluetoothDevice.DEVICE_TYPE_*
+     * @param isPaired is it paired
+     * @return the device record for the device
+     */
+    DeviceRecord addDevice(String mac, String name, int type, boolean isPaired) {
         return addDevice(new DeviceRecord(mac, name, type, isPaired));
     }
 
@@ -189,9 +229,16 @@ public class Ping {
                 device.getBondState() == BluetoothDevice.BOND_BONDED);
     }
 
-    DeviceRecord addDevice(DeviceRecord dr) {
-        mDevices.add(dr);
-        return dr;
+    DeviceRecord addDevice(DeviceRecord add) {
+        for (DeviceRecord dr : mDevices) {
+            if (dr.address.equalsIgnoreCase(add.address)) {
+                dr.isPaired = add.isPaired;
+                return dr;
+            }
+        }
+        mDevices.add(add);
+        saveDeviceList();
+        return add;
     }
 
     /**

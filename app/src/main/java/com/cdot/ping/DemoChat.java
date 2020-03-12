@@ -2,11 +2,12 @@ package com.cdot.ping;
 
 import android.os.Handler;
 
-import com.cdot.bluetooth.BluetoothService;
-
 import java.util.Timer;
 import java.util.TimerTask;
 
+/**
+ * Demo data generator
+ */
 class DemoChat extends Chatter {
     private static final float[] demoDepth = {
             24.9f, 24.6f, 24.6f, 24.6f, 24.6f, 24.6f, 24.6f, 24.6f, 24.6f, 24.6f,
@@ -59,58 +60,36 @@ class DemoChat extends Chatter {
         demoFishType[3] = 4;
 
         demoFishDepth[75] = 13.8f;
-        demoFishType[75] = 1;
+        demoFishType[75] = SampleData.SMALL_FISH;
 
         demoFishDepth[142] = 4;
-        demoFishType[142] = 3;
+        demoFishType[142] = SampleData.BIG_FISH;
 
         demoFishDepth[199] = 8.6f;
-        demoFishType[199] = 4;
+        demoFishType[199] = SampleData.SHOAL;
 
         demoFishDepth[274] = 10.7f;
-        demoFishType[274] = 2;
+        demoFishType[274] = SampleData.MEDIUM_FISH;
 
         demoFishDepth[364] = 14.7f;
-        demoFishType[364] = 4;
+        demoFishType[364] = SampleData.SHOAL;
 
         demoFishDepth[400] = 8;
-        demoFishType[400] = 3;
+        demoFishType[400] = SampleData.BIG_FISH;
 
         demoFishDepth[474] = 9.8f;
-        demoFishType[474] = 2;
+        demoFishType[474] = SampleData.MEDIUM_FISH;
     }
 
     private Timer mTimer = null;
     private TimerTask mTask = null;
     private int mTicker = 0;
-    private boolean mConnected = false;
+    private float mCurBattery = 6;
+    private float mCurTemp = Ping.MAX_TEMPERATURE / 4;
 
     DemoChat(Handler listener) {
         super(listener);
         mListener = listener;
-    }
-
-    // Called when the app is paused
-    void onPause() {
-        stopTimer();
-        mListener.obtainMessage(MESSAGE_STATE_CHANGE, STATE_DISCONNECTED, BluetoothService.CONNECTION_LOST).sendToTarget();
-    }
-
-    // Called when the app is resumed
-    void onResume() {
-        if (mConnected)
-            startTimer();
-    }
-
-    // Called to configure the connected device
-    void configure(int sensitivity, int noise, int range) {
-    }
-
-    // Called to connect to a device
-    void connect(DeviceRecord dev) {
-        mListener.obtainMessage(MESSAGE_STATE_CHANGE, STATE_CONNECTED, -1).sendToTarget();
-        mConnected = true;
-        startTimer();
     }
 
     private void stopTimer() {
@@ -126,14 +105,21 @@ class DemoChat extends Chatter {
         mTimer = new Timer();
         mTask = new TimerTask() {
             public void run() {
-                SonarData data = new SonarData();
+                SampleData data = new SampleData();
                 data.isLand = false;
                 data.depth = demoDepth[mTicker % demoDepth.length];
-                data.strength = (int) (demoStrength[mTicker % demoStrength.length]);
+                data.strength = demoStrength[mTicker % demoStrength.length];
                 data.fishDepth = demoFishDepth[mTicker % demoFishDepth.length];
                 data.fishType = demoFishType[mTicker % demoFishType.length];
-                data.battery = (int) (Math.random() * 6);
-                data.temperature = (float) Math.random() * 35f;
+
+                mCurBattery -= 0.001;
+                data.battery = (int)mCurBattery;
+
+                mCurTemp += (Math.random() - 0.5f);
+                if (mCurTemp < 0) mCurTemp = 0;
+                else if (mCurTemp > Ping.MAX_TEMPERATURE) mCurTemp = Ping.MAX_TEMPERATURE;
+                data.temperature = mCurTemp;
+
                 mTicker++;
                 mListener.obtainMessage(Chatter.MESSAGE_SONAR_DATA, data).sendToTarget();
             }
@@ -141,9 +127,33 @@ class DemoChat extends Chatter {
         mTimer.schedule(mTask, 250, 250);
     }
 
-    // Called to stop any running background services
-    void stopService() {
+    @Override
+    void onPause() {
+    }
+
+    @Override
+    void onResume() {
+    }
+
+    @Override
+    void configure(int sensitivity, int noise, int range) {
+    }
+
+    @Override
+    void connect(DeviceRecord dev) {
+        mListener.obtainMessage(MESSAGE_STATE_CHANGE, STATE_CONNECTED, -1).sendToTarget();
+        startTimer();
+        Ping.demoDevice.isConnected = true;
+    }
+
+    @Override
+    void disconnect() {
+        Ping.demoDevice.isConnected = false;
         stopTimer();
-        mConnected = false;
+    }
+
+    @Override
+    void stopServices() {
+        disconnect();
     }
 }

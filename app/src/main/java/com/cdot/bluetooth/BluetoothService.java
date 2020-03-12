@@ -7,8 +7,9 @@ import android.os.Binder;
 import android.os.IBinder;
 
 /**
- * Abstract base class of bluetooth services classes. There is a different class for each of
- * the different types of device i.e. Classic or LE (and maybe more later)
+ * Abstract base class of bluetooth services classes. There should be a different class for each of
+ * the different types of device i.e. Classic or LE (and maybe more later). Right now we only
+ * support LE, but classic might be added if it's ever needed.
  */
 public abstract class BluetoothService extends Service {
     public static final String ACTION_BT_DATA_AVAILABLE = "com.cdot.bluetooth.ACTION_BT_DATA_AVAILABLE";
@@ -30,7 +31,7 @@ public abstract class BluetoothService extends Service {
     /**
      * Closes down the service
      */
-    public abstract void close();
+    public void close() {}
 
     public class LocalBinder extends Binder {
         public BluetoothService getService() {

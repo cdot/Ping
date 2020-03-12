@@ -7,35 +7,59 @@ import android.graphics.Paint;
 import android.util.AttributeSet;
 import android.view.View;
 
+import androidx.annotation.NonNull;
+
+/**
+ * A simple view for watching a graph of sonar samples.
+ */
 public class SonarView extends View {
-    SonarData[] mSamples = new SonarData[256];
+    SampleData[] mSamples;
     int mPtr = 0;
     int mWidth;
     int mHeight;
-    Paint mGroundPaint;
+    Paint depthPaint, tempPaint, strengthPaint;
 
     SonarView(Context context, AttributeSet attrs) {
         super(context, attrs);
-        mGroundPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         setWillNotDraw(false);
-        mGroundPaint.setColor(Color.RED);
-        mGroundPaint.setAntiAlias(true);
-        mGroundPaint.setStrokeWidth(1);
-        mGroundPaint.setStyle(Paint.Style.STROKE);
+
+        depthPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        depthPaint.setColor(Color.GREEN);
+        depthPaint.setAntiAlias(true);
+        depthPaint.setStrokeWidth(1);
+        depthPaint.setStyle(Paint.Style.STROKE);
+
+        tempPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        tempPaint.setColor(Color.RED);
+        tempPaint.setAntiAlias(true);
+        tempPaint.setStrokeWidth(1);
+        tempPaint.setStyle(Paint.Style.STROKE);
+
+        strengthPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        strengthPaint.setColor(Color.MAGENTA);
+        strengthPaint.setAntiAlias(true);
+        strengthPaint.setStrokeWidth(1);
+        strengthPaint.setStyle(Paint.Style.STROKE);
     }
 
-    void sample(SonarData data) {
-        if (mPtr == mSamples.length)
-            mPtr = 0;
-        mSamples[mPtr++] = data;
+    synchronized void sample(@NonNull SampleData data) {
+        if (mPtr == mSamples.length) {
+            System.arraycopy(mSamples, 1, mSamples, 0, mSamples.length - 1);
+            mSamples[mPtr - 1] = data;
+        } else
+            mSamples[mPtr++] = data;
         invalidate();
     }
 
     @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);
-        mWidth = w;
-        mHeight = h;
+        synchronized (this) {
+            mWidth = w;
+            mSamples = new SampleData[w];
+            mPtr = 0;
+            mHeight = h;
+        }
     }
 
     private int scalex(int sample) {
@@ -51,10 +75,27 @@ public class SonarView extends View {
         super.onDraw(canvas);
         if (mSamples == null || mPtr == 0)
             return;
-        float last = mSamples[0].depth;
-        for (int i = 0; i < mPtr; i++) {
-            canvas.drawLine(scalex(i - 1), scaley(last, 36), scalex(i), scaley(mSamples[i].depth, 36), mGroundPaint);
-            last = mSamples[i].depth;
+        int maxDepth = Ping.RANGE_DEPTH[Ping.P.getInt("range")];
+        int maxStrength = Ping.MAX_STRENGTH;
+        float maxTemp = Ping.MAX_TEMPERATURE;
+        synchronized (this) {
+            float depthy1 = scaley(mSamples[0].depth, maxDepth);
+            float tempy1 = scaley(mSamples[0].depth, maxTemp);
+            float strengthy1 = scaley(mSamples[0].depth, maxStrength);
+            int x1 = 0;
+            for (int i = 0; i < mPtr; i++) {
+                int x2 = scalex(i);
+                int depthy2 = scaley(mSamples[i].depth, maxDepth);
+                int tempy2 = scaley(mSamples[i].temperature, maxTemp);
+                int strengthy2 = scaley(mSamples[i].strength, maxStrength);
+                canvas.drawLine(x1, depthy1, x2, depthy2, depthPaint);
+                canvas.drawLine(x1, tempy1, x2, tempy2, tempPaint);
+                canvas.drawLine(x1, strengthy1, x2, strengthy2, strengthPaint);
+                depthy1 = depthy2;
+                tempy1 = tempy2;
+                strengthy1 = strengthy2;
+                x1 = x2;
+            }
         }
     }
 }

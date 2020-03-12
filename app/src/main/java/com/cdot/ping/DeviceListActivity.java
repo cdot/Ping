@@ -27,38 +27,34 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static android.bluetooth.BluetoothAdapter.ACTION_DISCOVERY_FINISHED;
-import static android.bluetooth.BluetoothDevice.ACTION_FOUND;
-import static android.bluetooth.BluetoothDevice.EXTRA_DEVICE;
-import static com.cdot.ping.DeviceRecord.DEVICE_ADDRESS;
-import static com.cdot.ping.DeviceRecord.DEVICE_NAME;
-import static com.cdot.ping.DeviceRecord.DEVICE_TYPE;
-
 /**
- * Activity that displays a list of available bluetooth devices and allows the user to select one
+ * Activity that displays a list of available bluetooth devices and allows the user to select one.
+ * Used from the SettingsActivity.
  */
 public class DeviceListActivity extends AppCompatActivity {
     private static final String TAG = "DeviceListActivity";
 
     private ListView mDeviceListView;
-    List<Map<String, Object>> mDeviceList;
-    ProgressDialog mScanProgressDialog;
+    private List<Map<String, Object>> mDeviceList;
+    private ProgressDialog mScanProgressDialog;
     private boolean mReceiverRegistered = false;
+    private BluetoothAdapter mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
 
+    // Receiver for broadcasts from device discovery. Only registered if there is a bluetooth adapter
     private final BroadcastReceiver mReceiver = new BroadcastReceiver() {
         public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();
-            if (action.equals(ACTION_FOUND)) {
-                BluetoothDevice device = intent.getParcelableExtra(EXTRA_DEVICE);
-                String dn = device.getName();
-                Log.d(TAG, "Found device " + dn);
-                if (dn == null) {
-                    Log.e(TAG, "Weirdness");
-                    return;
-                }
-                Ping.getInstance().addDevice(device);
-                updateDisplay();
-            } else if (action.equals(ACTION_DISCOVERY_FINISHED)) {
+            if (BluetoothDevice.ACTION_FOUND.equals(action)) {
+                BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
+                int t = device.getType();
+                // Only interested in LE devices
+                if (t == BluetoothDevice.DEVICE_TYPE_LE || t == BluetoothDevice.DEVICE_TYPE_DUAL) {
+                    Log.d(TAG, "Found device " + device.getName());
+                    Ping.P.addDevice(device);
+                    updateDisplay();
+                } else
+                    Log.d(TAG, "Ignoring non-LE device " + device.getName());
+            } else if (BluetoothAdapter.ACTION_DISCOVERY_FINISHED.equals(action)) {
                 setProgressBarIndeterminateVisibility(false);
                 mScanProgressDialog.cancel();
             }
@@ -70,11 +66,11 @@ public class DeviceListActivity extends AppCompatActivity {
         // Fill the UI from our list of devices
         Resources r = getResources();
         mDeviceList = new ArrayList<>();
-        for (DeviceRecord dr : Ping.getInstance().mDevices) {
+        for (DeviceRecord dr : Ping.P.getDevices()) {
             Map<String, Object> map = new HashMap<>();
-            map.put(DEVICE_ADDRESS, dr.address);
-            map.put(DEVICE_NAME, dr.name);
-            map.put(DEVICE_TYPE, r.getStringArray(R.array.device_types)[dr.type]);
+            map.put(DeviceRecord.DEVICE_ADDRESS, dr.address);
+            map.put(DeviceRecord.DEVICE_NAME, dr.name);
+            map.put(DeviceRecord.DEVICE_TYPE, r.getStringArray(R.array.device_types)[dr.type]);
             map.put("devicePairingStatus", r.getString(dr.isPaired ? R.string.paired : R.string.not_paired));
             map.put("devicePairingAction", r.getString(dr.isPaired ? R.string.paired : R.string.click_to_pair));
             mDeviceList.add(map);
@@ -84,7 +80,7 @@ public class DeviceListActivity extends AppCompatActivity {
                 mDeviceList,
                 R.layout.listview_device,
                 new String[]{
-                        DEVICE_ADDRESS, DEVICE_NAME, DEVICE_TYPE,
+                        DeviceRecord.DEVICE_ADDRESS, DeviceRecord.DEVICE_NAME, DeviceRecord.DEVICE_TYPE,
                         "devicePairingStatus", "devicePairingAction"
                 },
                 new int[]{
@@ -94,70 +90,66 @@ public class DeviceListActivity extends AppCompatActivity {
         mDeviceListView.setStackFromBottom(false);
     }
 
+    @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        final BluetoothAdapter bta = BluetoothAdapter.getDefaultAdapter();
 
         setResult(Activity.RESULT_CANCELED);
-        if (bta == null) {
-            setContentView(R.layout.no_bluetooth);
-            return;
-        }
 
         setContentView(R.layout.device_list);
 
         createProgressDlg();
         Button scanButton = findViewById(R.id.scan_button);
         scanButton.setTextColor(getResources().getColor(R.color.white, getTheme()));
-        scanButton.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) {
-                setProgressBarIndeterminateVisibility(true);
-                setTitle(R.string.scanning);
-                if (bta.isDiscovering())
-                    bta.cancelDiscovery();
-                bta.startDiscovery();
-                if (!mScanProgressDialog.isShowing())
-                    mScanProgressDialog.show();
-            }
-        });
+        if (mBluetoothAdapter != null) {
+            scanButton.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) {
+                    setProgressBarIndeterminateVisibility(true);
+                    setTitle(R.string.scanning);
+                    if (mBluetoothAdapter.isDiscovering())
+                        mBluetoothAdapter.cancelDiscovery();
+                    mBluetoothAdapter.startDiscovery();
+                    if (!mScanProgressDialog.isShowing())
+                        mScanProgressDialog.show();
+                }
+            });
+        }
 
-        Ping.getInstance().clearDevices();
-        mDeviceListView = findViewById(R.id.paired_devices);
-
-        // Listener invoked when a device is selected for pairing
+        // Listener invoked when a device is selected for pairing. This is attached even
+        // if there is no bluetooth, so we can test/demo it.
         AdapterView.OnItemClickListener clickListener = new AdapterView.OnItemClickListener() {
             public void onItemClick(AdapterView<?> adapterView, View v, int arg2, long arg3) {
-                if (bta.isDiscovering())
-                    bta.cancelDiscovery();
+                if (mBluetoothAdapter != null && mBluetoothAdapter.isDiscovering())
+                    mBluetoothAdapter.cancelDiscovery();
                 Intent intent = new Intent();
-                DeviceRecord dr = Ping.getInstance().getDevice((String) mDeviceList.get(arg2).get(DEVICE_ADDRESS));
-                intent.putExtra(DEVICE_ADDRESS, dr.address);
+                DeviceRecord dr = Ping.P.getDevice((String) mDeviceList.get(arg2).get(DeviceRecord.DEVICE_ADDRESS));
+                intent.putExtra(DeviceRecord.DEVICE_ADDRESS, dr.address);
                 setResult(Activity.RESULT_OK, intent);
                 finish();
             }
         };
+
+        mDeviceListView = findViewById(R.id.paired_devices);
         mDeviceListView.setOnItemClickListener(clickListener);
 
-        registerReceiver(mReceiver, new IntentFilter(ACTION_FOUND));
-        registerReceiver(mReceiver, new IntentFilter(ACTION_DISCOVERY_FINISHED));
-        mReceiverRegistered = true;
+        Ping.P.clearDevices(); // except demoDevice
 
-        // On startup, get the bonded devices and the devices remembered in the database,
-        // and add them to the view.
+        if (mBluetoothAdapter != null) {
+            registerReceiver(mReceiver, new IntentFilter(BluetoothDevice.ACTION_FOUND));
+            registerReceiver(mReceiver, new IntentFilter(BluetoothAdapter.ACTION_DISCOVERY_FINISHED));
+            mReceiverRegistered = true;
 
-        Ping ping = Ping.getInstance();
-        Set<BluetoothDevice> pairedDevices = bta.getBondedDevices();
-        // TODO: If Bluetooth state is not STATE_ON, getBondedDevices will return an empty set.
-        // After turning on Bluetooth, wait for ACTION_BT_STATE_CHANGED with STATE_ON to get the updated value.
-        for (BluetoothDevice device : pairedDevices)
-            ping.addDevice(device);
+            // Get the bonded devices and add/update them in the view.
+            Set<BluetoothDevice> pairedDevices = mBluetoothAdapter.getBondedDevices();
+            for (BluetoothDevice device : pairedDevices)
+                Ping.P.addDevice(device);
+        }
+
         updateDisplay();
-        ping.addActivity(this);
+        Ping.addActivity(this);
     }
 
-    /**
-     * Dialog for device scan progress
-     */
+    // Dialog for device scan progress (only activated if mBluetoothAdapter is non-null
     private void createProgressDlg() {
         mScanProgressDialog = new ProgressDialog(this);
         mScanProgressDialog.setProgressStyle(0);
@@ -167,32 +159,32 @@ public class DeviceListActivity extends AppCompatActivity {
         mScanProgressDialog.setMessage(getResources().getString(R.string.scanning));
         mScanProgressDialog.setOnKeyListener(new DialogInterface.OnKeyListener() {
             public boolean onKey(DialogInterface dialog, int keyCode, KeyEvent event) {
-                BluetoothAdapter bta = BluetoothAdapter.getDefaultAdapter();
-                if (!bta.isDiscovering())
+                if (!mBluetoothAdapter.isDiscovering())
                     return false;
-                bta.cancelDiscovery();
+                mBluetoothAdapter.cancelDiscovery();
                 return false;
             }
         });
         mScanProgressDialog.setOnCancelListener(new DialogInterface.OnCancelListener() {
             public void onCancel(DialogInterface dialog) {
-                BluetoothAdapter bta = BluetoothAdapter.getDefaultAdapter();
-                if (bta.isDiscovering())
-                    bta.cancelDiscovery();
+                if (mBluetoothAdapter.isDiscovering())
+                    mBluetoothAdapter.cancelDiscovery();
             }
         });
     }
 
+    @Override
     protected void onDestroy() {
         super.onDestroy();
-        BluetoothAdapter bta = BluetoothAdapter.getDefaultAdapter();
-        if (bta != null && bta.isDiscovering())
-            bta.cancelDiscovery();
+        if (mBluetoothAdapter != null && mBluetoothAdapter.isDiscovering())
+            mBluetoothAdapter.cancelDiscovery();
+        mBluetoothAdapter = null;
         if (mReceiverRegistered)
             unregisterReceiver(mReceiver);
         mReceiverRegistered = false;
     }
 
+    @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         if (keyCode == KeyEvent.KEYCODE_BACK) {
             finishAfterTransition();

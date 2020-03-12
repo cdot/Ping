@@ -58,7 +58,7 @@
     <color name="burlywood">#ffdeb887</color>
     <color name="plum">#ffdda0dd</color>
     <color name="gainsboro">#ffdcdcdc</color>
-    <color name="crimson">#ffdc143c</color>
+    <color name="crimson">#DC143C</color>
     <color name="palevioletred">#ffdb7093</color>
     <color name="goldenrod">#ffdaa520</color>
     <color name="orchid">#ffda70d6</color>
