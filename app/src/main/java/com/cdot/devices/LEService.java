@@ -1,5 +1,6 @@
-package com.cdot.bluetooth;
+package com.cdot.devices;
 
+import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
 import android.bluetooth.BluetoothGattCallback;
@@ -16,9 +17,11 @@ import java.util.UUID;
 /**
  * Service for talking to Bluetooth LE devices. The application talks to the service
  * through a SonarChat interface.
+ * *
+ * Tested talking to a MicroChip IS1678S-152
  */
-public class BluetoothLEService extends BluetoothService {
-    public static final String TAG = "BluetoothLEService";
+public class LEService extends DeviceService {
+    public static final String TAG = "LEService";
 
     // Bluetooth services BTS_*
     // Bluetooth characteristics BTC_*
@@ -72,6 +75,7 @@ public class BluetoothLEService extends BluetoothService {
         @Override
         public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
             Intent intent = null;
+            Log.d(TAG, "BluetoothGatt: connection state change " + status + " " + newState);
             if (newState == BluetoothProfile.STATE_CONNECTED) {
                 Log.d(TAG, "Connected to GATT server. Starting service discovery");
                 if (!mBluetoothGatt.discoverServices())
@@ -81,7 +85,8 @@ public class BluetoothLEService extends BluetoothService {
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 Log.d(TAG, "Disconnected from GATT server.");
                 intent = new Intent(ACTION_BT_DISCONNECTED);
-                intent.putExtra(EXTRA_DATA, CONNECTION_LOST);
+                intent.putExtra(DEVICE_ADDRESS, mConnectingDevice.getAddress());
+                intent.putExtra(REASON, CONNECTION_LOST);
                 sendBroadcast(intent);
             }
         }
@@ -89,7 +94,8 @@ public class BluetoothLEService extends BluetoothService {
         @Override
         public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
             Intent intent = new Intent(ACTION_BT_DATA_AVAILABLE);
-            intent.putExtra(BluetoothService.EXTRA_DATA, characteristic.getValue());
+            intent.putExtra(DeviceService.DEVICE_ADDRESS, mConnectingDevice.getAddress());
+            intent.putExtra(DeviceService.DATA, characteristic.getValue());
             sendBroadcast(intent);
         }
 
@@ -113,7 +119,7 @@ public class BluetoothLEService extends BluetoothService {
             }
             // Tell the world we are ready for action
             Intent intent = new Intent(ACTION_BT_CONNECTED);
-            intent.putExtra(EXTRA_DATA, mConnectingDevice.getName());
+            intent.putExtra(DEVICE_ADDRESS, mConnectingDevice.getAddress());
             sendBroadcast(intent);
 
             // Enable push notification from the BTC_CUSTOM_SAMPLE service
@@ -132,22 +138,30 @@ public class BluetoothLEService extends BluetoothService {
     }
 
     @Override
-    public void connect(BluetoothDevice device) {
+    public boolean connect(DeviceRecord device) {
         if (mBluetoothGatt == null) {
-            Log.d(TAG, "Trying to create a new connection.");
-            mBluetoothGatt = device.connectGatt(this,
+            BluetoothAdapter bta = BluetoothAdapter.getDefaultAdapter();
+            if (bta == null) {
+                Log.e(TAG, "connect() failed, no bluetooth adapter");
+                return false;
+            }
+            BluetoothDevice btd = bta.getRemoteDevice(device.address);
+            if (btd == null) {
+                Log.e(TAG, "connect() failed, " + device.address + " not found");
+                return false;
+            }
+            Log.d(TAG, "connect() using new BluetoothGatt");
+            mBluetoothGatt = btd.connectGatt(this,
                     false, // Don't wait for device to become available
-                    new GattBack(device), // Callback
+                    new GattBack(btd), // Callback
                     BluetoothDevice.TRANSPORT_LE); // Use LE with dual-mode devices
-        } else {
-            // Re-connect to a remote device after the connection has been dropped. If the
-            // device is not in range, the re-connection will be triggered once the device
-            // is back in range.
-            Log.d(TAG, "Trying to use an existing mBluetoothGatt for connection.");
-            if (!mBluetoothGatt.connect())
-                throw new Error("GATT connect failed");
+            return true;
         }
-        // Once the connect state changes, service discovery should start
+        // Re-connect to a remote device after the connection has been dropped. If the
+        // device is not in range, the re-connection will be triggered once the device
+        // is back in range.
+        Log.d(TAG, "connect() using existing BluetoothGatt");
+        return mBluetoothGatt.connect();
     }
 
     // Disconnect the currently connected device

@@ -18,7 +18,9 @@ import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
 import androidx.preference.PreferenceManager;
 
-import static com.cdot.ping.DeviceRecord.DEVICE_ADDRESS;
+import com.cdot.devices.DeviceRecord;
+
+import static com.cdot.devices.DeviceRecord.DEVICE_ADDRESS;
 
 /**
  * Preferences - a simple, single page that took f**king ages to work out how to do.
@@ -100,7 +102,7 @@ public class SettingsActivity extends AppCompatActivity {
 
         // Set the input type of the setting
         private void setInputType(String prefName, final int type) {
-            EditTextPreference etPref = (EditTextPreference) findPreference(prefName);
+            EditTextPreference etPref = findPreference(prefName);
             etPref.setOnBindEditTextListener(new EditTextPreference.OnBindEditTextListener() {
                 @Override
                 public void onBindEditText(@NonNull EditText editText) {

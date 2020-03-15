@@ -2,14 +2,18 @@ package com.cdot.ping;
 
 import android.os.Handler;
 
+import com.cdot.devices.DeviceRecord;
+
 /**
- * Abstract interface to a data source.
+ * Abstract interface to a data source. This could be a Bluetooth device, or a wireless device,
+ * or a USB device, or something else.
  */
 abstract class Chatter {
     // Constants which indicate the current connection state
     static final int STATE_NONE = 0;            // we're doing nothing, or getting connected
-    static final int STATE_CONNECTED = 1;       // now connected to a remote device
-    static final int STATE_DISCONNECTED = 2;    // Connection was lost
+    static final int STATE_CONNECTING = 1;      // trying to connect
+    static final int STATE_CONNECTED = 2;       // now connected to a remote device
+    static final int STATE_DISCONNECTED = 3;    // Connection was lost
 
     static final String[] stateName = { "None", "Connected", "Disconnected" }; // debug trace only
 
@@ -40,8 +44,10 @@ abstract class Chatter {
 
     /**
      * Called to connect to a device
+     * @param dev device to connect to
+     * @return true if a connection was made
      */
-    abstract void connect(DeviceRecord dev);
+    abstract boolean connect(DeviceRecord dev);
 
     /**
      * Called to disconnect from a device

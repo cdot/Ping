@@ -65,7 +65,7 @@ class Sampler extends SampleData {
         battery = data.battery;
         // Other fields are averaged over the history
         mAveraging.add(data);
-        isLand = data.isLand;
+        contactsDry = data.contactsDry;
 
         depth = 0;
         strength = 0;
@@ -98,7 +98,7 @@ class Sampler extends SampleData {
     /**
      * Record a sample
      */
-    void sample(Context context) {
+    private void sample(Context context) {
         if (Ping.P.recordingOn && Ping.P.getSampleFile() != null) {
             // Going to have to ask for permission
             try {

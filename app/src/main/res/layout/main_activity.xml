@@ -15,7 +15,6 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
             android:orientation="horizontal">
 
             <TextView
@@ -27,6 +26,19 @@
                 android:id="@+id/device"
                 style="@style/settingStyle"
                 android:text="@string/demo" />
+
+            <TextView
+                android:id="@+id/connectionStatus"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@array/bt_status" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
 
             <TextView
                 android:id="@+id/sensitivity_label"
@@ -65,7 +77,6 @@
             android:id="@+id/location_layout"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
             android:orientation="horizontal">
 
             <TextView
@@ -91,49 +102,44 @@
         </LinearLayout>
 
         <LinearLayout
-            android:id="@+id/water_layout"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
             android:orientation="horizontal">
 
             <TextView
-                android:id="@+id/waterDepth_label"
+                android:id="@+id/depth_label"
                 style="@style/labelStyle"
                 android:text="@string/depth" />
 
             <TextView
-                android:id="@+id/waterDepth"
+                android:id="@+id/depth"
                 style="@style/dataStyle"
                 android:text="@string/sample_data" />
 
             <TextView
-                android:id="@+id/isLand_label"
+                android:id="@+id/contactsDry_label"
                 style="@style/labelStyle"
-                android:text="@string/land_flag" />
+                android:text="@string/contactsDry_label" />
+
+            <RadioButton
+                android:id="@+id/contactsDry"
+                style="@style/dataStyle" />
 
             <TextView
-                android:id="@+id/isLand"
-                style="@style/dataStyle"
-                android:text="@string/sample_data" />
-
-            <TextView
-                android:id="@+id/waterTemp_label"
+                android:id="@+id/temperature_label"
                 style="@style/labelStyle"
                 android:text="@string/temperature" />
 
             <TextView
-                android:id="@+id/waterTemp"
+                android:id="@+id/temperature"
                 style="@style/dataStyle"
                 android:text="@string/sample_data" />
 
         </LinearLayout>
 
         <LinearLayout
-            android:id="@+id/other_layout"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
             android:orientation="horizontal">
 
             <TextView
@@ -159,16 +165,14 @@
         </LinearLayout>
 
         <LinearLayout
-            android:id="@+id/fish_layout"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
             android:orientation="horizontal">
 
             <TextView
                 android:id="@+id/fishDepth_label"
                 style="@style/labelStyle"
-                android:text="@string/fish_depth" />
+                android:text="@string/fishDepth" />
 
             <TextView
                 android:id="@+id/fishDepth"
@@ -178,7 +182,7 @@
             <TextView
                 android:id="@+id/fishType_label"
                 style="@style/labelStyle"
-                android:text="@string/fish_type" />
+                android:text="@string/fishType" />
 
             <TextView
                 android:id="@+id/fishType"
@@ -200,7 +204,7 @@
         android:layout_height="wrap_content"
         android:layout_gravity="end|bottom"
         android:layout_margin="16dp"
-        android:contentDescription="@string/record"
+        android:contentDescription="@string/record_start"
         android:src="@android:drawable/ic_media_play" />
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

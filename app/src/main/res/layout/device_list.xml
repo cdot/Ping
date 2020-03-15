@@ -12,11 +12,11 @@
         android:layout_height="wrap_content"
         android:layout_marginLeft="10.0dip"
         android:layout_marginRight="10.0dip"
-        android:text="@string/scan" />
+        android:text="@string/bt_discover" />
 
     <ListView android:id="@+id/paired_devices"
         android:layout_width="fill_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="0dp"
         android:stackFromBottom="true"
         android:divider="#00000000"
         android:layout_weight="2.0" />

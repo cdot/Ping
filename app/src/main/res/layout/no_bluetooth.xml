@@ -12,7 +12,7 @@
         android:layout_marginTop="20dp"
         android:layout_marginStart="20dp"
         android:layout_marginEnd="20dp"
-        android:text="@string/no_bluetooth"
+        android:text="@string/bt_no_bluetooth"
         android:textAlignment="center"
         android:textColor="@color/crimson"
         android:textSize="30sp"

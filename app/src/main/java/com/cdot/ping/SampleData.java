@@ -11,7 +11,7 @@ class SampleData {
     static final byte ID0 = 83;
     static final byte ID1 = 70;
 
-    boolean isLand; // simple flag
+    boolean contactsDry; // simple flag
 
     float depth; // metres
     // probably 0..100? Value in a cup is 111, suggesting that's the max.
@@ -43,7 +43,7 @@ class SampleData {
      * @param copy SampleData to copy
      */
     SampleData(SampleData copy) {
-        isLand = copy.isLand;
+        contactsDry = copy.contactsDry;
         depth = copy.depth;
         strength = copy.strength;
         fishDepth = copy.fishDepth;
@@ -61,8 +61,8 @@ class SampleData {
      */
     SampleData(byte[] data) {
         if (data.length < 14 || data[0] != ID0 || data[1] != ID1)
-            throw new IllegalArgumentException("Bad data block " + data);
-        isLand = ((data[4] & 0x8) != 0); // wonder what the other bits are? Always 0 AFAICT
+            throw new IllegalArgumentException("Bad data block");
+        contactsDry = ((data[4] & 0x8) != 0); // wonder what the other bits are? Always 0 AFAICT
         // Convert feet to metres
         depth = ft2m * (data[6] + data[7] / 100.0f);
         strength = 100f * data[8] / MAX_STRENGTH;

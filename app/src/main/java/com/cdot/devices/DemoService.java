@@ -1,14 +1,14 @@
-package com.cdot.ping;
+package com.cdot.devices;
 
-import android.os.Handler;
+import android.content.Intent;
+import android.util.Log;
 
 import java.util.Timer;
 import java.util.TimerTask;
 
-/**
- * Demo data generator
- */
-class DemoChat extends Chatter {
+public class DemoService extends DeviceService {
+    private static final String TAG = "DemoService";
+
     private static final float[] demoDepth = {
             24.9f, 24.6f, 24.6f, 24.6f, 24.6f, 24.6f, 24.6f, 24.6f, 24.6f, 24.6f,
             24.6f, 24.3f, 24.3f, 24.3f, 24.3f, 24.3f, 24.3f, 24.3f, 24.3f, 24.0f,
@@ -35,6 +35,8 @@ class DemoChat extends Chatter {
             24.0f, 24.0f, 24.0f, 24.0f, 24.3f, 24.3f, 24.3f, 24.3f, 24.3f, 24.3f,
             24.6f, 24.6f, 24.6f, 24.6f, 24.6f, 24.6f, 24.6f, 24.6f, 24.9f, 24.9f,
             24.9f, 24.9f, 24.9f, 24.9f, 24.9f, 24.9f, 24.9f, 24.9f, 24.9f, 24.9f};
+
+    // These numbers are just weird.
     private static final float[] demoStrength = {
             47.5f, 66.3f, 88.2f, 24.3f, 46.6f, 41.2f, 16.9f, 27.9f, 60.1f, 66.3f,
             8f, 95.3f, 70f, 17.7f, 19.5f, 47.2f, 10.4f, 71.1f, 8f, 21.4f,
@@ -52,108 +54,125 @@ class DemoChat extends Chatter {
             11.5f, 1.9f, 95.1f, 66.9f, 99.4f, 31.4f, 44.2f, 12.7f, 54.8f, 25.5f,
             90.5f, 27.2f, 33.6f, 38f, 48.7f, 78.4f, 61.2f, 98.6f, 90.6f, 31f,
             77f, 25.9f, 90.4f, 12.3f, 79};
+
     private static final float[] demoFishDepth = new float[477];
-    private static final int[] demoFishType = new int[500];
+
+    private static final byte[] demoFishType = new byte[500];
 
     static {
         demoFishDepth[3] = 9.8f;
         demoFishType[3] = 4;
 
         demoFishDepth[75] = 13.8f;
-        demoFishType[75] = SampleData.SMALL_FISH;
+        demoFishType[75] = 1; // SMALL_FISH;
 
         demoFishDepth[142] = 4;
-        demoFishType[142] = SampleData.BIG_FISH;
+        demoFishType[142] = 3; // BIG FISH
 
         demoFishDepth[199] = 8.6f;
-        demoFishType[199] = SampleData.SHOAL;
+        demoFishType[199] = 4;
 
         demoFishDepth[274] = 10.7f;
-        demoFishType[274] = SampleData.MEDIUM_FISH;
+        demoFishType[274] = 2; // MEDIUM_FISH;
 
         demoFishDepth[364] = 14.7f;
-        demoFishType[364] = SampleData.SHOAL;
+        demoFishType[364] = 4;
 
         demoFishDepth[400] = 8;
-        demoFishType[400] = SampleData.BIG_FISH;
+        demoFishType[400] = 3; // big fish
 
         demoFishDepth[474] = 9.8f;
-        demoFishType[474] = SampleData.MEDIUM_FISH;
+        demoFishType[474] = 2; // MEDIUM_FISH;
     }
 
     private Timer mTimer = null;
-    private TimerTask mTask = null;
     private int mTicker = 0;
     private float mCurBattery = 6;
-    private float mCurTemp = Ping.MAX_TEMPERATURE / 4;
-
-    DemoChat(Handler listener) {
-        super(listener);
-        mListener = listener;
-    }
+    private float mCurTemp = 64;
 
     private void stopTimer() {
         if (mTimer != null)
             mTimer.cancel();
-        if (mTask != null)
-            mTask.cancel();
         mTimer = null;
-        mTask = null;
     }
 
-    private void startTimer() {
+    private static final float ft2m = 0.3048f;
+
+    private DeviceRecord mConnected = null;
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
         mTimer = new Timer();
-        mTask = new TimerTask() {
+        TimerTask task = new TimerTask() {
             public void run() {
-                SampleData data = new SampleData();
-                data.isLand = false;
-                data.depth = demoDepth[mTicker % demoDepth.length];
-                data.strength = demoStrength[mTicker % demoStrength.length];
-                data.fishDepth = demoFishDepth[mTicker % demoFishDepth.length];
-                data.fishType = demoFishType[mTicker % demoFishType.length];
-
+                if (mConnected == null)
+                    return;
+                byte[] data = new byte[20];
+                data[0] = 83;
+                data[1] = 70;
+                data[2] = 0;
+                data[3] = 0;
+                data[4] = (byte)((mTicker & 1) << 3);
+                data[5] = 0;
+                float d = demoDepth[mTicker % demoDepth.length] / ft2m;
+                data[6] = (byte)Math.floor(d);
+                data[7] = (byte)Math.floor((d - data[6]) * 100);
+                data[8] = (byte)((demoStrength[mTicker % demoStrength.length] / 100) * 128);
+                d = demoFishDepth[mTicker % demoFishDepth.length] / ft2m;
+                data[9] = (byte)Math.floor(d);
+                data[10] = (byte)Math.floor((d - data[9]) * 100);
                 mCurBattery -= 0.001;
-                data.battery = (int)mCurBattery;
-
+                byte battery = (byte)mCurBattery;
+                data[11] = (byte)(demoFishType[mTicker % demoFishType.length] | (battery << 4));
                 mCurTemp += (Math.random() - 0.5f);
-                if (mCurTemp < 0) mCurTemp = 0;
-                else if (mCurTemp > Ping.MAX_TEMPERATURE) mCurTemp = Ping.MAX_TEMPERATURE;
-                data.temperature = mCurTemp;
+                if (mCurTemp < 32) mCurTemp = 32;
+                else if (mCurTemp > 100) mCurTemp = 32;
+                data[12] = (byte)Math.floor(mCurTemp);
+                data[13] = (byte)Math.floor((mCurTemp - data[12]) * 100.0);
 
                 mTicker++;
-                mListener.obtainMessage(Chatter.MESSAGE_SONAR_DATA, data).sendToTarget();
+                Intent intent = new Intent(ACTION_BT_DATA_AVAILABLE);
+                intent.putExtra(DEVICE_ADDRESS, mConnected.address);
+                intent.putExtra(DATA, data);
+                sendBroadcast(intent);
             }
         };
-        mTimer.schedule(mTask, 250, 250);
+        mTimer.schedule(task, 0, 1000);
     }
 
-    @Override
-    void onPause() {
+    public boolean connect(DeviceRecord device) {
+        Log.d(TAG, "Connecting " + device.name);
+        mConnected = device;
+        // Tell the world we are ready for action
+        Intent intent = new Intent(ACTION_BT_CONNECTED);
+        intent.putExtra(DEVICE_ADDRESS, device.address);
+        sendBroadcast(intent);
+        return true;
     }
 
-    @Override
-    void onResume() {
+    public void disconnect() {
+        if (mConnected != null) {
+            Intent intent = new Intent(ACTION_BT_DISCONNECTED);
+            intent.putExtra(DEVICE_ADDRESS, mConnected.address);
+            intent.putExtra(REASON, CONNECTION_LOST);
+            sendBroadcast(intent);
+        }
+        mConnected = null;
     }
 
-    @Override
-    void configure(int sensitivity, int noise, int range) {
+    private int mSensitivity, mNoise, mRange;
+
+    public void write(byte[] data) {
+        mSensitivity = data[0];
+        mNoise = data[1];
+        mRange = data[2];
+        Log.d(TAG, "S " + mSensitivity + " N " + mNoise + " R " + mRange);
     }
 
-    @Override
-    void connect(DeviceRecord dev) {
-        mListener.obtainMessage(MESSAGE_STATE_CHANGE, STATE_CONNECTED, -1).sendToTarget();
-        startTimer();
-        Ping.demoDevice.isConnected = true;
-    }
-
-    @Override
-    void disconnect() {
-        Ping.demoDevice.isConnected = false;
-        stopTimer();
-    }
-
-    @Override
-    void stopServices() {
-        disconnect();
+    public void close() {
+        if (mTimer != null)
+            mTimer.cancel();
+        mTimer = null;
     }
 }

@@ -7,6 +7,9 @@ import android.content.SharedPreferences;
 import android.content.res.Resources;
 import android.net.Uri;
 import android.preference.PreferenceManager;
+import android.util.Log;
+
+import com.cdot.devices.DeviceRecord;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -18,7 +21,7 @@ import java.util.Map;
  * Global Application State. Singleton. Maintains a list of activities, and a set of preferences
  * which includes a list of available bluetooth mDevices.
  */
-public class Ping {
+class Ping {
     private static final String TAG = "Ping";
 
     // noise filtering is for turbid water or where there are suspended solids
@@ -92,8 +95,12 @@ public class Ping {
         if (devs != null && devs.length() > 0) {
             String[] deviceSet = devs.split(",");
             // Devices saved in REVERSE order so the first ends up last, restoring the original order
-            for (String s : deviceSet)
-                mDevices.add(new DeviceRecord(s));
+            Log.d(TAG, "Loading devices from preferences");
+            for (String s : deviceSet) {
+                DeviceRecord dr = new DeviceRecord(s);
+                Log.d(TAG, "remembered " + dr.serialise());
+                mDevices.add(dr);
+            }
         }
         mDevices.add(demoDevice);
     }
@@ -137,6 +144,12 @@ public class Ping {
         clearDevices();
     }
 
+    /**
+     * Get the integer value of a preference. All preferences are stored as strings, and must be
+     * converted on read.
+     * @param key preference to read
+     * @return preference value
+     */
     int getInt(String key) {
         String v = mSP.getString(key, sKeyDefault.get(key));
         try {
@@ -146,6 +159,12 @@ public class Ping {
         }
     }
 
+    /**
+     * Get the float value of a preference. All preferences are stored as strings, and must be
+     * converted on read.
+     * @param key preference to read
+     * @return preference value
+     */
     float getFloat(String key) {
         String v = mSP.getString(key, sKeyDefault.get(key));
         try {
@@ -155,10 +174,21 @@ public class Ping {
         }
     }
 
+    /**
+     * Get the text value of the current stored value of an integer preference
+     * @param key preference to read
+     * @return string representation of the value of the preferene
+     */
     String getText(String key) {
         return getText(key, getInt(key));
     }
 
+    /**
+     * Get the text value of the value of an integer preference
+     * @param key preference to read
+     * @param val value of the preference
+     * @return string representation of the value of the preferene
+     */
     String getText(String key, Object val) {
         float i;
         switch (key) {
@@ -176,6 +206,10 @@ public class Ping {
         }
     }
 
+    /**
+     * Get the currently selected sample file
+     * @return a Uri for the sample file
+     */
     Uri getSampleFile() {
         String sf = mSP.getString("sampleFile", "");
 
@@ -184,14 +218,23 @@ public class Ping {
         return Uri.parse(sf);
     }
 
+    /**
+     * Get the currently selected device
+     * @return the DeviceRecord
+     */
     DeviceRecord getSelectedDevice() {
         return getDevice(mSP.getString("selectedDevice", DEMO_DEVICE));
     }
 
+    /**
+     * Get a list of all known devices
+     * @return the list
+     */
     List<DeviceRecord> getDevices() {
         return mDevices;
     }
 
+    // Save the device list cache to SharedPreferences
     private void saveDeviceList() {
         String comma = "", devs = "";
         if (mDevices != null) {
@@ -205,6 +248,10 @@ public class Ping {
         set("devices", devs);
     }
 
+    /**
+     * Clear the list of devices. Does not remove the DEMO device. The only way to restore the
+     * device list is to discover devices again.
+     */
     void clearDevices() {
         mDevices.clear();
         saveDeviceList();

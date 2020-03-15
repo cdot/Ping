@@ -21,6 +21,8 @@ import android.widget.SimpleAdapter;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.cdot.devices.DeviceRecord;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -70,9 +72,9 @@ public class DeviceListActivity extends AppCompatActivity {
             Map<String, Object> map = new HashMap<>();
             map.put(DeviceRecord.DEVICE_ADDRESS, dr.address);
             map.put(DeviceRecord.DEVICE_NAME, dr.name);
-            map.put(DeviceRecord.DEVICE_TYPE, r.getStringArray(R.array.device_types)[dr.type]);
-            map.put("devicePairingStatus", r.getString(dr.isPaired ? R.string.paired : R.string.not_paired));
-            map.put("devicePairingAction", r.getString(dr.isPaired ? R.string.paired : R.string.click_to_pair));
+            map.put(DeviceRecord.DEVICE_TYPE, r.getStringArray(R.array.bt_device_types)[dr.type]);
+            map.put("devicePairingStatus", r.getString(dr.isPaired ? R.string.bt_paired : R.string.bt_not_paired));
+            map.put("devicePairingAction", r.getString(dr.isPaired ? R.string.bt_paired : R.string.bt_click_to_pair));
             mDeviceList.add(map);
         }
         mDeviceListView.setAdapter(new SimpleAdapter(
@@ -105,7 +107,7 @@ public class DeviceListActivity extends AppCompatActivity {
             scanButton.setOnClickListener(new View.OnClickListener() {
                 public void onClick(View v) {
                     setProgressBarIndeterminateVisibility(true);
-                    setTitle(R.string.scanning);
+                    setTitle(R.string.bt_discovering);
                     if (mBluetoothAdapter.isDiscovering())
                         mBluetoothAdapter.cancelDiscovery();
                     mBluetoothAdapter.startDiscovery();
@@ -156,7 +158,7 @@ public class DeviceListActivity extends AppCompatActivity {
         mScanProgressDialog.setCanceledOnTouchOutside(true);
         mScanProgressDialog.setIndeterminate(false);
         mScanProgressDialog.setCancelable(true);
-        mScanProgressDialog.setMessage(getResources().getString(R.string.scanning));
+        mScanProgressDialog.setMessage(getResources().getString(R.string.bt_discovering));
         mScanProgressDialog.setOnKeyListener(new DialogInterface.OnKeyListener() {
             public boolean onKey(DialogInterface dialog, int keyCode, KeyEvent event) {
                 if (!mBluetoothAdapter.isDiscovering())
