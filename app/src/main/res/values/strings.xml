@@ -48,6 +48,7 @@
     <string name="minimumDepthChange_summary">The minimum depth difference that must be seen before a sample will be recorded, in metres</string>
     <string name="minimumPositionChange">Minimum position change</string>
     <string name="minimumPositionChange_summary">The minimum horizontal distance that must be moved before a sample will be recorded, in metres</string>
+    <string name="new_device">Changing device</string>
 
     <!-- Setting -->
     <string name="noise">Noise filter</string>

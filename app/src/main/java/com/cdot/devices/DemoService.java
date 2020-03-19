@@ -10,31 +10,27 @@ public class DemoService extends DeviceService {
     private static final String TAG = "DemoService";
 
     private static final float[] demoDepth = {
-            24.9f, 24.6f, 24.6f, 24.6f, 24.6f, 24.6f, 24.6f, 24.6f, 24.6f, 24.6f,
-            24.6f, 24.3f, 24.3f, 24.3f, 24.3f, 24.3f, 24.3f, 24.3f, 24.3f, 24.0f,
-            24.0f, 24.0f, 24.0f, 24.0f, 23.6f, 23.6f, 23.6f, 23.6f, 23.6f, 23.6f,
-            23.3f, 23.3f, 23.3f, 23.3f, 23.0f, 23.0f, 23.0f, 23.0f, 23.0f, 22.7f,
-            22.7f, 22.7f, 22.7f, 22.4f, 22.4f, 22.4f, 22.1f, 22.1f, 22.1f, 22.1f,
-            22.1f, 21.8f, 21.8f, 21.8f, 21.8f, 21.8f, 21.5f, 21.5f, 21.5f, 21.5f,
-            21.5f, 21.5f, 21.5f, 21.2f, 21.2f, 21.2f, 21.2f, 21.2f, 21.2f, 21.2f,
-            21.2f, 21.2f, 21.2f, 21.5f, 21.5f, 21.5f, 21.5f, 21.5f, 21.5f, 21.5f,
-            21.8f, 21.8f, 21.8f, 21.8f, 21.8f, 21.8f, 21.8f, 22.1f, 22.1f, 22.1f,
-            22.1f, 22.1f, 22.1f, 22.1f, 22.1f, 22.1f, 22.1f, 22.1f, 22.1f, 22.1f,
-            22.1f, 22.1f, 22.1f, 22.1f, 22.1f, 22.1f, 22.1f, 22.1f, 22.1f, 22.1f,
-            22.1f, 22.1f, 22.1f, 22.1f, 22.1f, 22.1f, 22.1f, 22.1f, 22.1f, 22.1f,
-            21.8f, 21.8f, 21.8f, 21.8f, 21.8f, 21.5f, 21.5f, 21.5f, 21.5f, 21.5f,
-            21.2f, 21.2f, 21.2f, 21.2f, 20.9f, 20.9f, 20.9f, 20.6f, 20.6f, 20.6f,
-            20.6f, 20.6f, 20.6f, 20.6f, 20.6f, 20.3f, 20.3f, 20.3f, 20.3f, 20.3f,
-            20.3f, 20.3f, 20.3f, 20.3f, 20.3f, 20.3f, 20.3f, 20.3f, 20.3f, 20.3f,
-            20.3f, 20.3f, 20.3f, 20.3f, 20.3f, 20.3f, 20.3f, 20.3f, 20.3f, 20.3f,
-            20.3f, 20.3f, 20.3f, 20.6f, 20.6f, 20.6f, 20.6f, 20.6f, 20.9f, 20.9f,
-            20.9f, 20.9f, 20.9f, 20.9f, 21.2f, 21.2f, 21.2f, 21.2f, 21.2f, 21.5f,
-            21.5f, 21.5f, 21.5f, 21.8f, 21.8f, 21.8f, 21.8f, 22.1f, 22.1f, 22.1f,
-            22.4f, 22.4f, 22.4f, 22.4f, 22.7f, 22.7f, 22.7f, 22.7f, 22.7f, 23.0f,
-            23.0f, 23.0f, 23.0f, 23.3f, 23.3f, 23.3f, 23.6f, 23.6f, 23.6f, 24.0f,
-            24.0f, 24.0f, 24.0f, 24.0f, 24.3f, 24.3f, 24.3f, 24.3f, 24.3f, 24.3f,
-            24.6f, 24.6f, 24.6f, 24.6f, 24.6f, 24.6f, 24.6f, 24.6f, 24.9f, 24.9f,
-            24.9f, 24.9f, 24.9f, 24.9f, 24.9f, 24.9f, 24.9f, 24.9f, 24.9f, 24.9f};
+            81f, 80f, 80f, 80f, 80f, 80f, 80f, 80f, 80f, 80f, 80f, 79f,
+            79f, 79f, 79f, 79f, 79f, 79f, 79f, 78f, 78f, 78f, 78f, 78f,
+            77f, 77f, 77f, 77f, 77f, 77f, 76f, 76f, 76f, 76f, 75f, 75f,
+            75f, 75f, 75f, 74f, 74f, 74f, 74f, 73f, 73f, 73f, 72f, 72f,
+            72f, 72f, 72f, 71f, 71f, 71f, 71f, 71f, 70f, 70f, 70f, 70f,
+            70f, 70f, 70f, 69f, 69f, 69f, 69f, 69f, 69f, 69f, 69f, 69f,
+            69f, 70f, 70f, 70f, 70f, 70f, 70f, 70f, 71f, 71f, 71f, 71f,
+            71f, 71f, 71f, 72f, 72f, 72f, 72f, 72f, 72f, 72f, 72f, 72f,
+            72f, 72f, 72f, 72f, 72f, 72f, 72f, 72f, 72f, 72f, 72f, 72f,
+            72f, 72f, 72f, 72f, 72f, 72f, 72f, 72f, 72f, 72f, 72f, 72f,
+            71f, 71f, 71f, 71f, 71f, 70f, 70f, 70f, 70f, 70f, 69f, 69f,
+            69f, 69f, 68f, 68f, 68f, 67f, 67f, 67f, 67f, 67f, 67f, 67f,
+            67f, 66f, 66f, 66f, 66f, 66f, 66f, 66f, 66f, 66f, 66f, 66f,
+            66f, 66f, 66f, 66f, 66f, 66f, 66f, 66f, 66f, 66f, 66f, 66f,
+            66f, 66f, 66f, 66f, 66f, 67f, 67f, 67f, 67f, 67f, 68f, 68f,
+            68f, 68f, 68f, 68f, 69f, 69f, 69f, 69f, 69f, 70f, 70f, 70f,
+            70f, 71f, 71f, 71f, 71f, 72f, 72f, 72f, 73f, 73f, 73f, 73f,
+            74f, 74f, 74f, 74f, 74f, 75f, 75f, 75f, 75f, 76f, 76f, 76f,
+            77f, 77f, 77f, 78f, 78f, 78f, 78f, 78f, 79f, 79f, 79f, 79f,
+            79f, 79f, 80f, 80f, 80f, 80f, 80f, 80f, 80f, 80f, 81f, 81f,
+            81f, 81f, 81f, 81f, 81f, 81f, 81f, 81f, 81f, 81f };
 
     // These numbers are just weird.
     private static final float[] demoStrength = {
@@ -87,8 +83,6 @@ public class DemoService extends DeviceService {
 
     private Timer mTimer = null;
     private int mTicker = 0;
-    private float mCurBattery = 6;
-    private float mCurTemp = 64;
 
     private void stopTimer() {
         if (mTimer != null)
@@ -96,9 +90,17 @@ public class DemoService extends DeviceService {
         mTimer = null;
     }
 
-    private static final float ft2m = 0.3048f;
+    private static final float FT2M = 0.3048f;
+    private static final int[] RANGE_FT = {
+            10, 20, 30, 40, 60, 80, 80
+    };
 
     private DeviceRecord mConnected = null;
+    private String mDeviceName;
+    private int mSensitivity, mNoise, mRange;
+    private float mDepthFt, mFishDepthFt;
+    private float mBattery = 6;
+    private float mTemperatureF = 64;
 
     @Override
     public void onCreate() {
@@ -115,23 +117,23 @@ public class DemoService extends DeviceService {
                 data[3] = 0;
                 data[4] = (byte)((mTicker & 1) << 3);
                 data[5] = 0;
-                float d = demoDepth[mTicker % demoDepth.length] / ft2m;
-                data[6] = (byte)Math.floor(d);
-                data[7] = (byte)Math.floor((d - data[6]) * 100);
+                mDepthFt = demoDepth[mTicker % demoDepth.length] / FT2M;
+                data[6] = (byte)Math.floor(mDepthFt);
+                data[7] = (byte)Math.floor((mDepthFt - data[6]) * 100);
                 data[8] = (byte)((demoStrength[mTicker % demoStrength.length] / 100) * 128);
-                d = demoFishDepth[mTicker % demoFishDepth.length] / ft2m;
-                data[9] = (byte)Math.floor(d);
-                data[10] = (byte)Math.floor((d - data[9]) * 100);
-                mCurBattery -= 0.001;
-                byte battery = (byte)mCurBattery;
-                data[11] = (byte)(demoFishType[mTicker % demoFishType.length] | (battery << 4));
-                mCurTemp += (Math.random() - 0.5f);
-                if (mCurTemp < 32) mCurTemp = 32;
-                else if (mCurTemp > 100) mCurTemp = 32;
-                data[12] = (byte)Math.floor(mCurTemp);
-                data[13] = (byte)Math.floor((mCurTemp - data[12]) * 100.0);
+                mFishDepthFt = demoFishDepth[mTicker % demoFishDepth.length] / FT2M;
+                data[9] = (byte)Math.floor(mFishDepthFt);
+                data[10] = (byte)Math.floor((mFishDepthFt - data[9]) * 100);
+                mBattery -= 001;
+                data[11] = (byte)(demoFishType[mTicker % demoFishType.length] | ((byte)Math.floor(mBattery) << 4));
+                mTemperatureF += (Math.random() - 0.5f);
+                if (mTemperatureF < 32) mTemperatureF = 32;
+                else if (mTemperatureF > 100) mTemperatureF = 32;
+                data[12] = (byte)Math.floor(mTemperatureF);
+                data[13] = (byte)Math.floor((mTemperatureF - data[12]) * 100);
 
                 mTicker++;
+                Log.d(TAG, "Sampling " + mDeviceName);
                 Intent intent = new Intent(ACTION_BT_DATA_AVAILABLE);
                 intent.putExtra(DEVICE_ADDRESS, mConnected.address);
                 intent.putExtra(DATA, data);
@@ -142,7 +144,8 @@ public class DemoService extends DeviceService {
     }
 
     public boolean connect(DeviceRecord device) {
-        Log.d(TAG, "Connecting " + device.name);
+        mDeviceName = device.name;
+        Log.d(TAG, "Connecting " + mDeviceName);
         mConnected = device;
         // Tell the world we are ready for action
         Intent intent = new Intent(ACTION_BT_CONNECTED);
@@ -152,6 +155,7 @@ public class DemoService extends DeviceService {
     }
 
     public void disconnect() {
+        Log.d(TAG, "Disconnecting " + mDeviceName);
         if (mConnected != null) {
             Intent intent = new Intent(ACTION_BT_DISCONNECTED);
             intent.putExtra(DEVICE_ADDRESS, mConnected.address);
@@ -161,16 +165,17 @@ public class DemoService extends DeviceService {
         mConnected = null;
     }
 
-    private int mSensitivity, mNoise, mRange;
-
     public void write(byte[] data) {
         mSensitivity = data[0];
         mNoise = data[1];
         mRange = data[2];
-        Log.d(TAG, "S " + mSensitivity + " N " + mNoise + " R " + mRange);
+        String s = "S " + mSensitivity + " N " + mNoise + " R " + mRange;
+        Log.d(TAG, "Writing to " + mDeviceName + " " + s);
+        Log.d(TAG, s );
     }
 
     public void close() {
+        Log.d(TAG, "Closing " + mDeviceName);
         if (mTimer != null)
             mTimer.cancel();
         mTimer = null;

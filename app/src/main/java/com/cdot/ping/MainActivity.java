@@ -255,19 +255,24 @@ public class MainActivity extends AppCompatActivity {
             // Result coming from startup2_enableBluetooth/enable bluetooth
             if (resultCode != Activity.RESULT_OK)
                 // Bluetooth was not enabled; we can still continue, in demo mode
-                Ping.P.set("selectedDevice", Ping.demoDevice);
+                Ping.P.set("selectedDevice", Ping.P.getDevice(Ping.DEMO_DEVICE));
             startAutoConnect();
         } else if (requestCode == REQUEST_SETTINGS_CHANGED) {
             Log.d(TAG, "REQUEST_SETTINGS_CHANGED received");
             // Result coming from SettingsActivity
             if (resultCode == Activity.RESULT_OK) {
+                // Location options might have changed, stop and restart sampling
                 stopLocationSampling();
                 if (Ping.P.getSelectedDevice().isConnected)
+                    // Device not changed
                     startLocationSampling();
                 else {
                     // Selected device has changed
                     for (Map.Entry<Integer, Chatter> entry : mChatters.entrySet())
                         entry.getValue().disconnect();
+                    for (DeviceRecord dr: Ping.P.getDevices())
+                        dr.isConnected = false;
+                    updateStatus(Chatter.STATE_DISCONNECTED, getResources().getString(R.string.new_device));
                     startAutoConnect(); // will restart location sampling when it connects
                 }
             }

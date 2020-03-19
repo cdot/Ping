@@ -102,6 +102,7 @@ class Ping {
                 mDevices.add(dr);
             }
         }
+        // DEMO device always goes first
         mDevices.add(demoDevice);
     }
 
