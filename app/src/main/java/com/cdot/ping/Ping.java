@@ -9,7 +9,7 @@ import android.net.Uri;
 import android.preference.PreferenceManager;
 import android.util.Log;
 
-import com.cdot.devices.DeviceRecord;
+import com.cdot.ping.devices.DeviceRecord;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -93,13 +93,17 @@ class Ping {
         String devs = mSP.getString("devices", "");
         List<DeviceRecord> res = new ArrayList<>();
         if (devs != null && devs.length() > 0) {
-            String[] deviceSet = devs.split(",");
+            String[] deviceSet = devs.split(DeviceRecord.RECORD_SEPARATOR);
             // Devices saved in REVERSE order so the first ends up last, restoring the original order
             Log.d(TAG, "Loading devices from preferences");
             for (String s : deviceSet) {
-                DeviceRecord dr = new DeviceRecord(s);
-                Log.d(TAG, "remembered " + dr.serialise());
-                mDevices.add(dr);
+                try {
+                    DeviceRecord dr = new DeviceRecord(s);
+                    Log.d(TAG, "remembered " + dr.toString());
+                    mDevices.add(dr);
+                } catch (IllegalArgumentException iae) {
+                    Log.e(TAG, "Cannot restore device " + iae);
+                }
             }
         }
         // DEMO device always goes first
@@ -121,6 +125,14 @@ class Ping {
         SharedPreferences.Editor edit = mSP.edit();
         edit.putString(key, value);
         edit.apply();
+    }
+
+    void set(String key, int value) {
+        set(key, Integer.toString(value));
+    }
+
+    void set(String key, float value) {
+        set(key, Float.toString(value));
     }
 
     void set(String key, DeviceRecord dr) {
@@ -237,13 +249,11 @@ class Ping {
 
     // Save the device list cache to SharedPreferences
     private void saveDeviceList() {
-        String comma = "", devs = "";
+        String devs = "";
         if (mDevices != null) {
             for (DeviceRecord dr : mDevices) {
-                if (!DEMO_DEVICE.equals(dr.address)) {
-                    devs = dr.serialise() + comma + devs;
-                    comma = ",";
-                }
+                if (!DEMO_DEVICE.equals(dr.address))
+                    devs = dr.serialise() + DeviceRecord.RECORD_SEPARATOR + devs;
             }
         }
         set("devices", devs);

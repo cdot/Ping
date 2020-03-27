@@ -1,75 +1,78 @@
-<?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/layout"
-    android:layout_width="fill_parent"
-    android:layout_height="fill_parent"
-    android:orientation="vertical">
+<layout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
-    <RelativeLayout
-        android:layout_width="wrap_content"
-        android:layout_height="22.0dip">
+    <LinearLayout
+        android:id="@+id/layout"
+        android:layout_width="fill_parent"
+        android:layout_height="fill_parent"
+        android:orientation="vertical">
 
-        <TextView
-            android:id="@+id/deviceAddress"
-            android:layout_width="180.0dip"
-            android:layout_height="40.0dip"
-            android:layout_alignParentTop="true"
-            android:layout_marginStart="10.0dip"
-            android:gravity="center|start"
-            android:text="88:1B:99:03:4F:31"
-            android:textSize="18.0sp"
-            android:textStyle="bold" />
+        <RelativeLayout
+            android:layout_width="wrap_content"
+            android:layout_height="22.0dip">
 
-        <TextView
-            android:id="@+id/deviceType"
-            android:layout_width="35.0dip"
-            android:layout_height="40.0dip"
-            android:layout_alignParentEnd="true"
-            android:layout_marginEnd="10.0dip"
-            android:layout_toEndOf="@+id/deviceAddress"
-            android:gravity="center|end"
-            android:text="Unknown"
-            android:textSize="18.0sp"
-            android:textStyle="bold" />
+            <TextView
+                android:id="@+id/deviceAddress"
+                android:layout_width="180.0dip"
+                android:layout_height="40.0dip"
+                android:layout_alignParentTop="true"
+                android:layout_marginStart="10.0dip"
+                android:gravity="center|start"
+                android:text="88:1B:99:03:4F:31"
+                android:textSize="18.0sp"
+                android:textStyle="bold" />
 
-        <TextView
-            android:id="@+id/devicePairingStatus"
-            android:layout_width="70.0dip"
-            android:layout_height="40.0dip"
-            android:layout_alignParentEnd="true"
-            android:layout_marginEnd="10.0dip"
-            android:layout_toEndOf="@+id/deviceType"
-            android:gravity="center|end"
-            android:text="@string/bt_not_paired"
-            android:textSize="18.0sp"
-            android:textStyle="bold" />
+            <TextView
+                android:id="@+id/deviceType"
+                android:layout_width="35.0dip"
+                android:layout_height="40.0dip"
+                android:layout_alignParentEnd="true"
+                android:layout_marginEnd="10.0dip"
+                android:layout_toEndOf="@+id/deviceAddress"
+                android:gravity="center|end"
+                android:text="Unknown"
+                android:textSize="18.0sp"
+                android:textStyle="bold" />
 
-    </RelativeLayout>
+            <TextView
+                android:id="@+id/devicePairingStatus"
+                android:layout_width="70.0dip"
+                android:layout_height="40.0dip"
+                android:layout_alignParentEnd="true"
+                android:layout_marginEnd="10.0dip"
+                android:layout_toEndOf="@+id/deviceType"
+                android:gravity="center|end"
+                android:text="@string/bt_not_paired"
+                android:textSize="18.0sp"
+                android:textStyle="bold" />
 
-    <RelativeLayout
-        android:layout_width="wrap_content"
-        android:layout_height="22.0dip">
+        </RelativeLayout>
 
-        <TextView
-            android:id="@+id/deviceName"
-            android:layout_width="180.0dip"
-            android:layout_height="40.0dip"
-            android:layout_alignParentTop="true"
-            android:layout_marginStart="15.0dip"
-            android:gravity="center|start"
-            android:text="Sonar device"
-            android:textSize="15.0sp" />
+        <RelativeLayout
+            android:layout_width="wrap_content"
+            android:layout_height="22.0dip">
 
-        <TextView
-            android:id="@+id/devicePairingAction"
-            android:layout_width="70.0dip"
-            android:layout_height="40.0dip"
-            android:layout_alignParentEnd="true"
-            android:layout_marginEnd="10.0dip"
-            android:layout_toEndOf="@+id/deviceName"
-            android:gravity="center|end"
-            android:text="@string/bt_click_to_pair"
-            android:textSize="18.0sp"
-            android:textStyle="bold" />
-    </RelativeLayout>
-</LinearLayout>
+            <TextView
+                android:id="@+id/deviceName"
+                android:layout_width="180.0dip"
+                android:layout_height="40.0dip"
+                android:layout_alignParentTop="true"
+                android:layout_marginStart="15.0dip"
+                android:gravity="center|start"
+                android:text="Sonar device"
+                android:textSize="15.0sp" />
+
+            <TextView
+                android:id="@+id/devicePairingAction"
+                android:layout_width="70.0dip"
+                android:layout_height="40.0dip"
+                android:layout_alignParentEnd="true"
+                android:layout_marginEnd="10.0dip"
+                android:layout_toEndOf="@+id/deviceName"
+                android:gravity="center|end"
+                android:text="@string/bt_click_to_pair"
+                android:textSize="18.0sp"
+                android:textStyle="bold" />
+        </RelativeLayout>
+    </LinearLayout>
+</layout>

@@ -1,20 +1,51 @@
 # Ping
 
-This work is in support of a project to build a bathygraphic map of a quarry, used by SCUBA divers.
-Previously surveying has been done using a GPS tracker attached to a buoy, while a diver below
-notes depths below the buoy. This is a slow and error-prone process, and I wanted a better approach.
+This work is in support of a project to build a bathygraphic map of a quarry used by SCUBA divers
+from our dive club. Previously surveying has been done using a GPS tracker attached to a buoy,
+while a diver below notes depths below the buoy on a slate. This is a slow and error-prone process,
+and I wanted a better approach.
 
 There are a number of sonar fish-finder devices on the market that appeared to offer a solution;
 they are primarily designed for the angling community and have limited access to depth data. A
-few, however, have bluetooth interfaces that allow them to interface to an Android phone. Such a
-device could easily be attached to the buoy alongside a phone to give continuous depth and location
+few, however, have bluetooth interfaces that allow them to interface to an Android phone. I thought
+such a device could be attached to the buoy alongside a phone to give continuous depth and location
 data as the buoy moves through the water.
 
-So I purchased one of the cheapest of these devices, an unbranded device that uses the "Erchang Fish Helper"
-software from Google Play https://play.google.com/store/apps/details?id=com.fish.fishhint.
+So I purchased one of the cheapest of these devices from Ebay, an unbranded device that normally
+uses the "Erchang Fish Helper" software from Google Play
+https://play.google.com/store/apps/details?id=com.fish.fishhint.
 
-The software proved to be fairly specific to the needs of the angling community, so I reverse-
-engineered the protocol and built Ping. This is a simple app that focuses on logging the depth data
-returned by the device, in coordination with location data as determined by the device GPS. Logging
-is done to a CSV file that records GPS lat, long, a depth in metres, and some extra information such
-as the sonar signal strength and water temperature.
+I had hoped the software might provide a loggable depth trace, but it proved to be quite specific
+to the needs of the angling community. So I reverse-engineered the simple device protocol and built
+Ping. This is a simple app that focuses on logging the depth data returned by the device, in
+coordination with location data as determined by the device GPS. Logging is done to a CSV file that
+records GPS lat, long, a depth in metres, and some extra information such as the sonar signal
+strength and water temperature, for later analysis. A simple display gives a view of the sonar data
+as it comes in, but is not intended to be of any practical use.
+
+The logged sample data can be used directly in my "Surveying" project to incrementally build up a
+3D picture of the bottom in the surveyed area.
+
+## The Device
+
+Relevant specifications of the sensor:
+Depth range: 0.6-36m
+Sonar frequency: 125KHz
+Sonar beam angle: 90 degrees
+Bluetooth interface: MicroChip IS1678S-152
+
+## The Protocol
+
+The protocol was reverse-engineered by watching bluetooth packets sent to/from the device by the
+Erchang "Fish Helper" software. This software uses classic BR/EDR bluetooth to communicate with
+the device, but by using the excellent Bluetooth Scanner https://play.google.com/store/apps/details?id=com.pzolee.bluetoothscanner&hl=en
+I was able to determine that it is dual mode and LE can work just as well.
+
+The device is configured by setting the required sensitivity,
+noise filtering, and range. There may be more settings, but this is all the Erchange software uses.
+
+Samples contain an indication of whether the contacts are wet or not, the depth, and what appears
+to be the signal return strength (depending on the nature of the bottom, I assume). Another depth
+which appears to be the depth of an intermediate return (i.e. a fish) and a byte which appears to
+indicate the horizontal extent for that signal. Finally a battery strength and temperature.
+

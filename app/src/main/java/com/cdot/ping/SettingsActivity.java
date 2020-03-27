@@ -18,9 +18,9 @@ import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
 import androidx.preference.PreferenceManager;
 
-import com.cdot.devices.DeviceRecord;
+import com.cdot.ping.devices.DeviceRecord;
 
-import static com.cdot.devices.DeviceRecord.DEVICE_ADDRESS;
+import static com.cdot.ping.devices.DeviceRecord.DEVICE_ADDRESS;
 
 /**
  * Preferences - a simple, single page that took f**king ages to work out how to do.

@@ -3,11 +3,15 @@ package com.cdot.ping;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.LinearGradient;
 import android.graphics.Paint;
+import android.graphics.Shader;
 import android.util.AttributeSet;
 import android.view.View;
 
 import androidx.annotation.NonNull;
+
+import com.cdot.ping.devices.SampleData;
 
 /**
  * A simple view for watching a graph of sonar samples.
@@ -17,29 +21,17 @@ public class SonarView extends View {
     int mPtr = 0;
     int mWidth;
     int mHeight;
-    Paint depthPaint, tempPaint, strengthPaint;
+    Paint paint;
+    Shader shader;
 
-    SonarView(Context context, AttributeSet attrs) {
+    public SonarView(Context context, AttributeSet attrs) {
         super(context, attrs);
         setWillNotDraw(false);
 
-        depthPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        depthPaint.setColor(Color.GREEN);
-        depthPaint.setAntiAlias(true);
-        depthPaint.setStrokeWidth(1);
-        depthPaint.setStyle(Paint.Style.STROKE);
-
-        tempPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        tempPaint.setColor(Color.RED);
-        tempPaint.setAntiAlias(true);
-        tempPaint.setStrokeWidth(1);
-        tempPaint.setStyle(Paint.Style.STROKE);
-
-        strengthPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        strengthPaint.setColor(Color.MAGENTA);
-        strengthPaint.setAntiAlias(true);
-        strengthPaint.setStrokeWidth(1);
-        strengthPaint.setStyle(Paint.Style.STROKE);
+        paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        paint.setAntiAlias(true);
+        paint.setStrokeWidth(1);
+        paint.setStyle(Paint.Style.STROKE);
     }
 
     synchronized void sample(@NonNull SampleData data) {
@@ -59,6 +51,7 @@ public class SonarView extends View {
             mSamples = new SampleData[w];
             mPtr = 0;
             mHeight = h;
+            shader = new LinearGradient(0, 0, 0, mHeight, Color.GREEN,  Color.YELLOW, Shader.TileMode.MIRROR);
         }
     }
 
@@ -80,20 +73,24 @@ public class SonarView extends View {
         float maxTemp = Ping.MAX_TEMPERATURE;
         synchronized (this) {
             float depthy1 = scaley(mSamples[0].depth, maxDepth);
-            float tempy1 = scaley(mSamples[0].depth, maxTemp);
-            float strengthy1 = scaley(mSamples[0].depth, maxStrength);
+            float tempy1 = scaley(mSamples[0].temperature, maxTemp);
             int x1 = 0;
             for (int i = 0; i < mPtr; i++) {
                 int x2 = scalex(i);
                 int depthy2 = scaley(mSamples[i].depth, maxDepth);
                 int tempy2 = scaley(mSamples[i].temperature, maxTemp);
-                int strengthy2 = scaley(mSamples[i].strength, maxStrength);
-                canvas.drawLine(x1, depthy1, x2, depthy2, depthPaint);
-                canvas.drawLine(x1, tempy1, x2, tempy2, tempPaint);
-                canvas.drawLine(x1, strengthy1, x2, strengthy2, strengthPaint);
+                int strength = scaley(mSamples[i].strength, maxStrength);
+                paint.setColor(Color.RED);
+                canvas.drawLine(x1, tempy1, x2, tempy2, paint);
+                paint.setColor(Color.GREEN);
+                canvas.drawLine(x1, depthy1, x2, depthy2, paint);
+                paint.setShader(shader);
+                if (depthy2 + strength > mHeight) strength = mHeight - depthy2;
+                if (strength > 75)
+                    canvas.drawLine(x2, depthy2, x2, depthy2 + strength, paint);
+                paint.setShader(null);
                 depthy1 = depthy2;
                 tempy1 = tempy2;
-                strengthy1 = strengthy2;
                 x1 = x2;
             }
         }

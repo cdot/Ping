@@ -5,6 +5,7 @@
 
     <!-- Bluetooth interactions -->
     <string name="bt_cannot_bind_service">The system couldn\'t find the bluetooth service, or your client doesn\'t have permission to bind to it</string>
+    <string name="bt_clear">Clear list</string>
     <string name="bt_click_to_pair">Click to Pair</string>
     <!-- Bluetooth device types, indexed by BluetoothDevice.DEVICE_TYPE_* -->
     <string-array name="bt_device_types">
@@ -31,7 +32,6 @@
         <item>Disconnected. %s</item>
     </string-array>
 
-    <string name="contactsDry_label">Dry</string>
     <string name="demo">Demo</string>
     <string name="depth">Depth</string>
     <string name="devices">Devices</string>

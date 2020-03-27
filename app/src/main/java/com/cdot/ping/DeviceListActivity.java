@@ -13,6 +13,9 @@ import android.content.res.Resources;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.KeyEvent;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.Button;
@@ -21,7 +24,7 @@ import android.widget.SimpleAdapter;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-import com.cdot.devices.DeviceRecord;
+import com.cdot.ping.devices.DeviceRecord;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -93,29 +96,55 @@ public class DeviceListActivity extends AppCompatActivity {
     }
 
     @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        MenuInflater inflater = getMenuInflater();
+        inflater.inflate(R.menu.menu_devices, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        // Handle item selection
+        switch (item.getItemId()) {
+            case R.id.bt_discover:
+                //setProgressBarIndeterminateVisibility(true);
+                //setTitle(R.string.bt_discovering);
+                if (mBluetoothAdapter.isDiscovering())
+                    mBluetoothAdapter.cancelDiscovery();
+                mBluetoothAdapter.startDiscovery();
+                if (!mScanProgressDialog.isShowing())
+                    mScanProgressDialog.show(this,
+                            getResources().getString(R.string.bt_discover),
+                            getResources().getString(R.string.bt_discovering),
+                            true,
+                            true,
+                            new DialogInterface.OnCancelListener() {
+                                public void onCancel(DialogInterface di) {
+                                    mBluetoothAdapter.cancelDiscovery();
+                                }
+                            });
+                return true;
+            case R.id.bt_clear:
+                Ping.P.clearDevices();
+                updateDisplay();
+                return true;
+            default:
+                return super.onOptionsItemSelected(item);
+        }
+    }
+
+    public boolean onPrepareOptionsMenu(Menu menu) {
+        menu.getItem(0).setEnabled(mBluetoothAdapter != null && !mBluetoothAdapter.isDiscovering());
+        return true;
+    }
+
+    @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
         setResult(Activity.RESULT_CANCELED);
-
         setContentView(R.layout.device_list);
-
         createProgressDlg();
-        Button scanButton = findViewById(R.id.scan_button);
-        scanButton.setTextColor(getResources().getColor(R.color.white, getTheme()));
-        if (mBluetoothAdapter != null) {
-            scanButton.setOnClickListener(new View.OnClickListener() {
-                public void onClick(View v) {
-                    setProgressBarIndeterminateVisibility(true);
-                    setTitle(R.string.bt_discovering);
-                    if (mBluetoothAdapter.isDiscovering())
-                        mBluetoothAdapter.cancelDiscovery();
-                    mBluetoothAdapter.startDiscovery();
-                    if (!mScanProgressDialog.isShowing())
-                        mScanProgressDialog.show();
-                }
-            });
-        }
 
         // Listener invoked when a device is selected for pairing. This is attached even
         // if there is no bluetooth, so we can test/demo it.

@@ -29,11 +29,10 @@
             android:label="@string/settings_title"></activity>
         <activity
             android:name=".DeviceListActivity"
-            android:label="@string/devices"
-            android:theme="@style/AppTheme.NoActionBar"></activity>
+            android:label="@string/devices"></activity>
 
-        <service android:name="com.cdot.devices.LEService" />
-        <service android:name="com.cdot.devices.DemoService" />
+        <service android:name=".devices.LEService" />
+        <service android:name=".devices.DemoService" />
     </application>
 
 </manifest>
