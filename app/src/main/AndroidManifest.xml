@@ -1,11 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.cdot.ping">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.cdot.ping">
 
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-feature android:name="android.hardware.location.gps" />
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="true"/>
 
     <application
         android:allowBackup="true"
@@ -24,15 +26,14 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <activity
-            android:name=".SettingsActivity"
-            android:label="@string/settings_title"></activity>
-        <activity
-            android:name=".DeviceListActivity"
-            android:label="@string/devices"></activity>
-
-        <service android:name=".devices.LEService" />
-        <service android:name=".devices.DemoService" />
+        <!-- See https://developer.android.com/guide/topics/manifest/service-element -->
+        <service android:name=".services.SonarService"
+            android:description="@string/service_description"
+            android:enabled="true" />
+        <service
+            android:name=".services.LocationService"
+            android:enabled="true"
+            android:foregroundServiceType="location" />
     </application>
 
 </manifest>

@@ -1,58 +1,60 @@
 <resources>
     <string name="app_name">Ping</string>
-    <string name="battery">Battery</string>
-    <string name="cancel">Cancel</string>
 
-    <!-- Bluetooth interactions -->
-    <string name="bt_cannot_bind_service">The system couldn\'t find the bluetooth service, or your client doesn\'t have permission to bind to it</string>
-    <string name="bt_clear">Clear list</string>
-    <string name="bt_click_to_pair">Click to Pair</string>
-    <!-- Bluetooth device types, indexed by BluetoothDevice.DEVICE_TYPE_* -->
-    <string-array name="bt_device_types">
-        <item>Unknown</item>
-        <item>Classic</item>
-        <item>LE</item>
-        <item>Dual</item>
-    </string-array>
+    <string name="battery_value">Battery %1$d</string>
+
     <string-array name="bt_disconnect_reason">
         <item>Unable to connect</item>
         <item>Connection was lost</item>
     </string-array>
-    <string name="bt_discover">Discover devices</string>
-    <string name="bt_discovering">Discovering devices&#x2026;</string>
     <string name="bt_not_paired">Not paired</string>
     <string name="bt_no_bluetooth">No bluetooth support on this device</string>
     <string name="bt_no_device">No bluetooth device selected</string>
     <string name="bt_paired">Paired</string>
     <!-- Indexed by Chatter.STATE_* -->
     <string-array name="bt_status">
-        <item>None</item>
-        <item>Connecting to %s</item>
+        <item>Disconnected. %1$s</item> <!-- -1 -->
+        <item>Connecting</item>
         <item>Connected</item>
-        <item>Disconnected. %s</item>
     </string-array>
 
-    <string name="demo">Demo</string>
-    <string name="depth">Depth</string>
-    <string name="devices">Devices</string>
-    <string name="device">Device</string>
-    <string name="device_summary">Select a bluetooth device or scan for new devices</string>
+    <string name="cancel">Cancel</string>
 
-    <string name="fishDepth">Fish Depth</string>
-    <string name="fishType">Fish Type</string>
-    <string name="latitude">Lat</string>
-    <string name="longitude">Lon</string>
-    <string name="OK">OK</string>
-    <string name="menuitem_settings">Settings</string>
-    <string name="minimumDepthChange">Minimum depth change</string>
-    <string name="minimumDepthChange_summary">The minimum depth difference that must be seen before a sample will be recorded, in metres</string>
-    <string name="minimumPositionChange">Minimum position change</string>
-    <string name="minimumPositionChange_summary">The minimum horizontal distance that must be moved before a sample will be recorded, in metres</string>
-    <string name="new_device">Changing device</string>
+    <string name="depth_value">Depth %1$.2g</string>
+    <string name="device">Device</string>
+
+    <string name="fish_depth_value">Fish Depth %1$.2g</string>
+    <string name="fish_type_value">Fish Type %1$.2g</string>
+
+    <string name="help_autoconnect">Automatically connect to the first compatible device found. Otherwise wait for you to select a device.</string>
+    <string name="help_change_device">Connect to a different device</string>
+    <string name="help_device">Select a bluetooth device or scan for new devices</string>
+    <string name="help_locationSampleFile">Click to change the file to store location samples in. This is a plain-text CSV file</string>
+    <string name="help_minimumDepthChange">The minimum depth difference that must be seen before a sample will be recorded, in metres</string>
+    <string name="help_minimumPositionChange">The minimum horizontal distance that must be moved before a sample will be recorded, in metres</string>
+    <string name="help_noise">Use higher settings for turbid water or where there are suspended solids</string>
+    <string name="help_range">Set as close to the estimated depth as possible for best detection results</string>
+    <string name="help_scan_all">Scanning for a compatible device&#x2026; touch a device to connect to it</string>
+    <string name="help_scan_first">Scanning for a compatible device&#x2026;</string>
+    <string name="help_sensitivity">Intensity of the sonar pulse. When the water is shallow, or there is noise in the water such as engine noise, select a lower sensitivity</string>
+    <string name="help_sonarSampleFile">Click to change the file to store sonar samples in. This is a plain-text CSV file</string>
+
+    <string name="latitude_value">Lat %1$.5g</string>
+    <string name="launch_activity">Launch Ping</string>
+    <string name="location_updated">Location: %1$s</string>
 
     <!-- Setting -->
-    <string name="noise">Noise filter</string>
-    <string name="noise_summary">Use higher settings for turbid water or where there are suspended solids</string>
+    <string name="locationSampleFile">Location Sample File</string>
+
+    <string name="longitude_value">Lon %1$.5g</string>
+    <string name="menuitem_settings">Settings</string>
+    <string name="minimumDepthChange">Minimum depth change</string>
+    <string name="minimumPositionChange">Minimum position change</string>
+    <string name="no_device">No device</string>
+
+    <!-- Setting -->
+    <string name="noise_value">Noise filter %1$s</string>
+    <string name="noise_label">Noise</string>
     <!-- See Ping.NOISE_* -->
     <string-array name="noise_options">
         <item>Off</item>
@@ -67,6 +69,8 @@
         <item>3</item>
     </string-array>
 
+    <string name="OK">OK</string>
+
     <string-array name="permissions_required">
         <item>android.permission.BLUETOOTH</item>
         <item>android.permission.BLUETOOTH_ADMIN</item>
@@ -79,8 +83,9 @@
         <item>Permission to access the fine location of this device is required</item>
     </string-array>
 
-    <string name="range">Range</string>
-    <string name="range_summary">Set as close to the estimated depth as possible for best detection results</string>
+    <!-- Setting -->
+    <string name="range_value">Range %1$s</string>
+    <string name="range_label">Range</string>
     <!-- See Ping.RANGE_* -->
     <string-array name="range_options">
         <item>3m</item>
@@ -107,15 +112,25 @@
     <string name="sample_data">XX.XX</string>
 
     <!-- Setting -->
-    <string name="sampleFile">Sample File</string>
-    <string name="sampleFile_summary">Click to change the file to store samples in. This is a plain-text CSV file</string>
+    <string name="sonarSampleFile">Sonar Sample File</string>
 
     <!-- Setting -->
-    <string name="sensitivity">Sensitivity</string>
-    <string name="sensitivity_summary">Intensity of the sonar pulse. When the water is shallow, or there is noise in the water such as engine noise, select a lower sensitivity</string>
+    <string name="sensitivity_value">Sensitivity %1$d</string>
+    <string name="sensitivity_label">Sensitivity</string>
+
+    <string name="service_description">Background service for Ping device communication over Bluetooth</string>
+    <string name="service_notification_message">Notification message</string>
+    <string name="service_notification_ticker_text">Notification ticker text</string>
+    <string name="service_notification_title">Sonar</string>
 
     <string name="settings_title">Ping Settings</string>
 
-    <string name="strength">Strength</string>
-    <string name="temperature">Temperature</string>
+    <string name="sonar_updated">Sonar: %1$s</string>
+    <string name="stop_location_service">Stop Ping location logging</string>
+    <string name="stop_sonar_service">Stop Ping sonar logging</string>
+    <string name="strength_value">Strength %1$.2g</string>
+
+    <string name="temperature_value">Temperature %1$.2g</string>
+    <string name="autoconnect_label">Auto Connect</string>
+    <string name="help_bt_address">FF:FF:FF:FF:FF:FF</string>
 </resources>

@@ -18,8 +18,8 @@ https://play.google.com/store/apps/details?id=com.fish.fishhint.
 I had hoped the software might provide a loggable depth trace, but it proved to be quite specific
 to the needs of the angling community. So I reverse-engineered the simple device protocol and built
 Ping. This is a simple app that focuses on logging the depth data returned by the device, in
-coordination with location data as determined by the device GPS. Logging is done to a CSV file that
-records GPS lat, long, a depth in metres, and some extra information such as the sonar signal
+coordination with location data as determined by the device GPS. Logging is done to CSV files that
+record GPS lat, long, a depth in metres, and some extra information such as the sonar signal
 strength and water temperature, for later analysis. A simple display gives a view of the sonar data
 as it comes in, but is not intended to be of any practical use.
 
@@ -38,14 +38,17 @@ Bluetooth interface: MicroChip IS1678S-152
 
 The protocol was reverse-engineered by watching bluetooth packets sent to/from the device by the
 Erchang "Fish Helper" software. This software uses classic BR/EDR bluetooth to communicate with
-the device, but by using the excellent Bluetooth Scanner https://play.google.com/store/apps/details?id=com.pzolee.bluetoothscanner&hl=en
-I was able to determine that it is dual mode and LE can work just as well.
+the device, but LE works just as well.
 
 The device is configured by setting the required sensitivity,
-noise filtering, and range. There may be more settings, but this is all the Erchange software uses.
+noise filtering, and range. There may be more settings, but this is all the Erchang software uses.
 
 Samples contain an indication of whether the contacts are wet or not, the depth, and what appears
 to be the signal return strength (depending on the nature of the bottom, I assume). Another depth
 which appears to be the depth of an intermediate return (i.e. a fish) and a byte which appears to
 indicate the horizontal extent for that signal. Finally a battery strength and temperature.
 
+## The Application
+The application is split into a UI and two services. The services are largely independent from the UI
+and can bring themselves into the foreground even if the UI detaches (is killed) but logging is still
+active. One of the services is responsible for GPS location, and the other for talking to the sonar device.

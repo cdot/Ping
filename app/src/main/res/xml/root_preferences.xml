@@ -1,47 +1,53 @@
 <androidx.preference.PreferenceScreen
-    xmlns:app="http://schemas.android.com/apk/res-auto">
+    xmlns:android="http://schemas.android.com/apk/res/android">
 
     <Preference
-        app:defaultValue="DEMO"
-        app:key="selectedDevice"
-        app:summary="@string/device_summary"
-        app:title="@string/device" />
-    <EditTextPreference
-        app:defaultValue="5"
-        app:key="sensitivity"
-        app:singleLine="true"
-        app:summary="@string/sensitivity_summary"
-        app:title="@string/sensitivity" />
-    <ListPreference
-        app:defaultValue="0"
-        app:entries="@array/noise_options"
-        app:entryValues="@array/noise_values"
-        app:key="noise"
-        app:summary="@string/noise_summary"
-        app:title="@string/noise" />
-    <ListPreference
-        app:defaultValue="6"
-        app:entries="@array/range_options"
-        app:entryValues="@array/range_values"
-        app:key="range"
-        app:summary="@string/range_summary"
-        app:title="@string/range" />
+        android:key="device"
+        android:summary="@string/help_change_device"
+        android:title="@string/device" />
+
+    <CheckBoxPreference
+        android:key="autoconnect"
+        android:summary="@string/help_autoconnect"
+        android:title="@string/autoconnect_label" />
+
+    <SeekBarPreference
+        android:key="sensitivity"
+        android:summary="@string/help_sensitivity"
+        android:title="@string/sensitivity_label" />
+
+    <com.cdot.ping.IntListPreference
+        android:entries="@array/noise_options"
+        android:entryValues="@array/noise_values"
+        android:key="noise"
+        android:summary="@string/help_noise"
+        android:title="@string/noise_label" />
+
+    <com.cdot.ping.IntListPreference
+        android:entries="@array/range_options"
+        android:entryValues="@array/range_values"
+        android:key="range"
+        android:summary="@string/help_range"
+        android:title="@string/range_label" />
+
     <Preference
-        app:defaultValue="ping.csv"
-        app:key="sampleFile"
-        app:summary="@string/sampleFile_summary"
-        app:title="@string/sampleFile" />
-    <EditTextPreference
-        app:defaultValue="0.5"
-        app:key="minimumPositionChange"
-        app:singleLine="true"
-        app:summary="@string/minimumPositionChange_summary"
-        app:title="@string/minimumPositionChange" />
-    <EditTextPreference
-        app:defaultValue="0.25"
-        app:key="minimumDepthChange"
-        app:singleLine="true"
-        app:summary="@string/minimumDepthChange_summary"
-        app:title="@string/minimumDepthChange" />
+        android:key="sonarSampleFile"
+        android:summary="@string/help_sonarSampleFile"
+        android:title="@string/sonarSampleFile" />
+
+    <Preference
+        android:key="locationSampleFile"
+        android:summary="@string/help_locationSampleFile"
+        android:title="@string/locationSampleFile" />
+
+    <SeekBarPreference
+        android:key="minimumPositionChange"
+        android:summary="@string/help_minimumPositionChange"
+        android:title="@string/minimumPositionChange" />
+
+    <SeekBarPreference
+        android:key="minimumDepthChange"
+        android:summary="@string/help_minimumDepthChange"
+        android:title="@string/minimumDepthChange" />
 
 </androidx.preference.PreferenceScreen>
