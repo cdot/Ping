@@ -56,7 +56,7 @@ public class SonarView extends View {
     private Rect mDrawDestRect;
 
     private ConcurrentLinkedQueue<Integer> mDepthQueue = new ConcurrentLinkedQueue<>();
-    Thread mRenderThread = null;
+    Thread mRenderThread;
 
     public SonarView(Context context, AttributeSet attrs) {
         super(context, attrs);

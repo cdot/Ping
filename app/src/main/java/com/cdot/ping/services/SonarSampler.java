@@ -28,6 +28,8 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.util.Log;
 
+import com.cdot.ping.R;
+
 import java.util.UUID;
 
 /**
@@ -53,18 +55,18 @@ import java.util.UUID;
 public class SonarSampler extends Sampler {
     public static final String TAG = SonarSampler.class.getSimpleName();
 
-    private static final String PACKAGE_NAME = SonarSampler.class.getPackage().getName();
+    private static final String CLASS_NAME = SonarSampler.class.getCanonicalName();
 
     // Messages sent by the service
-    public static final String ACTION_SONAR_CONNECTED = PACKAGE_NAME + ".action_sonar_connected";
-    public static final String ACTION_SONAR_DISCONNECTED = PACKAGE_NAME + ".action_sonar_disconnected";
+    public static final String ACTION_SONAR_CONNECTED = CLASS_NAME + ".action_sonar_connected";
+    public static final String ACTION_SONAR_DISCONNECTED = CLASS_NAME + ".action_sonar_disconnected";
 
     // Message extras
-    public static final String EXTRA_DEVICE_ADDRESS = PACKAGE_NAME + ".device_address";
-    public static final String EXTRA_DISCONNECT_REASON = PACKAGE_NAME + ".disconnect_reason";
+    public static final String EXTRA_DEVICE_ADDRESS = CLASS_NAME + ".device_address";
+    public static final String EXTRA_DISCONNECT_REASON = CLASS_NAME + ".disconnect_reason";
 
     // DISCONNECT_REASONs sent with ACTION_DISCONNECTED/EXTRA_DISCONNECT_REASON
-    public static final int REASON_CANNOT_CONNECT = 0;
+    //public static final int REASON_CANNOT_CONNECT = 0;
     public static final int REASON_CONNECTION_LOST = 1;
 
     // ID bytes sent / received in every packet received from the sonar unit
@@ -92,8 +94,7 @@ public class SonarSampler extends Sampler {
     // Bit 0 - Notifications disabled/enabled
     // Bit 1 Indications disabled/enabled
 
-    // Other IDs observed from device discovery, but not used in Ping. Descriptions found by googling; may not be correct
-
+    /* Other IDs observed from device discovery, but not used in Ping. Descriptions found by googling; may not be correct
     public static final UUID BTS_GENERIC_ACCESS = UUID.fromString("00001800-0000-1000-8000-00805f9b34fb");
     public static final UUID BTC_DEVICE_NAME = UUID.fromString("00002a00-0000-1000-8000-00805f9b34fb"); // "Fish Helper"
     public static final UUID BTC_APPEARANCE = UUID.fromString("00002a01-0000-1000-8000-00805f9b34fb"); // [0x80, 0x00]
@@ -113,6 +114,7 @@ public class SonarSampler extends Sampler {
     public static final UUID BTS_MICROCHIP = UUID.fromString("49535343-fe7d-4ae5-8fa9-9fafd205e455");
     public static final UUID BTC_MICROCHIP_CONNECTION_PARAMETER = UUID.fromString("49535343-6daa-4d02-abf6-19569aca69fe"); // [-120, 102, 0, 0, 0, 0, 0, 0, 0]
     public static final UUID BTC_MICROCHIP_AIR_PATCH = UUID.fromString("49535343-aca3-481c-91ec-d85e28a60318"); // has a Client Characteristic Configuration descriptor, value [0, 0]
+    */
 
     // Current bluetooth state
     public static final int BT_STATE_DISCONNECTED = 0;
@@ -122,7 +124,7 @@ public class SonarSampler extends Sampler {
             "DISCONNECTED", "CONNECTING", "CONNECTED"
     };
     private int mBluetoothState = BT_STATE_DISCONNECTED;
-    private String mBluetoothStateReason = "Not connected yet";
+    private int mBluetoothStateReason;
 
     // Minimum depth change between recorded samples
     public static final double MINIMUM_DELTA_DEPTH_DEFAULT = 0.5; // metres
@@ -147,9 +149,10 @@ public class SonarSampler extends Sampler {
                     // mBluetoothGatt should have been set from the result of connectGatt in connect()
                     Log.e(TAG, "mBluetoothGatt and gatt differ! Not expected");
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-                setBluetoothState(BT_STATE_DISCONNECTED, "Disconnected from " + gatt.getDevice().getName());
+                Log.d(TAG, "Disconnected from " + gatt.getDevice().getName());
+                setBluetoothState(BT_STATE_DISCONNECTED, R.string.reason_gatt_disconnected);
                 if (mBluetoothGatt != null & gatt.getDevice().getAddress().equals(mBluetoothGatt.getDevice().getAddress()))
-                    disconnectBluetooth("cleaning up");
+                    disconnectBluetooth(R.string.reason_cleaning_up);
 
                 Intent intent = new Intent(ACTION_SONAR_DISCONNECTED);
                 intent.putExtra(EXTRA_DEVICE_ADDRESS, gatt.getDevice().getAddress());
@@ -170,7 +173,7 @@ public class SonarSampler extends Sampler {
             super.onServicesDiscovered(gatt, status);
 
             if (status != BluetoothGatt.GATT_SUCCESS) {
-                disconnectBluetooth("onServicesDiscovered failed");
+                disconnectBluetooth(R.string.reason_osd_failed);
                 return;
             }
 
@@ -180,13 +183,13 @@ public class SonarSampler extends Sampler {
             BluetoothGattService bgs = gatt.getService(BTS_CUSTOM);
             if (bgs == null) {
                 GattQueue.describeFromCache(mBluetoothGatt); // DEBUG
-                disconnectBluetooth("Device does not offer service BTS_CUSTOM");
+                disconnectBluetooth(R.string.reason_uuid_custom);
                 return;
             }
 
             BluetoothGattCharacteristic cha = bgs.getCharacteristic(BTC_CUSTOM_SAMPLE);
             if (cha == null) {
-                disconnectBluetooth("Device does not offer characteristic BTC_CUSTOM_SAMPLE");
+                disconnectBluetooth(R.string.reason_uuid_custom_sample);
                 return;
             }
 
@@ -198,7 +201,7 @@ public class SonarSampler extends Sampler {
             // Tell the device to activate characteristic change notifications
             BluetoothGattDescriptor descriptor = cha.getDescriptor(BTD_CLIENT_CHARACTERISTIC_CONFIGURATION);
             if (descriptor == null) {
-                disconnectBluetooth("Device does not offer descriptor BTD_CLIENT_CHARACTERISTIC_CONFIGURATION");
+                disconnectBluetooth(R.string.reason_uuid_ccc);
                 return;
             }
 
@@ -207,7 +210,7 @@ public class SonarSampler extends Sampler {
             mGattQueue.queue(new GattQueue.DescriptorWrite(descriptor));
 
             // Tell the world we are ready for action
-            setBluetoothState(BT_STATE_CONNECTED, "Connected");
+            setBluetoothState(BT_STATE_CONNECTED, R.string.reason_ok);
             Intent intent = new Intent(ACTION_SONAR_CONNECTED);
             intent.putExtra(EXTRA_DEVICE_ADDRESS, mBluetoothGatt.getDevice().getAddress());
             mService.sendBroadcast(intent);
@@ -257,7 +260,7 @@ public class SonarSampler extends Sampler {
      * @param state  a BT_STATE
      * @param reason the reson for the change to this state
      */
-    private void setBluetoothState(int state, String reason) {
+    private void setBluetoothState(int state, int reason) {
         Log.d(TAG, "State change to " + BT_STATE_NAMES[state] + " " + reason);
         mBluetoothState = state;
         mBluetoothStateReason = reason;
@@ -275,9 +278,9 @@ public class SonarSampler extends Sampler {
     /**
      * Get the reason for the current BT_STATE for the service
      *
-     * @return a reason
+     * @return a string resource
      */
-    public String getBluetoothStateReason() {
+    public int getBluetoothStateReason() {
         return mBluetoothStateReason;
     }
 
@@ -306,46 +309,42 @@ public class SonarSampler extends Sampler {
     /**
      * Connect to a bluetooth device. Will disconnect() currently connected device
      * first if it is not the desired device.
-     *
-     * @return false if the connection attempt failed. true doesn't mean it succeeded (the
-     * connection may be being made by another thread) just that it hasn't failed (yet)
      */
-    public boolean connectToDevice(BluetoothDevice btd) {
+    public void connectToDevice(BluetoothDevice btd) {
+
+        if (btd == null) {
+            setBluetoothState(BT_STATE_DISCONNECTED, R.string.reason_no_device);
+            return;
+        }
 
         Log.d(TAG, "connect(" + btd.getAddress() + ")");
 
-        if (mBluetoothGatt != null
-                && !mBluetoothGatt.getDevice().getAddress().equals(btd.getAddress())) {
+        if (mBluetoothGatt != null && !mBluetoothGatt.getDevice().getAddress().equals(btd.getAddress())) {
             // Connected to wrong device
-            mBluetoothGatt.close(); // TODO: Wait for callback!
+            mBluetoothGatt.close();
             mBluetoothGatt = null;
         }
 
         if (mBluetoothGatt == null) {
             // New connection
-            setBluetoothState(BT_STATE_CONNECTING, "connect()ing using new BluetoothGatt");
+            setBluetoothState(BT_STATE_CONNECTING, R.string.reason_new_gatt);
             GattQueue.Callback cb = new GattBack();
             mBluetoothGatt = btd.connectGatt(mService,
                     false, // Don't wait for device to become available
                     cb, // Callback
                     BluetoothDevice.TRANSPORT_LE);
             mGattQueue = new GattQueue(mBluetoothGatt, cb);
-            return true;
+            return;
         } else if (mBluetoothState >= BT_STATE_CONNECTING)
             // BT_CONNECTING or BT_CONNECTED
-            return true;
+            return;
 
         // Re-connect to a remote device after the connection has been dropped. If the
         // device is not in range, the re-connection will be triggered once the device
         // is back in range.
         Log.d(TAG, "connect()ing using existing BluetoothGatt");
-        if (mBluetoothGatt.connect()) {
-            // setState(BT_STATE_CONNECTED, "using existing BluetoothGatt"); // not until onStateChanged!
-            return true;
-        } else {
-            setBluetoothState(BT_STATE_DISCONNECTED, "BluetoothGatt.connect failed");
-            return false;
-        }
+        if (!mBluetoothGatt.connect())
+            setBluetoothState(BT_STATE_DISCONNECTED, R.string.reason_gatt_connect_failed);
     }
 
     @Override // implements Sampler
@@ -364,7 +363,7 @@ public class SonarSampler extends Sampler {
     /**
      * Disconnects an established connection, or cancels a connection attempt currently in progress.
      */
-    private void disconnectBluetooth(String reason) {
+    private void disconnectBluetooth(int reason) {
         Log.d(TAG, "disconnect because " + reason);
         setBluetoothState(BT_STATE_DISCONNECTED, reason);
         if (mBluetoothGatt == null)

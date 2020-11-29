@@ -72,12 +72,12 @@ import java.util.Map;
 public class LoggingService extends Service {
     public static final String TAG = LoggingService.class.getSimpleName();
 
-    protected static final String PACKAGE_NAME = LocationSampler.class.getPackage().getName();
+    protected static final String CLASS_NAME = LocationSampler.class.getCanonicalName();
 
-    public static final String ACTION_SAMPLE = PACKAGE_NAME + ".ACTION_SAMPLE";
+    public static final String ACTION_SAMPLE = CLASS_NAME + ".action_sample";
 
-    public static final String EXTRA_SAMPLE_DATA = PACKAGE_NAME + ".SAMPLE_DATA";
-    public static final String EXTRA_SAMPLE_SOURCE = PACKAGE_NAME + ".SAMPLE_SOURCE";
+    public static final String EXTRA_SAMPLE_DATA = CLASS_NAME + ".sample_data";
+    public static final String EXTRA_SAMPLE_SOURCE = CLASS_NAME + ".sample_source";
 
     // Extra to tell us if we arrived in onStartCommand from the Notification
     protected static final String EXTRA_STARTED_FROM_NOTIFICATION =
@@ -94,7 +94,7 @@ public class LoggingService extends Service {
 
     protected PrintWriter mSampleWriter = null;
 
-    // Set to true in subclasses to keep this service running even when all clients are unbound
+    // DEBUG: Set to true in subclasses to keep this service running even when all clients are unbound
     // and logging is disabled.
     protected boolean mKeepRunning = true;
 
@@ -149,8 +149,9 @@ public class LoggingService extends Service {
     }
 
     /**
-     * This is how users of the service add samplers to it
-     * @param s
+     * This is how users of the service add samplers to it. Doesn't check if the sampler is already
+     * there!
+     * @param s sampler to add
      */
     public void addSampler(Sampler s) {
         mSamplers.put(s.getTag(), s);
@@ -282,16 +283,14 @@ public class LoggingService extends Service {
      * Start logging to the given URI.
      *
      * @param suri URI to log to
-     * @return true if logging to that URI was enabled
      */
-    public boolean startLogging(String suri) {
+    public void startLogging(String suri) {
         Uri mLogUri = Uri.parse(suri);
-        // Check it exists, create it with appropriate header if not
+        // Check it exists, create it if not
         try {
             AssetFileDescriptor afd;
             FileWriter fw = null;
             try {
-                // TODO: fix this
                 getContentResolver().openAssetFileDescriptor(mLogUri, "r").close();
                 afd = getContentResolver().openAssetFileDescriptor(mLogUri, "wa");
                 fw = new FileWriter(afd.getFileDescriptor());
@@ -304,11 +303,9 @@ public class LoggingService extends Service {
             for (Sampler s : mSamplers.values())
                 s.mMustLogNextSample = true;
             Log.d(TAG, "startLogging to '" + suri + "'");
-            return true;
         } catch (IOException ioe) {
             Log.e(TAG, "startLogging failed: could not open '" + mLogUri + "' " + ioe);
             mSampleWriter = null;
-            return false;
         }
     }
 

@@ -37,9 +37,6 @@ public class SettingsFragment extends PreferenceFragmentCompat {
     // String used to separate the preference current value from the description in the summary
     private static String VALUE_SEPARATOR = "\n";
 
-    // Interface to SharedPreferences
-    private Settings mPrefs;
-
     // All value changes should come through here. Preference value changes are all handled
     // in the MainActivity when the preference screen is navigated away from.
     private class SummaryUpdateListener implements Preference.OnPreferenceChangeListener {
@@ -64,7 +61,8 @@ public class SettingsFragment extends PreferenceFragmentCompat {
     public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
         setPreferencesFromResource(R.xml.root_preferences, rootKey);
 
-        mPrefs = new Settings(getActivity());
+        // Interface to SharedPreferences
+        Settings mPrefs = new Settings(getActivity());
 
         CheckBoxPreference cbPref = findPreference(Settings.PREF_AUTOCONNECT);
         assert cbPref != null;

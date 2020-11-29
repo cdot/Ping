@@ -23,7 +23,6 @@ import android.bluetooth.BluetoothDevice;
 import android.bluetooth.le.BluetoothLeScanner;
 import android.bluetooth.le.ScanCallback;
 import android.bluetooth.le.ScanResult;
-import android.content.res.Resources;
 import android.os.Bundle;
 import android.os.ParcelUuid;
 import android.util.Log;
@@ -54,7 +53,6 @@ public class DiscoveryFragment extends Fragment {
     private List<Map<String, Object>> mDeviceViewItems;
 
     private DiscoveryFragmentBinding mBinding;
-    private Settings mPrefs;
 
     private BluetoothLeScanner mBLEScanner = null;
     boolean mIgnoreScanResults = false; // used during error handling
@@ -73,21 +71,20 @@ public class DiscoveryFragment extends Fragment {
         public void onScanFailed(int errorCode) {
             switch (errorCode) {
                 case ScanCallback.SCAN_FAILED_ALREADY_STARTED:
-                    Log.d(TAG, mId+"Scan failed, already started");
+                    Log.d(TAG, mId + "Scan failed, already started");
                     return;
                 case ScanCallback.SCAN_FAILED_APPLICATION_REGISTRATION_FAILED:
-                    Log.d(TAG, mId+"Scan failed, app registration failed");
+                    Log.d(TAG, mId + "Scan failed, app registration failed");
                     break;
                 case ScanCallback.SCAN_FAILED_FEATURE_UNSUPPORTED:
-                    Log.d(TAG, mId+"Scan failed, unsupported");
+                    Log.d(TAG, mId + "Scan failed, unsupported");
                     break;
                 case ScanCallback.SCAN_FAILED_INTERNAL_ERROR:
-                    Log.d(TAG, mId+"Scan failed, internal error");
+                    Log.d(TAG, mId + "Scan failed, internal error");
                     break;
             }
             // Try again with a new scanner
-            BluetoothAdapter bta = BluetoothAdapter.getDefaultAdapter();
-            Log.d(TAG, mId+"Starting BLE scan again");
+            Log.d(TAG, mId + "Starting BLE scan again");
             mIgnoreScanResults = false;
             mBLEScanner.startScan(new ScanBack("RESTART"));
         }
@@ -111,11 +108,11 @@ public class DiscoveryFragment extends Fragment {
             if (uuids != null && uuids.contains(new ParcelUuid(SonarSampler.BTS_CUSTOM))) {
                 if (mAutoConnect) {
                     // First device that offers the service we want. Fingers crossed!
-                    ((MainActivity)getActivity()).openDevice(device);
+                    ((MainActivity) getActivity()).openDevice(device);
                     return;
                 }
                 if (!mDeviceList.contains(device)) {
-                    Log.d(TAG, mId+" Found device " + device.getAddress() + " " + device.getName());
+                    Log.d(TAG, mId + " Found device " + device.getAddress() + " " + device.getName());
                     mDeviceList.add(device);
                     updateDisplay();
                 }
@@ -129,7 +126,6 @@ public class DiscoveryFragment extends Fragment {
     @Override // Fragment
     public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         mBinding = DiscoveryFragmentBinding.inflate(inflater, container, false);
-        mPrefs = new Settings(getActivity());
 
         mBinding.discoveryHelp.setText(mAutoConnect ? R.string.help_scan_first : R.string.help_scan_all);
 
@@ -137,8 +133,8 @@ public class DiscoveryFragment extends Fragment {
         // if there is no bluetooth, so we can test/demo it.
         AdapterView.OnItemClickListener clickListener = new AdapterView.OnItemClickListener() {
             public void onItemClick(AdapterView<?> adapterView, View v, int arg2, long arg3) {
-                BluetoothDevice device = (BluetoothDevice)mDeviceViewItems.get(arg2).get("device");
-                ((MainActivity)getActivity()).openDevice(device);
+                BluetoothDevice device = (BluetoothDevice) mDeviceViewItems.get(arg2).get("device");
+                ((MainActivity) getActivity()).openDevice(device);
             }
         };
 
@@ -148,6 +144,7 @@ public class DiscoveryFragment extends Fragment {
         // filtering never invokes the callback.
         BluetoothAdapter bta = BluetoothAdapter.getDefaultAdapter();
 
+        mIgnoreScanResults = false;
         // mBLEScanner is a singleton in the adapter; once it has been found once, there's no point
         // in re-finding it
         mBLEScanner = bta.getBluetoothLeScanner();
@@ -156,7 +153,6 @@ public class DiscoveryFragment extends Fragment {
         // Scanning continues ad infinitum. Can't see any obvious way to remove a device from the
         // scan list.
         Log.d(TAG, "Starting BLE scan");
-        mIgnoreScanResults = false;
         mBLEScanner.startScan(new ScanBack("FIRST"));
         updateDisplay();
 
@@ -183,7 +179,6 @@ public class DiscoveryFragment extends Fragment {
     // Update display after lists contents changed
     private void updateDisplay() {
         // Fill the UI from our list of devices
-        Resources r = getResources();
         mDeviceViewItems = new ArrayList<>();
         for (BluetoothDevice dr : mDeviceList) {
             Map<String, Object> map = new HashMap<>();

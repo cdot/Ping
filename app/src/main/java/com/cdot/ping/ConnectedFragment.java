@@ -34,6 +34,7 @@ import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
@@ -127,9 +128,16 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
         mBinding = ConnectedFragmentBinding.inflate(inflater, container, false);
 
         updatePreferencesDisplay();
-        String daddr = mConnectedDevice.getAddress();
-        mBinding.deviceAddress.setText(daddr);
-        mBinding.deviceName.setText(mConnectedDevice.getName());
+        if (mConnectedDevice == null) {
+            mBinding.deviceAddress.setText("-");
+            mBinding.deviceName.setText("-");
+            // Only way we can get here with a null device....
+            Toast.makeText(getActivity(), R.string.help_no_bluetooth, Toast.LENGTH_LONG).show();
+        } else {
+            String daddr = mConnectedDevice.getAddress();
+            mBinding.deviceAddress.setText(daddr);
+            mBinding.deviceName.setText(mConnectedDevice.getName());
+        }
 
         mBinding.record.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -140,7 +148,16 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
             }
         });
 
-        return mBinding.mainFragment;
+        Resources r = getResources();
+        mBinding.batteryValue.setText(r.getString(R.string.battery_value, 0));
+        mBinding.depthValue.setText(r.getString(R.string.depth_value, 0.0));
+        mBinding.temperatureValue.setText(r.getString(R.string.temperature_value, 0.0));
+        mBinding.fishDepthValue.setText(r.getString(R.string.fish_depth_value, 0.0));
+        mBinding.fishTypeValue.setText(r.getString(R.string.fish_type_value, 0.0));
+        mBinding.strengthValue.setText(r.getString(R.string.strength_value, 0.0));
+        mBinding.latitude.setText(r.getString(R.string.latitude_value, 0.0));
+        mBinding.longitude.setText(r.getString(R.string.longitude_value, 0.0));
+        return mBinding.connectedFragment;
     }
 
     // Called after onCreateView->onViewCreated->onViewStateRestored. Followed by onResume
@@ -148,7 +165,7 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
     public void onStart() {
         Log.d(TAG, "onStart");
         super.onStart();
-        registerBroadcastReceiver(); // TODO: should be done in onResume?
+        registerBroadcastReceiver();
         updateSonarStateDisplay();
     }
 
@@ -187,8 +204,9 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
         LoggingService svc = ((MainActivity) getActivity()).getLoggingService();
         SonarSampler ss = (SonarSampler)svc.getSampler(SonarSampler.TAG);
         int state = ss.getBluetoothState();
-        String reason = ss.getBluetoothStateReason();
-        String s = String.format(getResources().getStringArray(R.array.bt_status)[state], reason);
+        int reason = ss.getBluetoothStateReason();
+        Resources r = getResources();
+        String s = r.getStringArray(R.array.bt_status)[state] + r.getString(reason);
         mBinding.connectionStatus.setText(s);
     }
 

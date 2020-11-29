@@ -26,6 +26,8 @@ import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothProfile;
 import android.util.Log;
 
+import androidx.annotation.NonNull;
+
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -90,6 +92,7 @@ class GattQueue {
                 mCallback.call(characteristic.getValue());
         }
 
+        @NonNull
         public String toString() {
             return "Read characteristic " + mCh.getUuid();
         }
@@ -112,6 +115,7 @@ class GattQueue {
             gatt.writeCharacteristic(mCh);
         }
 
+        @NonNull
         public String toString() {
             return "Write characteristic " + mCh.getUuid();
         }
@@ -141,6 +145,7 @@ class GattQueue {
                 mCallback.call(descriptor.getValue());
         }
 
+        @NonNull
         public String toString() {
             return "Read descriptor " + mDe.getUuid();
         }
@@ -162,6 +167,7 @@ class GattQueue {
             gatt.writeDescriptor(mDe);
         }
 
+        @NonNull
         public String toString() {
             return "Write descriptor " + mDe.getUuid();
         }
@@ -198,7 +204,7 @@ class GattQueue {
     };
 
     private static String describeBits(final String[] names, int val) {
-        StringBuffer descr = new StringBuffer();
+        StringBuilder descr = new StringBuilder();
         for (int idx = 0; idx < names.length; idx++) {
             if ((val & (1 << idx)) != 0) {
                 if (descr.length() > 0)

@@ -168,7 +168,6 @@ public class Settings {
      * @param value new value
      */
     void put(String key, boolean value) {
-        // TODO: check the key corresponds to a known integer preference
         SharedPreferences.Editor edit = mPrefs.edit();
         edit.putBoolean(key, value);
         edit.apply();
@@ -180,7 +179,6 @@ public class Settings {
      * @param value new value
      */
     void put(String key, int value) {
-        // TODO: check the key corresponds to a known integer preference
         SharedPreferences.Editor edit = mPrefs.edit();
         edit.putInt(key, value);
         edit.apply();
@@ -192,7 +190,6 @@ public class Settings {
      * @param value new value
      */
     void put(String key, String value) {
-        // TODO: check the key corresponds to a known String preference
         SharedPreferences.Editor edit = mPrefs.edit();
         edit.putString(key, value);
         edit.apply();

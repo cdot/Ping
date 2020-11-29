@@ -34,7 +34,6 @@ import android.os.IBinder;
 import android.os.Parcelable;
 import android.provider.DocumentsContract;
 import android.util.Log;
-import android.view.Gravity;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -62,7 +61,6 @@ public class MainActivity extends AppCompatActivity {
     private final static int REQUEST_ENABLE_BLUETOOTH = 1;
     private static final int REQUEST_PERMISSIONS = 2;
     private static final int REQUEST_CHOOSE_FILE = 3;
-    private static final String EXTRA_PREFERENCE_NAME = "EXTRA_PREFERENCE_NAME";
 
     private Settings mPrefs;
     private String mPickingFileFor;
@@ -85,7 +83,7 @@ public class MainActivity extends AppCompatActivity {
     // Monitors the state of the connection to the location service.
     private final ServiceConnection mLoggingServiceConnection = new ServiceConnection() {
 
-        @Override
+        @Override // ServiceConnection
         public void onServiceConnected(ComponentName name, IBinder service) {
             Log.d(TAG, "Logging service connected");
             LoggingService.LoggingServiceBinder binder = (LoggingService.LoggingServiceBinder) service;
@@ -101,7 +99,7 @@ public class MainActivity extends AppCompatActivity {
             findASonarDevice();
         }
 
-        @Override
+        @Override // ServiceConnection
         public void onServiceDisconnected(ComponentName name) {
             Log.d(TAG, "Logging service disconnected");
             mLoggingService = null;
@@ -255,10 +253,7 @@ public class MainActivity extends AppCompatActivity {
         // must be non-null before device service can be started
         BluetoothAdapter bta = BluetoothAdapter.getDefaultAdapter();
         if (bta == null) {
-            // TODO: change this from a toast to something more permanent
-            Toast toast = Toast.makeText(getApplicationContext(), R.string.bt_no_bluetooth, Toast.LENGTH_LONG);
-            toast.setGravity(Gravity.CENTER, 0, 0);
-            toast.show();
+
         } else if (bta.isEnabled())
             findASonarDevice();
         else
@@ -285,16 +280,21 @@ public class MainActivity extends AppCompatActivity {
             // if autoconnect is enabled, we might be able to shortcut the discovery process
             // using the paired devices, so sniff them first
             BluetoothAdapter bta = BluetoothAdapter.getDefaultAdapter();
-            Set<BluetoothDevice> pairedDevices = bta.getBondedDevices();
-            if (pairedDevices.size() > 0) {
-                for (BluetoothDevice device : pairedDevices) {
-                    Parcelable[] uuids = device.getUuids();
-                    if (uuids != null) {
-                        for (Parcelable p : uuids) {
-                            if (SonarSampler.BTS_CUSTOM.equals(p)) {
-                                Log.i(TAG, "paired device " + device.getName());
-                                openDevice(device);
-                                return;
+            if (bta == null) {
+                openDevice(null);
+                return;
+            } else {
+                Set<BluetoothDevice> pairedDevices = bta.getBondedDevices();
+                if (pairedDevices.size() > 0) {
+                    for (BluetoothDevice device : pairedDevices) {
+                        Parcelable[] uuids = device.getUuids();
+                        if (uuids != null) {
+                            for (Parcelable p : uuids) {
+                                if (SonarSampler.BTS_CUSTOM.toString().equals(p.toString())) {
+                                    Log.i(TAG, "paired device " + device.getName());
+                                    openDevice(device);
+                                    return;
+                                }
                             }
                         }
                     }
@@ -309,7 +309,7 @@ public class MainActivity extends AppCompatActivity {
     // equals() when either string could be null
     private static boolean sameString(String a, String b) {
         if (a == b) return true;
-        if (a == null || b == null || !a.equals(b)) return false;
+        if (a == null || !a.equals(b)) return false;
         return true;
     }
 
@@ -328,9 +328,14 @@ public class MainActivity extends AppCompatActivity {
      * @param device device to connect to
      */
     void openDevice(BluetoothDevice device) {
-        Log.d(TAG, "device selected " + device.getAddress() + " " + device.getName());
-        // Remember the connected device so we can reconnect
-        mPrefs.put(Settings.PREF_DEVICE, device.getName());
+        if (device == null)
+            Log.d(TAG, "no device");
+        else {
+            Log.d(TAG, "device selected " + device.getAddress() + " " + device.getName());
+
+            // Remember the connected device so we can reconnect
+            mPrefs.put(Settings.PREF_DEVICE, device.getName());
+        }
 
         // Switch to the ConnectedFragment to monitor connection
         Fragment f = new ConnectedFragment(device);
