@@ -32,8 +32,10 @@
             android:enabled="true" />
         <service
             android:name=".services.LocationService"
-            android:enabled="true"
-            android:foregroundServiceType="location" />
+            android:enabled="true" />
+        <!-- <service
+            android:name=".services.WhatTheFuck"
+            android:enabled="true" /> -->
     </application>
 
 </manifest>

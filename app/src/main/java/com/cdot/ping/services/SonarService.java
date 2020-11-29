@@ -1,43 +1,41 @@
+/*
+ * Copyright © 2020 C-Dot Consultants
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of this software
+ * and associated documentation files (the "Software"), to deal in the Software without restriction,
+ * including without limitation the rights to use, copy, modify, merge, publish, distribute,
+ * sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all copies or
+ * substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING
+ * BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+ * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
 package com.cdot.ping.services;
 
-import android.app.Notification;
-import android.app.NotificationChannel;
-import android.app.NotificationManager;
-import android.app.PendingIntent;
-import android.app.Service;
-import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
 import android.bluetooth.BluetoothGattCharacteristic;
 import android.bluetooth.BluetoothGattDescriptor;
 import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothProfile;
-import android.bluetooth.le.BluetoothLeScanner;
-import android.bluetooth.le.ScanCallback;
-import android.bluetooth.le.ScanResult;
 import android.content.Intent;
-import android.content.res.AssetFileDescriptor;
-import android.content.res.Configuration;
-import android.net.Uri;
 import android.os.Binder;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
-import android.os.ParcelUuid;
 import android.util.Log;
 
 import androidx.core.app.NotificationCompat;
 
-import com.cdot.ping.MainActivity;
 import com.cdot.ping.R;
 
-import java.io.FileNotFoundException;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.PrintWriter;
 import java.text.DateFormat;
 import java.util.Date;
-import java.util.List;
 import java.util.UUID;
 
 /**
@@ -56,20 +54,21 @@ import java.util.UUID;
  * Tested talking to a MicroChip IS1678S-152, and with an emulator for that device.
  * <p>
  * Communication with the device can be in three states: waiting, trying to connect, and connected.
+ * <p>
+ * Protocol reverse engineered from a FishFinder device and software using Wireshark. Service code
+ * based on https://github.com/android/location-samples
  */
-public class SonarService extends Service {
+public class SonarService extends LoggingService {
     public static final String TAG = SonarService.class.getSimpleName();
 
     private static final String PACKAGE_NAME = SonarService.class.getPackage().getName();
 
     // Messages sent by the service
-    public static final String ACTION_SAMPLE = PACKAGE_NAME + ".ACTION_SAMPLE";
     public static final String ACTION_CONNECTED = PACKAGE_NAME + ".ACTION_CONNECTED";
     public static final String ACTION_DISCONNECTED = PACKAGE_NAME + ".ACTION_DISCONNECTED";
 
     // Sent message extras
     public static final String EXTRA_DEVICE_ADDRESS = PACKAGE_NAME + ".DEVICE_ADDRESS";
-    public static final String EXTRA_SAMPLE_DATA = PACKAGE_NAME + ".SAMPLE_DATA";
     public static final String EXTRA_DISCONNECT_REASON = PACKAGE_NAME + ".DISCONNECT_REASON";
 
     // DISCONNECT_REASONs sent with ACTION_DISCONNECTED/EXTRA_DISCONNECT_REASON
@@ -133,41 +132,15 @@ public class SonarService extends Service {
     private int mBluetoothState = BT_STATE_DISCONNECTED;
     private String mBluetoothStateReason = "Not connected yet";
 
-    /**
-     * The identifier for the notification displayed for the foreground service.
-     */
-    private static final int NOTIFICATION_ID = 87654321;
-
-    // Interface used by processes to communicate with this service.
-    public class LocalBinder extends Binder {
-        public SonarService getService() {
-            return SonarService.this;
-        }
-    }
-
-    private final IBinder mBinder = new LocalBinder();
-
-    /**
-     * Flag used to indicate whether the bound activity has really gone away, and is not just
-     * unbound as part of an orientation change.
-     */
-    private boolean mJustAConfigurationChange = false;
-
-    private static final String NOTIFICATION_CHANNEL_ID = TAG;
-    private static final String EXTRA_STARTED_FROM_NOTIFICATION = "com.cdot.ping.services.SonarService.started_from_notification";
-
     // Minimum depth change between recorded samples
     public static final double MINIMUM_DELTA_DEPTH_DEFAULT = 0.5; // metres
-
     private double mMinDeltaDepth = MINIMUM_DELTA_DEPTH_DEFAULT;
+    private Bundle mLastLoggedSample = null;
+    private boolean mLoggingDisabled = false;
+    private static final double MIN_DELTA_TEMPERATURE = 1.0; // degrees C
 
-    private int mLastLoggedBattery = -1;
-    private double mLastLoggedDepth = -1;
     private BluetoothGatt mBluetoothGatt;
     private GattQueue mGattQueue;
-
-    private String mSampleFile = null; // URI being sampled to
-    private PrintWriter mSampleWriter = null; // non-null when sampling is active
 
     class GattBack extends GattQueue.Callback {
         // invoked when we have connected/disconnected to/from a remote GATT server
@@ -213,6 +186,7 @@ public class SonarService extends Service {
             // Enable push notification from the BTC_CUSTOM service
             BluetoothGattService bgs = gatt.getService(BTS_CUSTOM);
             if (bgs == null) {
+                GattQueue.describeFromCache(mBluetoothGatt); // DEBUG
                 disconnect("Device does not offer service BTS_CUSTOM");
                 return;
             }
@@ -280,10 +254,27 @@ public class SonarService extends Service {
             b.putDouble("strength", 100.0 * data[8] / 128.0); // Guess our max is 128
             b.putDouble("temperature", ((double) data[12] + (double) data[13] / 100.0 - 32.0) * 5.0 / 9.0);
 
-            logSample(b);
+            onNewSample(b);
         }
     }
 
+    public class SonarServiceBinder extends Binder {
+        public SonarService getService() {
+            return SonarService.this;
+        }
+    }
+
+    protected IBinder createBinder() {
+        return new SonarServiceBinder();
+    }
+
+    @Override // LoggingService
+    public String getTag() { return TAG; }
+
+    @Override // LoggingService
+    protected int getNotificationId() {
+        return 87654321;
+    }
     /**
      * Set the current BT_STATE for the service
      *
@@ -325,149 +316,19 @@ public class SonarService extends Service {
         return mBluetoothGatt.getDevice();
     }
 
-    @Override // Service
-    public void onCreate() {
-        NotificationManager mNotificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-
-        // Android O requires a Notification Channel.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            // Create the channel for the notification
-            NotificationChannel mChannel =
-                    new NotificationChannel(NOTIFICATION_CHANNEL_ID, getString(R.string.app_name), NotificationManager.IMPORTANCE_DEFAULT);
-
-            // Set the Notification Channel for the Notification Manager.
-            mNotificationManager.createNotificationChannel(mChannel);
-        }
-    }
-
-    // The system invokes this method by calling startService() when another component
-    // (such as an activity) requests that the service be started. When this method executes,
-    // the service is started and can run in the background indefinitely.
-    // It is your responsibility to stop the service when its work is
-    // complete by calling stopSelf() or stopService().
-    @Override // Service
-    public int onStartCommand(Intent intent, int flags, int startId) {
-        Log.i(TAG, "Service started");
-        boolean startedFromNotification = intent.getBooleanExtra(EXTRA_STARTED_FROM_NOTIFICATION,
-                false);
-
-        // We got here because the user decided to remove updates from the notification.
-        if (startedFromNotification) {
-            //removeLocationUpdates();
-            stopSelf();
-        }
-
-        // Note that we don't start trying to connect to a bluetooth device. That's done
-        // in startAutoConnect().
-
-        // Tells the system to not try to recreate the service after it has been killed.
-        return START_NOT_STICKY;
-    }
-
-    // Called when device configuration changes, such as the orientation. Used to flag that
-    // this is a configuration change to onUnbind()
-    @Override // Service
-    public void onConfigurationChanged(Configuration newConfig) {
-        super.onConfigurationChanged(newConfig);
-        mJustAConfigurationChange = true;
-    }
-
-    // "The system invokes this method by calling bindService() when another component wants to
-    // bind with the service (such as to perform RPC). In your implementation of this method,
-    // you must provide an interface that clients use to communicate with the service by returning
-    // an IBinder. You must always implement this method; however, if you don't want to allow
-    // binding, you should return null."
-    //
-    // Called when MainActivity comes to the foreground and binds with this service. The service
-    // should cease to be a foreground service when that happens.
-    @Override // Service
-    public IBinder onBind(Intent intent) {
-        Log.i(TAG, "onBind()");
-        stopForeground(true);
-        mJustAConfigurationChange = false;
-        return mBinder;
-    }
-
-    // Called when MainActivity returns to the foreground and binds once again with this service.
-    // The service should cease to be a foreground service when that happens.
-    @Override // Service
-    public void onRebind(Intent intent) {
-        Log.i(TAG, "onRebind()");
-        stopForeground(true);
-        mJustAConfigurationChange = false;
-        super.onRebind(intent);
-    }
-
-    // Called when MainActivity unbinds from this service. If this method is called due to a
-    // configuration change (such as a reorientation of the device) do nothing. Otherwise,
-    // if sampling is active, make this service a foreground service.
-    @Override // Service
-    public boolean onUnbind(Intent intent) {
-
-        if (mJustAConfigurationChange) {
-            Log.d(TAG, "Unbinding due to a configuration change");
-        } else if (mSampleWriter != null) {
-            Log.i(TAG, "Starting foreground service");
-            startForeground(NOTIFICATION_ID, getNotification());
-        } else if (mBluetoothGatt != null) {
-            Log.i(TAG, "Last client unbound from service and not sampling, closing service");
-            stopSelf();
-        }
-
-        return true; // Ensures onRebind() is called when a client re-binds.
-    }
-
     // The system invokes this method when the service is no longer used and is being destroyed.
     // Your service should implement this to clean up any resources such as threads, registered
     // listeners, or receivers. This is the last call that the service receives.
     @Override // Service
     public void onDestroy() {
-        // Clean up autoconnect thread, if it's running. Release Gatt.
-        //NOP? mServiceHandler.removeCallbacksAndMessages(null);
+        Log.d(TAG, "onDestroy " + isRunningInForeground());
+        // Release Gatt
         if (mBluetoothGatt != null) {
             Log.d(TAG, "Closing GATT in onDestroy");
             mBluetoothGatt.close();
             mBluetoothGatt = null;
         }
-    }
-
-    /**
-     * Returns the {@link NotificationCompat} used as part of the foreground service.
-     */
-    private Notification getNotification() {
-        Intent intent = new Intent(this, LocationService.class);
-
-        // Extra to help us figure out if we arrived in onStartCommand via the notification or not.
-        intent.putExtra(EXTRA_STARTED_FROM_NOTIFICATION, true);
-
-        // The PendingIntent that leads to a call to onStartCommand() in this service.
-        PendingIntent servicePendingIntent = PendingIntent.getService(this, 0, intent,
-                PendingIntent.FLAG_UPDATE_CURRENT);
-
-        // The PendingIntent to launch activity.
-        PendingIntent activityPendingIntent = PendingIntent.getActivity(this, 0,
-                new Intent(this, MainActivity.class), 0);
-
-        CharSequence text = "Depth " + mLastLoggedDepth;
-        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
-                .addAction(R.drawable.ic_launcher, getString(R.string.launch_activity),
-                        activityPendingIntent)
-                .addAction(R.drawable.ic_cancel, getString(R.string.stop_sonar_service),
-                        servicePendingIntent)
-                .setContentText(text)
-                .setContentTitle(getString(R.string.sonar_updated, DateFormat.getDateTimeInstance().format(new Date())))
-                .setOngoing(true)
-                .setPriority(Notification.PRIORITY_HIGH)
-                .setSmallIcon(R.mipmap.ic_launcher)
-                .setTicker(text)
-                .setWhen(System.currentTimeMillis());
-
-        // Set the Channel ID for Android O.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            builder.setChannelId(NOTIFICATION_CHANNEL_ID); // Channel ID
-        }
-
-        return builder.build();
+        super.onDestroy();
     }
 
     /**
@@ -515,6 +376,14 @@ public class SonarService extends Service {
         }
     }
 
+    @Override // LoggingService
+    protected void customiseNotification(NotificationCompat.Builder b) {
+        String text = "Depth " + mLastLoggedSample.getDouble("depth");
+        b.setContentTitle(getString(R.string.sonar_updated, DateFormat.getDateTimeInstance().format(new Date())))
+                .setContentText(text)
+                .setTicker(text);
+    }
+
     /**
      * Disconnects an established connection, or cancels a connection attempt currently in progress.
      */
@@ -528,6 +397,21 @@ public class SonarService extends Service {
         mBluetoothGatt = null;
     }
 
+    // Called when all clients
+    @Override // LoggingService
+    protected void onAllUnbound() {
+        if (mBluetoothGatt != null) {
+            Log.i(TAG, "Last client unbound from service and not sampling, closing service");
+            // Hum, is this needed?
+            stopSelf();
+        }
+    }
+
+    @Override // LoggingService
+    protected void onStoppedFromNotification() {
+        mLoggingDisabled = true;
+    }
+
     /**
      * Configuration reverse-engineered by sniffing packets sent by the official FishFinder software
      *
@@ -535,19 +419,10 @@ public class SonarService extends Service {
      * @param noise         filtering 0..4 (off, low, med, high)
      * @param range         0..6 (3, 6, 9, 18, 24, 36, auto)
      * @param minDeltaDepth min depth change, in metres
-     * @param sampleFile    name of sample file, null to disable sampling
      */
-    public void configure(int sensitivity, int noise, int range, double minDeltaDepth, String sampleFile) {
-        Log.d(TAG, "configure(" + sensitivity + "," + noise + "," + range + "," + minDeltaDepth + "," + sampleFile + ")");
+    public void configure(int sensitivity, int noise, int range, double minDeltaDepth) {
+        Log.d(TAG, "configure(" + sensitivity + "," + noise + "," + range + "," + minDeltaDepth + ")");
         mMinDeltaDepth = minDeltaDepth;
-        if (sampleFile == null) {
-            if (mSampleFile != null)
-                stopLogging();
-        } else if (!sampleFile.equals(mSampleFile)) {
-            if (mSampleFile != null)
-                stopLogging();
-            startLogging(sampleFile);
-        }
 
         if (mBluetoothState != BT_STATE_CONNECTED)
             return;
@@ -589,78 +464,19 @@ public class SonarService extends Service {
         mGattQueue.queue(new GattQueue.CharacteristicWrite(charaWrite));
     }
 
-    private void startLogging(String suri) {
-        Uri uri = Uri.parse(suri);
-        // Check it exists, create it with appropriate header if not
-        try {
-            AssetFileDescriptor afd;
-            FileWriter fw = null;
-            try {
-                // TODO: fix this
-                getContentResolver().openAssetFileDescriptor(uri, "r").close();
-                afd = getContentResolver().openAssetFileDescriptor(uri, "wa");
-                fw = new FileWriter(afd.getFileDescriptor());
-            } catch (FileNotFoundException fnfe) {
-                afd = getContentResolver().openAssetFileDescriptor(uri, "w");
-                fw = new FileWriter(afd.getFileDescriptor());
-            }
-            mSampleWriter = new PrintWriter(fw);
-            Log.d(TAG, "Recording to " + uri);
-            // Force the next sample to be recorded
-            mLastLoggedBattery = -1;
-        } catch (IOException ioe) {
-            Log.e(TAG, "Failed to create " + uri + ioe);
-        }
-    }
-
-    private void stopLogging() {
-        if (mSampleWriter != null) {
-            mSampleWriter.close();
-            mSampleWriter = null;
-        }
-    }
-
     /**
      * Update the last recorded sample
      */
-    private void logSample(Bundle sample) {
-        int battery = sample.getInt("battery");
-        double temperature = sample.getDouble("temperature");
-        double depth = sample.getDouble("depth");
-        double strength = sample.getDouble("strength");
-        double fishDepth = sample.getDouble("fishDepth");
-        double fishStrength = sample.getDouble("fishStrength");
-
-        boolean accepted = mLastLoggedBattery < 0
-                || battery != mLastLoggedBattery
-                || Math.abs(depth - mLastLoggedDepth) >= mMinDeltaDepth;
-
-        if (!accepted)
+    void onNewSample(Bundle sample) {
+        if (mLoggingDisabled || !(mMustLogNextSample
+                || sample.getInt("battery") != mLastLoggedSample.getInt("battery")
+                || Math.abs(sample.getDouble("temperature") - mLastLoggedSample.getDouble("temperature")) >= MIN_DELTA_TEMPERATURE
+                || Math.abs(sample.getDouble("depth") - mLastLoggedSample.getDouble("depth")) >= mMinDeltaDepth))
             return;
 
-        mLastLoggedBattery = battery;
-        mLastLoggedDepth = depth;
+        mMustLogNextSample = false;
+        mLastLoggedSample = new Bundle(sample);
 
-        if (mSampleFile != null) {
-            mSampleWriter.print((new Date()));
-            mSampleWriter.print(',');
-            mSampleWriter.print(depth);
-            mSampleWriter.print(',');
-            mSampleWriter.print(strength);
-            mSampleWriter.print(',');
-            mSampleWriter.print(temperature);
-            mSampleWriter.print(',');
-            mSampleWriter.print(battery);
-            mSampleWriter.print(',');
-            mSampleWriter.print(fishDepth);
-            mSampleWriter.print(',');
-            mSampleWriter.print(fishStrength);
-            mSampleWriter.println();
-            Log.d(TAG, "Recorded sonar sample");
-        }
-
-        Intent intent = new Intent(ACTION_SAMPLE);
-        intent.putExtra(EXTRA_SAMPLE_DATA, sample);
-        sendBroadcast(intent);
-    }
+        logSample(sample);
+     }
 }

@@ -29,7 +29,7 @@
     <string name="help_autoconnect">Automatically connect to the first compatible device found. Otherwise wait for you to select a device.</string>
     <string name="help_change_device">Connect to a different device</string>
     <string name="help_device">Select a bluetooth device or scan for new devices</string>
-    <string name="help_locationSampleFile">Click to change the file to store location samples in. This is a plain-text CSV file</string>
+    <string name="help_locationSampleFile">Click to change the file to store location samples in.</string>
     <string name="help_minimumDepthChange">The minimum depth difference that must be seen before a sample will be recorded, in metres</string>
     <string name="help_minimumPositionChange">The minimum horizontal distance that must be moved before a sample will be recorded, in metres</string>
     <string name="help_noise">Use higher settings for turbid water or where there are suspended solids</string>
@@ -37,7 +37,7 @@
     <string name="help_scan_all">Scanning for a compatible device&#x2026; touch a device to connect to it</string>
     <string name="help_scan_first">Scanning for a compatible device&#x2026;</string>
     <string name="help_sensitivity">Intensity of the sonar pulse. When the water is shallow, or there is noise in the water such as engine noise, select a lower sensitivity</string>
-    <string name="help_sonarSampleFile">Click to change the file to store sonar samples in. This is a plain-text CSV file</string>
+    <string name="help_sonarSampleFile">Click to change the file to store sonar samples in.</string>
 
     <string name="latitude_value">Lat %1$.5g</string>
     <string name="launch_activity">Launch Ping</string>
@@ -126,11 +126,11 @@
     <string name="settings_title">Ping Settings</string>
 
     <string name="sonar_updated">Sonar: %1$s</string>
-    <string name="stop_location_service">Stop Ping location logging</string>
-    <string name="stop_sonar_service">Stop Ping sonar logging</string>
+    <string name="stop_service">Stop Ping service</string>
     <string name="strength_value">Strength %1$.2g</string>
 
     <string name="temperature_value">Temperature %1$.2g</string>
     <string name="autoconnect_label">Auto Connect</string>
     <string name="help_bt_address">FF:FF:FF:FF:FF:FF</string>
+    <string name="sample_files_unset">Sample file locations must be set to enable recording</string>
 </resources>

@@ -1,3 +1,21 @@
+/*
+ * Copyright © 2020 C-Dot Consultants
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of this software
+ * and associated documentation files (the "Software"), to deal in the Software without restriction,
+ * including without limitation the rights to use, copy, modify, merge, publish, distribute,
+ * sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all copies or
+ * substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING
+ * BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+ * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
 package com.cdot.ping;
 
 import android.bluetooth.BluetoothDevice;
@@ -23,32 +41,22 @@ import androidx.fragment.app.FragmentTransaction;
 
 import com.cdot.ping.databinding.ConnectedFragmentBinding;
 import com.cdot.ping.services.LocationService;
+import com.cdot.ping.services.LoggingService;
 import com.cdot.ping.services.SonarService;
 
-import java.util.Locale;
-
+/**
+ * Fragment that handles user interaction when a device is connected.
+ */
 public class ConnectedFragment extends Fragment implements SharedPreferences.OnSharedPreferenceChangeListener {
     private static final String TAG = ConnectedFragment.class.getSimpleName();
 
-    ConnectedFragmentBinding mBinding;
-    Settings mPrefs;
+    private ConnectedFragmentBinding mBinding;
+    private Settings mPrefs;
     private BluetoothDevice mConnectedDevice;
     private IntentFilter mIntentFilter;
 
-    ConnectedFragment(BluetoothDevice device) {
-        mConnectedDevice = device;
-        mIntentFilter = new IntentFilter();
-        mIntentFilter.addAction(SonarService.ACTION_CONNECTED);
-        mIntentFilter.addAction(SonarService.ACTION_DISCONNECTED);
-        mIntentFilter.addAction(SonarService.ACTION_SAMPLE);
-        mIntentFilter.addAction(LocationService.ACTION_LOCATION_CHANGED);
-    }
-
-    private SonarService getSonarService() {
-        return ((MainActivity) getActivity()).mSonarService;
-    }
-
-    // Map broadcasts from the service to something the application can understand
+    // Handle broadcasts from the service
+    private boolean mReceiverRegistered = false;
     private final BroadcastReceiver mBroadcastReceiver = new BroadcastReceiver() {
 
         public void onReceive(Context context, Intent intent) {
@@ -56,106 +64,65 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
             if (SonarService.ACTION_CONNECTED.equals(action)) {
                 //mConnectedDevice = intent.getStringExtra(SonarService.EXTRA_DEVICE_ADDRESS);
                 Log.d(TAG, "Connected to " + mConnectedDevice);
-                updateStateDisplay();
+                updateSonarStateDisplay();
 
                 // Set up (or confirm) configuration
                 ((MainActivity) getActivity()).settingsChanged();
 
             } else if (SonarService.ACTION_DISCONNECTED.equals(action)) {
                 Log.d(TAG, "Disconnected from " + mConnectedDevice.getAddress());
-                updateStateDisplay();
+                updateSonarStateDisplay();
 
             } else if (SonarService.ACTION_SAMPLE.equals(action)) {
-                Bundle bund = intent.getBundleExtra(SonarService.EXTRA_SAMPLE_DATA);
-                onSonarSample(bund);
-
-            } else if (LocationService.ACTION_LOCATION_CHANGED.equals(action)) {
-                Location location = intent.getParcelableExtra(LocationService.EXTRA_LOCATION);
-                onLocationSample(location);
+                String source = intent.getStringExtra(LoggingService.EXTRA_SAMPLE_SOURCE);
+                Bundle bund = intent.getBundleExtra(LoggingService.EXTRA_SAMPLE_DATA);
+                if (SonarService.TAG.equals(source))
+                    onSonarSample(bund);
+                else if (LocationService.TAG.equals(source))
+                    onLocationSample((Location)bund.getParcelable("location"));
             }
         }
     };
-    private boolean mReceiverRegistered = false;
 
-    private void registerReceiver() {
+    ConnectedFragment(BluetoothDevice device) {
+        mConnectedDevice = device;
+        mIntentFilter = new IntentFilter();
+        mIntentFilter.addAction(SonarService.ACTION_CONNECTED);
+        mIntentFilter.addAction(SonarService.ACTION_DISCONNECTED);
+        mIntentFilter.addAction(SonarService.ACTION_SAMPLE);
+    }
+
+    private void registerBroadcastReceiver() {
         if (mReceiverRegistered)
             return;
         getActivity().registerReceiver(mBroadcastReceiver, mIntentFilter);
         mReceiverRegistered = true;
     }
 
-    private void unregisterReceiver() {
+    private void unregisterBroadcastReceiver() {
         if (mReceiverRegistered) {
             getActivity().unregisterReceiver(mBroadcastReceiver);
             mReceiverRegistered = false;
         }
     }
 
-    /**
-     * Called after onCreate and onStart, and when returning to the activity after a pause (another
-     * activity came into the foreground)
-     */
-    @Override
-    public void onResume() {
-        Log.d(TAG, "onResume");
-        super.onResume();
-        registerReceiver();
+    // Fragment lifecycle
+    // see https://developer.android.com/guide/fragments/lifecycle
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        mPrefs = new Settings(getActivity());
+        mPrefs.registerOnSharedPreferenceChangeListener(this);
+        registerBroadcastReceiver();
+        ((MainActivity) getActivity()).getSonarService().connect(mConnectedDevice);
     }
 
-    @Override
-    public void onStart() {
-        Log.d(TAG, "onStart");
-        super.onStart();
-        registerReceiver();
-    }
-
-    /**
-     * Another activity is coming into the foreground
-     */
-    @Override
-    public void onPause() {
-        Log.d(TAG, "onPause");
-        mBinding.sonarView.finish();
-        unregisterReceiver();
-        super.onPause();
-    }
-
-    @Override
-    public void onStop() {
-        Log.d(TAG, "onStop");
-        mBinding.sonarView.finish();
-        unregisterReceiver();
-        super.onStop();
-    }
-
-    public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
-        updatePreferencesDisplay();
-    }
-
-    // Update display of current preferences
-    private void updatePreferencesDisplay() {
-        Resources r = getResources();
-        int i = mPrefs.getInt(Settings.PREF_SENSITIVITY);
-        mBinding.sensitivity.setText(r.getString(R.string.sensitivity_value, i));
-        i = mPrefs.getInt(Settings.PREF_NOISE);
-        mBinding.noise.setText(r.getString(R.string.noise_value, r.getStringArray(R.array.noise_options)[i]));
-        i = mPrefs.getInt(Settings.PREF_RANGE);
-        mBinding.range.setText(r.getString(R.string.range_value, r.getStringArray(R.array.range_options)[i]));
-    }
-
-    private void updateStateDisplay() {
-        int state = getSonarService().getState();
-        String reason = getSonarService().getStateReason();
-        String s = String.format(getResources().getStringArray(R.array.bt_status)[state], reason);
-        mBinding.connectionStatus.setText(s);
-    }
-
-    @Override // EntryListFragment
+    // Called after onCreate and before onViewCreated, or may get here from onAttach if the
+    // fragment object already exists, or from onDestroyView (under what circumstances?)
+    @Override // Fragment
     public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         Log.d(TAG, "onCreateView");
         setHasOptionsMenu(true);
         mBinding = ConnectedFragmentBinding.inflate(inflater, container, false);
-        mPrefs = new Settings(getActivity());
 
         updatePreferencesDisplay();
         String daddr = mConnectedDevice.getAddress();
@@ -171,32 +138,76 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
             }
         });
 
-        mPrefs.registerOnSharedPreferenceChangeListener(this);
-        registerReceiver();
-        getSonarService().connect(mConnectedDevice);
-
-        return mBinding.getRoot();
+        return mBinding.mainFragment;
     }
 
-    @Override
+    // Called after onCreateView->onViewCreated->onViewStateRestored. Followed by onResume
+    @Override // Fragment
+    public void onStart() {
+        Log.d(TAG, "onStart");
+        super.onStart();
+        registerBroadcastReceiver(); // TODO: should be done in onResume?
+        updateSonarStateDisplay();
+    }
+
+    /**
+     * Only way to get here is from onPause. Next will be one of onDestroyView or onStart.
+     */
+    @Override // Fragment
+    public void onStop() {
+        Log.d(TAG, "onStop");
+        unregisterBroadcastReceiver();
+        super.onStop();
+    }
+
+    @Override // Fragment
+    public void onDestroyView() {
+        mBinding.sonarView.stop(); // shut down background rendering thread
+        super.onDestroyView();
+    }
+
+    @Override // SharedPreferences.OnSharedPreferenceChangeListener
+    public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
+        updatePreferencesDisplay();
+    }
+
+    private void updatePreferencesDisplay() {
+        Resources r = getResources();
+        int i = mPrefs.getInt(Settings.PREF_SENSITIVITY);
+        mBinding.sensitivity.setText(r.getString(R.string.sensitivity_value, i));
+        i = mPrefs.getInt(Settings.PREF_NOISE);
+        mBinding.noise.setText(r.getString(R.string.noise_value, r.getStringArray(R.array.noise_options)[i]));
+        i = mPrefs.getInt(Settings.PREF_RANGE);
+        mBinding.range.setText(r.getString(R.string.range_value, r.getStringArray(R.array.range_options)[i]));
+    }
+
+    private void updateSonarStateDisplay() {
+        SonarService svc = ((MainActivity) getActivity()).getSonarService();
+        int state = svc.getState();
+        String reason = svc.getStateReason();
+        String s = String.format(getResources().getStringArray(R.array.bt_status)[state], reason);
+        mBinding.connectionStatus.setText(s);
+    }
+
+    @Override // Fragment
     public void onCreateOptionsMenu(@NonNull Menu menu, MenuInflater inflater) {
         // Inflate the menu; this adds items to the action bar if it is present.
         inflater.inflate(R.menu.menu_main, menu);
     }
 
-    @Override
+    @Override // Fragment
     public boolean onOptionsItemSelected(MenuItem item) {
         if (item.getItemId() == R.id.menu_settings) {
             FragmentTransaction tx = getParentFragmentManager().beginTransaction();
-            tx.replace(R.id.fragment, new SettingsFragment());
+            tx.replace(R.id.fragment_container, new SettingsFragment(), SettingsFragment.TAG);
             tx.addToBackStack(null);
             tx.commit();
         }
         return super.onOptionsItemSelected(item);
     }
 
-    // Sample coming from a sonar service
-    void onSonarSample(Bundle data) {
+    // Handle incoming sample from the sonar service
+    private void onSonarSample(Bundle data) {
         if (data == null)
             return;
 
@@ -212,8 +223,8 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
         mBinding.sonarView.sample(data);
     }
 
-    // Sample coming from a location service
-    void onLocationSample(Location loc) {
+    // Handle incoming sample from the location service
+    private void onLocationSample(Location loc) {
         Resources r = getResources();
         mBinding.latitude.setText(r.getString(R.string.latitude_value, loc.getLatitude()));
         mBinding.longitude.setText(r.getString(R.string.longitude_value, loc.getLongitude()));

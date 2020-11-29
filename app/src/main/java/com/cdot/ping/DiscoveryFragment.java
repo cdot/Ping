@@ -1,3 +1,21 @@
+/*
+ * Copyright © 2020 C-Dot Consultants
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of this software
+ * and associated documentation files (the "Software"), to deal in the Software without restriction,
+ * including without limitation the rights to use, copy, modify, merge, publish, distribute,
+ * sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all copies or
+ * substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING
+ * BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+ * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
 package com.cdot.ping;
 
 import android.bluetooth.BluetoothAdapter;
@@ -8,6 +26,7 @@ import android.bluetooth.le.ScanResult;
 import android.content.res.Resources;
 import android.os.Bundle;
 import android.os.ParcelUuid;
+import android.os.Parcelable;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -23,15 +42,17 @@ import com.cdot.ping.databinding.DiscoveryFragmentBinding;
 import com.cdot.ping.services.SonarService;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
- * Fragment that displays a list of available bluetooth devices and allows the user to select one.
+ * Displays a list of available bluetooth devices and allows the user to select one.
  */
 public class DiscoveryFragment extends Fragment {
-    private static final String TAG = DiscoveryFragment.class.getSimpleName();
+    public static final String TAG = DiscoveryFragment.class.getSimpleName();
 
     private List<BluetoothDevice> mDeviceList = new ArrayList<>();
     private List<Map<String, Object>> mDeviceViewItems;
@@ -42,7 +63,7 @@ public class DiscoveryFragment extends Fragment {
     private BluetoothLeScanner mBLEScanner = null;
     boolean mIgnoreScanResults = false; // used during error handling
 
-    // Autoimatically connect to the first compatible device found
+    // Automatically connect to the first compatible device found
     private boolean mAutoConnect;
 
     private class ScanBack extends ScanCallback {
@@ -88,13 +109,13 @@ public class DiscoveryFragment extends Fragment {
             BluetoothDevice device = result.getDevice();
             // Bond states: BOND_NONE=10, BOND_BONDING=11, BOND_BONDED=12
             // This means _paired_ and NOT _bonded_; see https://piratecomm.wordpress.com/2014/01/19/ble-pairing-vs-bonding/
-            Log.d(TAG, mId+" onScanResult " + device.getAddress() + " " + device.getName() + " pairing state " + device.getBondState());
+            Log.d(TAG, "onScanResult " + device.getAddress() + " " + device.getName() + " pairing state " + device.getBondState());
             // DIY filtering, because the system code doesn't work (see above)
             List<ParcelUuid> uuids = result.getScanRecord().getServiceUuids();
             if (uuids != null && uuids.contains(new ParcelUuid(SonarService.BTS_CUSTOM))) {
                 if (mAutoConnect) {
                     // First device that offers the service we want. Fingers crossed!
-                    openDevice(device);
+                    ((MainActivity)getActivity()).openDevice(device);
                     return;
                 }
                 if (!mDeviceList.contains(device)) {
@@ -106,22 +127,10 @@ public class DiscoveryFragment extends Fragment {
         }
     }
 
-    DiscoveryFragment(boolean autoconnect) {
-        mAutoConnect = autoconnect;
-    }
+    // Fragment lifecycle
+    // see https://developer.android.com/guide/fragments/lifecycle
 
-    private void openDevice(BluetoothDevice device) {
-        Log.d(TAG, "device selected " + device.getAddress() + " " + device.getName());
-        // Remember the connected device so we can reconnect if that option is selected
-        (new Settings(getActivity())).put(Settings.PREF_DEVICE, device.getName());
-
-        // Switch to the ConnectedFragment to monitor connection
-        Fragment f = new ConnectedFragment(device);
-        FragmentTransaction tx = getActivity().getSupportFragmentManager().beginTransaction();
-        tx.replace(R.id.fragment, f, TAG).commit();
-    }
-
-    @Override
+    @Override // Fragment
     public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         mBinding = DiscoveryFragmentBinding.inflate(inflater, container, false);
         mPrefs = new Settings(getActivity());
@@ -133,7 +142,7 @@ public class DiscoveryFragment extends Fragment {
         AdapterView.OnItemClickListener clickListener = new AdapterView.OnItemClickListener() {
             public void onItemClick(AdapterView<?> adapterView, View v, int arg2, long arg3) {
                 BluetoothDevice device = (BluetoothDevice)mDeviceViewItems.get(arg2).get("device");
-                openDevice(device);
+                ((MainActivity)getActivity()).openDevice(device);
             }
         };
 
@@ -142,6 +151,7 @@ public class DiscoveryFragment extends Fragment {
         // LE discovery. ScanFilter just doesn't work. A scan without filtering finds the device, a scan with
         // filtering never invokes the callback.
         BluetoothAdapter bta = BluetoothAdapter.getDefaultAdapter();
+
         // mBLEScanner is a singleton in the adapter; once it has been found once, there's no point
         // in re-finding it
         mBLEScanner = bta.getBluetoothLeScanner();
@@ -154,10 +164,10 @@ public class DiscoveryFragment extends Fragment {
         mBLEScanner.startScan(new ScanBack("FIRST"));
         updateDisplay();
 
-        return mBinding.getRoot();
+        return mBinding.discoveryFragment;
     }
 
-    @Override
+    @Override // Fragment
     public void onDestroyView() {
         super.onDestroyView();
         Log.d(TAG, "onDestroyView");
@@ -168,6 +178,10 @@ public class DiscoveryFragment extends Fragment {
             mBLEScanner.flushPendingScanResults(new ScanBack("FLUSH"));
             mBLEScanner = null;
         }
+    }
+
+    DiscoveryFragment(boolean autoconnect) {
+        mAutoConnect = autoconnect;
     }
 
     // Update display after lists contents changed

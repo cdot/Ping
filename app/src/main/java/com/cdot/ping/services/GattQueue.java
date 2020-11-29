@@ -1,3 +1,21 @@
+/*
+ * Copyright © 2020 C-Dot Consultants
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of this software
+ * and associated documentation files (the "Software"), to deal in the Software without restriction,
+ * including without limitation the rights to use, copy, modify, merge, publish, distribute,
+ * sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all copies or
+ * substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING
+ * BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+ * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
 package com.cdot.ping.services;
 
 import android.bluetooth.BluetoothGatt;
@@ -9,6 +27,8 @@ import android.bluetooth.BluetoothProfile;
 import android.util.Log;
 
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -20,6 +40,9 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  * <p>
  * Operations are queued and executed one at a time. A timer is kept that will terminate any
  * operation that fails to finish.
+ * <p>
+ * Based on the GattManager class from https://github.com/NordicPlayground/puck-central-android
+ * </p>
  */
 class GattQueue {
 
@@ -187,34 +210,38 @@ class GattQueue {
     }
 
     // Generate a full description of the device on Log.d
-    private void describe() {
+    static void describeFromCache(BluetoothGatt gatt) {
+        StringBuilder descr = new StringBuilder();
+        for (BluetoothGattService s : gatt.getServices()) {
+            descr.append("<service uid=").append(s.getUuid()).append(" type=")
+                    .append(s.getType() == BluetoothGattService.SERVICE_TYPE_PRIMARY ? "primary" : "secondary")
+                    .append(">");
+            for (BluetoothGattCharacteristic c : s.getCharacteristics()) {
+                descr.append("<characteristic uid=").append(c.getUuid())
+                        .append(" props=").append(describeBits(PROPERTIES_BITS, c.getProperties()))
+                        .append(" perms=").append(describeBits(PERMISSIONS_BITS, c.getPermissions()))
+                        .append(" string='").append(c.getStringValue(0)).append("'")
+                        .append(" value=").append(Arrays.toString(c.getValue())).append(">");
+                for (BluetoothGattDescriptor d : c.getDescriptors()) {
+                    descr.append("<descriptor uid=").append(d.getUuid())
+                            .append(" perms=").append(describeBits(PERMISSIONS_BITS, c.getPermissions()))
+                            .append(" value=").append(Arrays.toString(d.getValue())).append(" />");
+                }
+                descr.append("</characteristic>");
+            }
+            descr.append("</service>");
+        }
+        Log.d(TAG, descr.toString());
+    }
+
+    void describeWithValues(BluetoothGatt gatt) {
         GattQueue.Operation postOp = new GattQueue.Operation() {
             public void execute(BluetoothGatt gatt) {
-                StringBuilder descr = new StringBuilder();
-                for (BluetoothGattService s : gatt.getServices()) {
-                    descr.append("<service uid=").append(s.getUuid()).append(" type=")
-                            .append(s.getType() == BluetoothGattService.SERVICE_TYPE_PRIMARY ? "primary" : "secondary")
-                            .append(">");
-                    for (BluetoothGattCharacteristic c : s.getCharacteristics()) {
-                        descr.append("<characteristic uid=").append(c.getUuid())
-                                .append(" props=").append(describeBits(PROPERTIES_BITS, c.getProperties()))
-                                .append(" perms=").append(describeBits(PERMISSIONS_BITS, c.getPermissions()))
-                                .append(" string='").append(c.getStringValue(0)).append("'")
-                                .append(" value=").append(Arrays.toString(c.getValue())).append(">");
-                        for (BluetoothGattDescriptor d : c.getDescriptors()) {
-                            descr.append("<descriptor uid=").append(d.getUuid())
-                                    .append(" perms=").append(describeBits(PERMISSIONS_BITS, c.getPermissions()))
-                                    .append(" value=").append(Arrays.toString(d.getValue())).append(" />");
-                        }
-                        descr.append("</characteristic>");
-                    }
-                    descr.append("</service>");
-                }
-                Log.d(TAG, descr.toString());
+                describeFromCache(gatt);
             }
         };
 
-        for (BluetoothGattService s : mBluetoothGatt.getServices()) {
+        for (BluetoothGattService s : gatt.getServices()) {
             for (BluetoothGattCharacteristic c : s.getCharacteristics()) {
                 if ((c.getProperties() & BluetoothGattCharacteristic.PROPERTY_READ) != 0)
                     queue(new GattQueue.CharacteristicRead(c, null));
@@ -225,6 +252,39 @@ class GattQueue {
         queue(postOp);
     }
     // END OF DEBUG
+
+    static final Map<Integer, String> BLE_STATUS = new HashMap<Integer, String>() {
+        {
+            put(0x00, "STATUS_CODE_SUCCESS");
+            put(0x01, "STATUS_CODE_UNKNOWN_BTLE_COMMAND");
+            put(0x02, "STATUS_CODE_UNKNOWN_CONNECTION_IDENTIFIER");
+            put(0x05, "AUTHENTICATION_FAILURE");
+            put(0x06, "STATUS_CODE_PIN_OR_KEY_MISSING");
+            put(0x07, "MEMORY_CAPACITY_EXCEEDED");
+            put(0x08, "CONNECTION_TIMEOUT");
+            put(0x0C, "STATUS_CODE_COMMAND_DISALLOWED");
+            put(0x12, "STATUS_CODE_INVALID_BTLE_COMMAND_PARAMETERS");
+            put(0x13, "REMOTE_USER_TERMINATED_CONNECTION");
+            put(0x14, "REMOTE_DEV_TERMINATION_DUE_TO_LOW_RESOURCES");
+            put(0x15, "REMOTE_DEV_TERMINATION_DUE_TO_POWER_OFF");
+            put(0x16, "LOCAL_HOST_TERMINATED_CONNECTION");
+            put(0x1A, "UNSUPPORTED_REMOTE_FEATURE");
+            put(0x1E, "STATUS_CODE_INVALID_LMP_PARAMETERS");
+            put(0x1F, "STATUS_CODE_UNSPECIFIED_ERROR");
+            put(0x22, "STATUS_CODE_LMP_RESPONSE_TIMEOUT");
+            put(0x24, "STATUS_CODE_LMP_PDU_NOT_ALLOWED");
+            put(0x28, "INSTANT_PASSED");
+            put(0x29, "PAIRING_WITH_UNIT_KEY_UNSUPPORTED");
+            put(0x2A, "DIFFERENT_TRANSACTION_COLLISION");
+            put(0x3A, "CONTROLLER_BUSY");
+            put(0x3B, "CONN_INTERVAL_UNACCEPTABLE");
+            put(0x3C, "DIRECTED_ADVERTISER_TIMEOUT");
+            put(0x3D, "CONN_TERMINATED_DUE_TO_MIC_FAILURE");
+            put(0x3E, "CONN_FAILED_TO_BE_ESTABLISHED");
+            put(0x81, "GATT internal error");
+            put(0x85, "Dreaded 133 bug");
+        }
+    };
 
     /**
      * Subclass of BluetoothGattCallback that is designed to sit behind the caller's
@@ -241,13 +301,7 @@ class GattQueue {
         @Override // BluetoothGattCallback
         public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
             if (status != BluetoothGatt.GATT_SUCCESS) {
-                Log.e(TAG, "onConnectionStateChange: Bad status " + status);
-                return;
-            }
-            if (status == 133) {
-                Log.e(TAG, "133 bug, closing gatt");
-                gatt.close();
-
+                Log.e(TAG, "onConnectionStateChange: Bad status " + status + " = " + BLE_STATUS.get(status));
                 return;
             }
 
