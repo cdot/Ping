@@ -25,17 +25,9 @@ import android.bluetooth.BluetoothGattDescriptor;
 import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothProfile;
 import android.content.Intent;
-import android.os.Binder;
 import android.os.Bundle;
-import android.os.IBinder;
 import android.util.Log;
 
-import androidx.core.app.NotificationCompat;
-
-import com.cdot.ping.R;
-
-import java.text.DateFormat;
-import java.util.Date;
 import java.util.UUID;
 
 /**
@@ -58,18 +50,18 @@ import java.util.UUID;
  * Protocol reverse engineered from a FishFinder device and software using Wireshark. Service code
  * based on https://github.com/android/location-samples
  */
-public class SonarService extends LoggingService {
-    public static final String TAG = SonarService.class.getSimpleName();
+public class SonarSampler extends Sampler {
+    public static final String TAG = SonarSampler.class.getSimpleName();
 
-    private static final String PACKAGE_NAME = SonarService.class.getPackage().getName();
+    private static final String PACKAGE_NAME = SonarSampler.class.getPackage().getName();
 
     // Messages sent by the service
-    public static final String ACTION_CONNECTED = PACKAGE_NAME + ".ACTION_CONNECTED";
-    public static final String ACTION_DISCONNECTED = PACKAGE_NAME + ".ACTION_DISCONNECTED";
+    public static final String ACTION_SONAR_CONNECTED = PACKAGE_NAME + ".action_sonar_connected";
+    public static final String ACTION_SONAR_DISCONNECTED = PACKAGE_NAME + ".action_sonar_disconnected";
 
-    // Sent message extras
-    public static final String EXTRA_DEVICE_ADDRESS = PACKAGE_NAME + ".DEVICE_ADDRESS";
-    public static final String EXTRA_DISCONNECT_REASON = PACKAGE_NAME + ".DISCONNECT_REASON";
+    // Message extras
+    public static final String EXTRA_DEVICE_ADDRESS = PACKAGE_NAME + ".device_address";
+    public static final String EXTRA_DISCONNECT_REASON = PACKAGE_NAME + ".disconnect_reason";
 
     // DISCONNECT_REASONs sent with ACTION_DISCONNECTED/EXTRA_DISCONNECT_REASON
     public static final int REASON_CANNOT_CONNECT = 0;
@@ -142,6 +134,7 @@ public class SonarService extends LoggingService {
     private BluetoothGatt mBluetoothGatt;
     private GattQueue mGattQueue;
 
+    // Callback that extends BluetootGattCallback
     class GattBack extends GattQueue.Callback {
         // invoked when we have connected/disconnected to/from a remote GATT server
         @Override // GattQueue.Callback
@@ -154,18 +147,18 @@ public class SonarService extends LoggingService {
                     // mBluetoothGatt should have been set from the result of connectGatt in connect()
                     Log.e(TAG, "mBluetoothGatt and gatt differ! Not expected");
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-                setState(BT_STATE_DISCONNECTED, "Disconnected from " + gatt.getDevice().getName());
+                setBluetoothState(BT_STATE_DISCONNECTED, "Disconnected from " + gatt.getDevice().getName());
                 if (mBluetoothGatt != null & gatt.getDevice().getAddress().equals(mBluetoothGatt.getDevice().getAddress()))
-                    disconnect("cleaning up");
+                    disconnectBluetooth("cleaning up");
 
-                Intent intent = new Intent(ACTION_DISCONNECTED);
+                Intent intent = new Intent(ACTION_SONAR_DISCONNECTED);
                 intent.putExtra(EXTRA_DEVICE_ADDRESS, gatt.getDevice().getAddress());
                 intent.putExtra(EXTRA_DISCONNECT_REASON, REASON_CONNECTION_LOST);
-                sendBroadcast(intent);
+                mService.sendBroadcast(intent);
 
                 // Try to reconnect
                 Log.d(TAG, "Attempting to reconnect to " + gatt.getDevice().getName());
-                connect(gatt.getDevice());
+                connectToDevice(gatt.getDevice());
             }
         }
 
@@ -177,7 +170,7 @@ public class SonarService extends LoggingService {
             super.onServicesDiscovered(gatt, status);
 
             if (status != BluetoothGatt.GATT_SUCCESS) {
-                disconnect("onServicesDiscovered failed");
+                disconnectBluetooth("onServicesDiscovered failed");
                 return;
             }
 
@@ -187,13 +180,13 @@ public class SonarService extends LoggingService {
             BluetoothGattService bgs = gatt.getService(BTS_CUSTOM);
             if (bgs == null) {
                 GattQueue.describeFromCache(mBluetoothGatt); // DEBUG
-                disconnect("Device does not offer service BTS_CUSTOM");
+                disconnectBluetooth("Device does not offer service BTS_CUSTOM");
                 return;
             }
 
             BluetoothGattCharacteristic cha = bgs.getCharacteristic(BTC_CUSTOM_SAMPLE);
             if (cha == null) {
-                disconnect("Device does not offer characteristic BTC_CUSTOM_SAMPLE");
+                disconnectBluetooth("Device does not offer characteristic BTC_CUSTOM_SAMPLE");
                 return;
             }
 
@@ -205,7 +198,7 @@ public class SonarService extends LoggingService {
             // Tell the device to activate characteristic change notifications
             BluetoothGattDescriptor descriptor = cha.getDescriptor(BTD_CLIENT_CHARACTERISTIC_CONFIGURATION);
             if (descriptor == null) {
-                disconnect("Device does not offer descriptor BTD_CLIENT_CHARACTERISTIC_CONFIGURATION");
+                disconnectBluetooth("Device does not offer descriptor BTD_CLIENT_CHARACTERISTIC_CONFIGURATION");
                 return;
             }
 
@@ -214,10 +207,10 @@ public class SonarService extends LoggingService {
             mGattQueue.queue(new GattQueue.DescriptorWrite(descriptor));
 
             // Tell the world we are ready for action
-            setState(BT_STATE_CONNECTED, "Connected");
-            Intent intent = new Intent(ACTION_CONNECTED);
+            setBluetoothState(BT_STATE_CONNECTED, "Connected");
+            Intent intent = new Intent(ACTION_SONAR_CONNECTED);
             intent.putExtra(EXTRA_DEVICE_ADDRESS, mBluetoothGatt.getDevice().getAddress());
-            sendBroadcast(intent);
+            mService.sendBroadcast(intent);
         }
 
         // triggered as a result of a remote characteristic notification
@@ -254,34 +247,17 @@ public class SonarService extends LoggingService {
             b.putDouble("strength", 100.0 * data[8] / 128.0); // Guess our max is 128
             b.putDouble("temperature", ((double) data[12] + (double) data[13] / 100.0 - 32.0) * 5.0 / 9.0);
 
-            onNewSample(b);
+            onSonarSample(b);
         }
     }
 
-    public class SonarServiceBinder extends Binder {
-        public SonarService getService() {
-            return SonarService.this;
-        }
-    }
-
-    protected IBinder createBinder() {
-        return new SonarServiceBinder();
-    }
-
-    @Override // LoggingService
-    public String getTag() { return TAG; }
-
-    @Override // LoggingService
-    protected int getNotificationId() {
-        return 87654321;
-    }
     /**
      * Set the current BT_STATE for the service
      *
      * @param state  a BT_STATE
      * @param reason the reson for the change to this state
      */
-    public void setState(int state, String reason) {
+    private void setBluetoothState(int state, String reason) {
         Log.d(TAG, "State change to " + BT_STATE_NAMES[state] + " " + reason);
         mBluetoothState = state;
         mBluetoothStateReason = reason;
@@ -292,7 +268,7 @@ public class SonarService extends LoggingService {
      *
      * @return a BT_STATE
      */
-    public int getState() {
+    public int getBluetoothState() {
         return mBluetoothState;
     }
 
@@ -301,7 +277,7 @@ public class SonarService extends LoggingService {
      *
      * @return a reason
      */
-    public String getStateReason() {
+    public String getBluetoothStateReason() {
         return mBluetoothStateReason;
     }
 
@@ -316,12 +292,8 @@ public class SonarService extends LoggingService {
         return mBluetoothGatt.getDevice();
     }
 
-    // The system invokes this method when the service is no longer used and is being destroyed.
-    // Your service should implement this to clean up any resources such as threads, registered
-    // listeners, or receivers. This is the last call that the service receives.
-    @Override // Service
+    @Override // Sampler
     public void onDestroy() {
-        Log.d(TAG, "onDestroy " + isRunningInForeground());
         // Release Gatt
         if (mBluetoothGatt != null) {
             Log.d(TAG, "Closing GATT in onDestroy");
@@ -338,7 +310,7 @@ public class SonarService extends LoggingService {
      * @return false if the connection attempt failed. true doesn't mean it succeeded (the
      * connection may be being made by another thread) just that it hasn't failed (yet)
      */
-    public boolean connect(BluetoothDevice btd) {
+    public boolean connectToDevice(BluetoothDevice btd) {
 
         Log.d(TAG, "connect(" + btd.getAddress() + ")");
 
@@ -351,9 +323,9 @@ public class SonarService extends LoggingService {
 
         if (mBluetoothGatt == null) {
             // New connection
-            setState(BT_STATE_CONNECTING, "connect()ing using new BluetoothGatt");
+            setBluetoothState(BT_STATE_CONNECTING, "connect()ing using new BluetoothGatt");
             GattQueue.Callback cb = new GattBack();
-            mBluetoothGatt = btd.connectGatt(this,
+            mBluetoothGatt = btd.connectGatt(mService,
                     false, // Don't wait for device to become available
                     cb, // Callback
                     BluetoothDevice.TRANSPORT_LE);
@@ -371,45 +343,35 @@ public class SonarService extends LoggingService {
             // setState(BT_STATE_CONNECTED, "using existing BluetoothGatt"); // not until onStateChanged!
             return true;
         } else {
-            setState(BT_STATE_DISCONNECTED, "BluetoothGatt.connect failed");
+            setBluetoothState(BT_STATE_DISCONNECTED, "BluetoothGatt.connect failed");
             return false;
         }
     }
 
-    @Override // LoggingService
-    protected void customiseNotification(NotificationCompat.Builder b) {
-        String text = "Depth " + mLastLoggedSample.getDouble("depth");
-        b.setContentTitle(getString(R.string.sonar_updated, DateFormat.getDateTimeInstance().format(new Date())))
-                .setContentText(text)
-                .setTicker(text);
+    @Override // implements Sampler
+    public String getTag() { return TAG; }
+
+    @Override // implements Sampler
+    public String getNotificationText() {
+        return mLastLoggedSample == null ? "" : ("Depth " + mLastLoggedSample.getDouble("depth"));
+    }
+
+    @Override // implements Sampler
+    public void onStoppedFromNotification() {
+        mLoggingDisabled = true;
     }
 
     /**
      * Disconnects an established connection, or cancels a connection attempt currently in progress.
      */
-    private void disconnect(String reason) {
+    private void disconnectBluetooth(String reason) {
         Log.d(TAG, "disconnect because " + reason);
-        setState(BT_STATE_DISCONNECTED, reason);
+        setBluetoothState(BT_STATE_DISCONNECTED, reason);
         if (mBluetoothGatt == null)
             return;
         mBluetoothGatt.disconnect();
         mBluetoothGatt.close();
         mBluetoothGatt = null;
-    }
-
-    // Called when all clients
-    @Override // LoggingService
-    protected void onAllUnbound() {
-        if (mBluetoothGatt != null) {
-            Log.i(TAG, "Last client unbound from service and not sampling, closing service");
-            // Hum, is this needed?
-            stopSelf();
-        }
-    }
-
-    @Override // LoggingService
-    protected void onStoppedFromNotification() {
-        mLoggingDisabled = true;
     }
 
     /**
@@ -420,8 +382,8 @@ public class SonarService extends LoggingService {
      * @param range         0..6 (3, 6, 9, 18, 24, 36, auto)
      * @param minDeltaDepth min depth change, in metres
      */
-    public void configure(int sensitivity, int noise, int range, double minDeltaDepth) {
-        Log.d(TAG, "configure(" + sensitivity + "," + noise + "," + range + "," + minDeltaDepth + ")");
+    public void configureSonar(int sensitivity, int noise, int range, double minDeltaDepth) {
+        Log.d(TAG, "configureSonar(" + sensitivity + "," + noise + "," + range + "," + minDeltaDepth + ")");
         mMinDeltaDepth = minDeltaDepth;
 
         if (mBluetoothState != BT_STATE_CONNECTED)
@@ -467,7 +429,7 @@ public class SonarService extends LoggingService {
     /**
      * Update the last recorded sample
      */
-    void onNewSample(Bundle sample) {
+    void onSonarSample(Bundle sample) {
         if (mLoggingDisabled || !(mMustLogNextSample
                 || sample.getInt("battery") != mLastLoggedSample.getInt("battery")
                 || Math.abs(sample.getDouble("temperature") - mLastLoggedSample.getDouble("temperature")) >= MIN_DELTA_TEMPERATURE
@@ -477,6 +439,6 @@ public class SonarService extends LoggingService {
         mMustLogNextSample = false;
         mLastLoggedSample = new Bundle(sample);
 
-        logSample(sample);
+        mService.logSample(sample, TAG);
      }
 }

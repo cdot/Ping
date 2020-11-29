@@ -44,8 +44,9 @@ import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentTransaction;
 
 import com.cdot.ping.databinding.MainActivityBinding;
-import com.cdot.ping.services.LocationService;
-import com.cdot.ping.services.SonarService;
+import com.cdot.ping.services.LocationSampler;
+import com.cdot.ping.services.LoggingService;
+import com.cdot.ping.services.SonarSampler;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -74,90 +75,41 @@ public class MainActivity extends AppCompatActivity {
     private int noise = -1;
     private int range = -1;
     private double minDeltaD = -1;
-    private String sonarSampleFile = null;
-    private String locationSampleFile = null;
+    private String sampleFile = null;
     private double minDeltaP = -1;
 
     // Connections to services
 
     // A reference to the service used to get location updates.
-    private LocationService mLocationService = null;
+    private LoggingService mLoggingService = null;
     // Monitors the state of the connection to the location service.
-    private final ServiceConnection mLocationServiceConnection = new ServiceConnection() {
+    private final ServiceConnection mLoggingServiceConnection = new ServiceConnection() {
 
         @Override
         public void onServiceConnected(ComponentName name, IBinder service) {
-            Log.d(TAG, "Location service connected");
-            LocationService.LocationServiceBinder binder = (LocationService.LocationServiceBinder) service;
-            mLocationService = binder.getService();
-            mLocationServiceBound = true;
-            startService(new Intent(MainActivity.this, LocationService.class));
+            Log.d(TAG, "Logging service connected");
+            LoggingService.LoggingServiceBinder binder = (LoggingService.LoggingServiceBinder) service;
+            mLoggingService = binder.getService();
+            mLoggingServiceBound = true;
+            startService(new Intent(MainActivity.this, LoggingService.class));
+
+            if (mLoggingService.getSampler(SonarSampler.TAG) == null)
+                mLoggingService.addSampler(new SonarSampler());
+            if (mLoggingService.getSampler(LocationSampler.TAG) == null)
+                mLoggingService.addSampler(new LocationSampler());
+
+            findASonarDevice();
         }
 
         @Override
         public void onServiceDisconnected(ComponentName name) {
-            Log.d(TAG, "Location service disconnected");
-            mLocationService = null;
-            mLocationServiceBound = false;
+            Log.d(TAG, "Logging service disconnected");
+            mLoggingService = null;
+            mLoggingServiceBound = false;
         }
     };
     // Tracks the bound state of the service.
-    private boolean mLocationServiceBound = false;
-
-    private SonarService mSonarService = null;
-    // Monitors the state of the connection to the sonar service.
-    private final ServiceConnection mSonarServiceConnection = new ServiceConnection() {
-        public void onServiceConnected(ComponentName componentName, IBinder service) {
-            SonarService.SonarServiceBinder binder = (SonarService.SonarServiceBinder) service;
-            mSonarService = binder.getService();
-            mSonarServiceBound = true;
-            startService(new Intent(MainActivity.this, SonarService.class));
-            findASonarDevice();
-        }
-
-        public void onServiceDisconnected(ComponentName componentName) {
-            mSonarService = null;
-            mSonarServiceBound = false;
-        }
-    };
-    private boolean mSonarServiceBound = false;
-
-    /*private WhatTheFuck mWhatTheFuck = null;
-    private final ServiceConnection mWhatTheFuckConnection = new ServiceConnection() {
-        public void onServiceConnected(ComponentName componentName, IBinder service) {
-            WhatTheFuck.WhatTheFuckBinder binder = (WhatTheFuck.WhatTheFuckBinder) service;
-            mWhatTheFuck = binder.getService();
-            mWhatTheFuckBound = true;
-            Log.d(TAG, "WhatTheFuck connected");
-            startService(new Intent(MainActivity.this, WhatTheFuck.class));
-            //mWhatTheFuck.requestLocationUpdates();
-            return;
-        }
-
-        public void onServiceDisconnected(ComponentName componentName) {
-            Log.d(TAG, "WhatTheFuck disconnected");
-            mWhatTheFuck = null;
-            mWhatTheFuckBound = false;
-        }
-    };
-    private boolean mWhatTheFuckBound = false;
-    private BroadcastReceiver mWhatTheFuckReceiver = new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context context, Intent intent) {
-                Location location = intent.getParcelableExtra(WhatTheFuck.EXTRA_LOCATION);
-                if (location != null) {
-                    Toast.makeText(MainActivity.this, "What the fuck " + location,
-                            Toast.LENGTH_SHORT).show();
-                }
-            }
-        };
-
-    @Override // other service receivers are registered in ConnectedFragment
-    protected void onResume() {
-        super.onResume();
-        registerReceiver(mWhatTheFuckReceiver, new IntentFilter(WhatTheFuck.ACTION_BROADCAST));
-    }
-*/
+    private boolean mLoggingServiceBound = false;
 
     // Lifecycle management
 
@@ -176,41 +128,28 @@ public class MainActivity extends AppCompatActivity {
     // See https://developer.android.com/guide/components/activities/activity-lifecycle
     @Override
     protected void onStart() {
-        Log.d(TAG, "onStart, binding services");
+        Log.d(TAG, "onStart, binding service");
         super.onStart();
 
         mPrefs = new Settings(this);
 
-        // Bind to the services. If a service is in foreground mode, this signals to the service
+        // Bind to the service. If the service is in foreground mode, this signals to the service
         // that since this activity is in the foreground, the service can exit foreground mode.
-
-        //bindService(new Intent(this, WhatTheFuck.class), mWhatTheFuckConnection, Context.BIND_AUTO_CREATE);
-        bindService(new Intent(this, LocationService.class), mLocationServiceConnection, Context.BIND_AUTO_CREATE);
-        bindService(new Intent(this, SonarService.class), mSonarServiceConnection, Context.BIND_AUTO_CREATE);
+        bindService(new Intent(this, LoggingService.class), mLoggingServiceConnection, Context.BIND_AUTO_CREATE);
     }
 
     // See https://developer.android.com/guide/components/activities/activity-lifecycle
     @Override
     protected void onStop() {
-        Log.d(TAG, "onStop (unbinding services)");
+        Log.d(TAG, "onStop (unbinding service)");
         // Unbind from the services. This signals to the service that this activity is no longer
         // in the foreground, and the service can respond by promoting itself to a foreground
         // service.
-        if (mLocationServiceBound) {
-            Log.d(TAG, "unbinding LocationService");
-            unbindService(mLocationServiceConnection);
-            mLocationServiceBound = false;
+        if (mLoggingServiceBound) {
+            Log.d(TAG, "unbinding LoggingService");
+            unbindService(mLoggingServiceConnection);
+            mLoggingServiceBound = false;
         }
-        if (mSonarServiceBound) {
-            Log.d(TAG, "unbinding SonarService");
-            unbindService(mSonarServiceConnection);
-            mSonarServiceBound = false;
-        }
-        /*if (mWhatTheFuckBound) {
-            Log.d(TAG, "unbinding WhatTheFuck");
-            unbindService(mWhatTheFuckConnection);
-            mWhatTheFuckBound = false;
-        }*/
 
         super.onStop();
     }
@@ -224,7 +163,7 @@ public class MainActivity extends AppCompatActivity {
             // If the MainActivity is destroyed and logging isn't enabled, then shut the service down.
             // TODO: when the service realises the mainactivity has gone it should have shut down
             // anyway. This is overkill.
-            stopService(new Intent(this, SonarService.class));
+            stopService(new Intent(this, LoggingService.class));
     }
 
     // Handling permissions
@@ -329,13 +268,15 @@ public class MainActivity extends AppCompatActivity {
 
     // Start looking for a sonar device. Called once permissions have been established.
     private void findASonarDevice() {
-        if (!mSonarServiceBound)
+        if (!mLoggingServiceBound)
             return;
 
-        if (mSonarService.getState() >= SonarService.BT_STATE_CONNECTING) {
+        SonarSampler sam = (SonarSampler) mLoggingService.getSampler(SonarSampler.TAG);
+        Log.d(TAG, "findASonarDevice conn " + sam.getConnectedDevice());
+        if (sam.getBluetoothState() >= SonarSampler.BT_STATE_CONNECTING) {
             // Service is CONNECTED or CONNECTING - skip discovery and jump straight
             // to connected
-            openDevice(mSonarService.getConnectedDevice());
+            openDevice(sam.getConnectedDevice());
             return;
         }
 
@@ -350,7 +291,7 @@ public class MainActivity extends AppCompatActivity {
                     Parcelable[] uuids = device.getUuids();
                     if (uuids != null) {
                         for (Parcelable p : uuids) {
-                            if (SonarService.BTS_CUSTOM.equals(p)) {
+                            if (SonarSampler.BTS_CUSTOM.equals(p)) {
                                 Log.i(TAG, "paired device " + device.getName());
                                 openDevice(device);
                                 return;
@@ -373,12 +314,12 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * Get the sonar service, so it can be quizzed for state information
+     * Get the logging service, so it can be quizzed for state information
      *
      * @return the currently bound sonar service
      */
-    SonarService getSonarService() {
-        return mSonarService;
+    LoggingService getLoggingService() {
+        return mLoggingService;
     }
 
     /**
@@ -409,8 +350,7 @@ public class MainActivity extends AppCompatActivity {
         int new_range = mPrefs.getInt(Settings.PREF_RANGE);
         int new_minDeltaD = mPrefs.getInt(Settings.PREF_MIN_DEPTH_CHANGE); // mm
         int new_minDeltaP = mPrefs.getInt(Settings.PREF_MIN_POS_CHANGE); // mm
-        String new_sonarSampleFile = mPrefs.getString(Settings.PREF_SONAR_SAMPLE_FILE);
-        String new_locationSampleFile = mPrefs.getString(Settings.PREF_LOCATION_SAMPLE_FILE);
+        String new_sampleFile = mPrefs.getString(Settings.PREF_SAMPLE_FILE);
 
         if (changes.length > 0) {
             switch ((String) changes[0]) {
@@ -429,36 +369,30 @@ public class MainActivity extends AppCompatActivity {
                 case Settings.PREF_MIN_POS_CHANGE:
                     new_minDeltaP = (int) changes[1];
                     break;
-                case Settings.PREF_SONAR_SAMPLE_FILE:
-                    new_sonarSampleFile = (String) changes[1];
-                    break;
-                case Settings.PREF_LOCATION_SAMPLE_FILE:
-                    new_locationSampleFile = (String) changes[1];
+                case Settings.PREF_SAMPLE_FILE:
+                    new_sampleFile = (String) changes[1];
                     break;
             }
         }
 
-        if (mSonarService != null) {
-            if (mRecordingOn && !sameString(new_sonarSampleFile, sonarSampleFile)) {
-                mSonarService.stopLogging();
-                mSonarService.startLogging(new_sonarSampleFile);
+        if (mLoggingService != null) {
+            if (mRecordingOn && !sameString(new_sampleFile, sampleFile)) {
+                mLoggingService.stopLogging();
+                mLoggingService.startLogging(new_sampleFile);
             }
 
             if (new_sensitivity != sensitivity
                     || new_noise != noise
                     || new_range != range
-                    || new_minDeltaD != minDeltaD)
-                mSonarService.configure(new_sensitivity, new_noise, new_range, new_minDeltaD / 1000.0);
-        }
-
-        if (mLocationService != null) {
-            if (mRecordingOn && !sameString(new_locationSampleFile, locationSampleFile)) {
-                mLocationService.stopLogging();
-                mLocationService.startLogging(new_locationSampleFile);
+                    || new_minDeltaD != minDeltaD) {
+                SonarSampler sam = (SonarSampler) mLoggingService.getSampler(SonarSampler.TAG);
+                sam.configureSonar(new_sensitivity, new_noise, new_range, new_minDeltaD / 1000.0);
             }
 
-            if (new_minDeltaP != minDeltaP)
-                mLocationService.configure(new_minDeltaP / 1000.0);
+            if (new_minDeltaP != minDeltaP) {
+                LocationSampler sam = (LocationSampler) mLoggingService.getSampler(LocationSampler.TAG);
+                sam.configureLocation(new_minDeltaP / 1000.0);
+            }
         }
 
         sensitivity = new_sensitivity;
@@ -466,8 +400,7 @@ public class MainActivity extends AppCompatActivity {
         range = new_range;
         minDeltaP = new_minDeltaP;
         minDeltaD = new_minDeltaD;
-        locationSampleFile = new_locationSampleFile;
-        sonarSampleFile = new_sonarSampleFile;
+        sampleFile = new_sampleFile;
     }
 
     /**
@@ -481,22 +414,14 @@ public class MainActivity extends AppCompatActivity {
         Log.d(TAG, "Recording " + on);
         if (on) {
             // Make sure required prefs are set
-            if (mPrefs.getString(Settings.PREF_SONAR_SAMPLE_FILE) == null ||
-                    mPrefs.getString(Settings.PREF_LOCATION_SAMPLE_FILE) == null) {
-                Toast.makeText(this, R.string.sample_files_unset, Toast.LENGTH_LONG).show();
+            if (mPrefs.getString(Settings.PREF_SAMPLE_FILE) == null) {
+                Toast.makeText(this, R.string.sample_file_unset, Toast.LENGTH_LONG).show();
                 on = false;
-            } else {
-                if (mSonarService != null)
-                    mSonarService.startLogging(mPrefs.getString(Settings.PREF_SONAR_SAMPLE_FILE));
-                if (mLocationService != null)
-                    mLocationService.startLogging(mPrefs.getString(Settings.PREF_LOCATION_SAMPLE_FILE));
-            }
-        } else if (mRecordingOn) {
-            if (mSonarService != null)
-                mSonarService.stopLogging();
-            if (mLocationService != null)
-                mLocationService.stopLogging();
-        }
+            } else if (mLoggingService != null)
+                mLoggingService.startLogging(mPrefs.getString(Settings.PREF_SAMPLE_FILE));
+        } else if (mRecordingOn && mLoggingService != null)
+            mLoggingService.stopLogging();
+
         mRecordingOn = on;
         return on;
     }

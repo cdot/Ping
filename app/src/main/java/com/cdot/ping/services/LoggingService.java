@@ -24,10 +24,12 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.res.AssetFileDescriptor;
 import android.content.res.Configuration;
+import android.media.AudioAttributes;
 import android.net.Uri;
 import android.os.Binder;
 import android.os.Build;
@@ -44,11 +46,14 @@ import java.io.FileNotFoundException;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.text.DateFormat;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Log incoming samples to a file.
- *
+ * <p>
  * This is a bound and started service that is automatically promoted to a foreground service
  * when all clients unbind.
  * <p>
@@ -64,10 +69,10 @@ import java.util.Date;
  * <p>
  * Substantially based on https://github.com/android/location-samples
  */
-public abstract class LoggingService extends Service {
+public class LoggingService extends Service {
     public static final String TAG = LoggingService.class.getSimpleName();
 
-    protected static final String PACKAGE_NAME = LocationService.class.getPackage().getName();
+    protected static final String PACKAGE_NAME = LocationSampler.class.getPackage().getName();
 
     public static final String ACTION_SAMPLE = PACKAGE_NAME + ".ACTION_SAMPLE";
 
@@ -88,9 +93,6 @@ public abstract class LoggingService extends Service {
     protected NotificationManager mNotificationManager;
 
     protected PrintWriter mSampleWriter = null;
-    protected boolean mMustLogNextSample = true; // set true to force logging of next sample
-
-    protected String getTag() { return TAG; }
 
     // Set to true in subclasses to keep this service running even when all clients are unbound
     // and logging is disabled.
@@ -102,42 +104,58 @@ public abstract class LoggingService extends Service {
      * not yet been canceled, it will be replaced by the updated information", so each subclass has
      * to provide a unique ID.
      */
-    protected abstract int getNotificationId();
+    private static final int NOTIFICATION_1D = 0xC0FEFE;
 
     private static final String CHANNEL_ID = "Ping_Channel";
 
-    /**
-     * Method provided by subclasses to create the IBinder
-     * @return
-     */
-    protected abstract IBinder createBinder();
+    public class LoggingServiceBinder extends Binder {
+        public LoggingService getService() {
+            return LoggingService.this;
+        }
+    }
 
-    private IBinder mBinder = createBinder();
+    private IBinder mBinder = new LoggingServiceBinder();
+
+    // Set of samplers that are providing sample updates to this logger
+    Map<String, Sampler> mSamplers = new HashMap<>();
+
+    public Sampler getSampler(String id) {
+        return mSamplers.get(id);
+    }
 
     @Override // Service
     public void onCreate() {
+        mNotificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
 
-        if (mNotificationManager == null) {
-            mNotificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        // Android O requires a Notification Channel.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            CharSequence name = getString(R.string.app_name);
+            // Create the channel for the notification
+            NotificationChannel channel = // low importance makes it silent
+                    new NotificationChannel(CHANNEL_ID, name, NotificationManager.IMPORTANCE_LOW);
 
-            // Android O requires a Notification Channel.
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                CharSequence name = getString(R.string.app_name);
-                // Create the channel for the notification
-                NotificationChannel channel =
-                        new NotificationChannel(CHANNEL_ID, name, NotificationManager.IMPORTANCE_DEFAULT);
+            // TODO: This doesn't seem to do anything with IMPORTANCE_DEFAULT, AFAICT code is correct
+            Uri soundUri = Uri.parse(ContentResolver.SCHEME_ANDROID_RESOURCE + "://"+ getApplicationContext().getPackageName() + "/" + R.raw.ping);
+            AudioAttributes.Builder ab = new AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+                ab.setHapticChannelsMuted(true);
+            channel.setSound(soundUri, ab.build());
 
-                // Set the Notification Channel for the Notification Manager.
-                mNotificationManager.createNotificationChannel(channel);
-            }
+            // Set the Notification Channel for the Notification Manager.
+            mNotificationManager.createNotificationChannel(channel);
         }
     }
 
     /**
-     * Override in subclasses to provide actions for when the service is being stopped from the
-     * foreground notification/
+     * This is how users of the service add samplers to it
+     * @param s
      */
-    protected void onStoppedFromNotification() {}
+    public void addSampler(Sampler s) {
+        mSamplers.put(s.getTag(), s);
+        s.onAttach(this);
+    }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -146,11 +164,13 @@ public abstract class LoggingService extends Service {
 
         // We got here because the user decided to kill the service from the notification.
         if (startedFromNotification) {
-            Log.d(TAG, getTag() + ": stopped from notification");
-            onStoppedFromNotification();
+            Log.d(TAG, "stopped from notification");
+            for (Sampler s : mSamplers.values()) {
+                s.onStoppedFromNotification();
+            }
             stopSelf();
         } else
-            Log.d(TAG, getTag() + ": started");
+            Log.d(TAG, "started");
         // Tells the system to not try to recreate the service after it has been killed.
         return START_NOT_STICKY;
     }
@@ -166,7 +186,7 @@ public abstract class LoggingService extends Service {
         // Called when a client (MainActivity in case of this sample) comes to the foreground
         // and binds with this service. The service should cease to be a foreground service
         // when that happens.
-        Log.d(TAG, getTag() + ": in onBind()");
+        Log.d(TAG, "in onBind()");
         stopForeground(true);
         mJustAConfigurationChange = false;
         return mBinder;
@@ -177,32 +197,23 @@ public abstract class LoggingService extends Service {
         // Called when a client (MainActivity in case of this sample) returns to the foreground
         // and binds once again with this service. The service should cease to be a foreground
         // service when that happens.
-        Log.d(TAG, getTag() + ": in onRebind()");
+        Log.d(TAG, "in onRebind()");
         stopForeground(true);
         mJustAConfigurationChange = false;
         super.onRebind(intent);
     }
 
-    /**
-     * Override in subclasses to handle what should happen when all clients are unbound from the
-     * service and logging is not enabled. This should be used to release resources the service
-     * is using.
-     */
-    protected void onAllUnbound() {};
-
     @Override
     public boolean onUnbind(Intent intent) {
-        Log.d(TAG, getTag() + ": in onUnbind()");
+        Log.d(TAG, "in onUnbind()");
 
         if (mJustAConfigurationChange)
-            Log.d(TAG, getTag() + ": Unbinding due to a configuration change");
+            Log.d(TAG, "Unbinding due to a configuration change");
         else if (mKeepRunning || mSampleWriter != null) {
-            Log.d(TAG, getTag() + ": Starting foreground service " + getNotificationId());
-            //startForeground(getNotificationId(), getNotification());
-            startForeground(getNotificationId(), getNotification());
+            Log.d(TAG, "Starting foreground service");
+            startForeground(NOTIFICATION_1D, getNotification());
         } else {
-            Log.d(TAG, getTag() + ": All unbound");
-            onAllUnbound();
+            Log.d(TAG, "All unbound");
         }
 
         return true; // Ensures onRebind() is called when a client re-binds.
@@ -210,7 +221,9 @@ public abstract class LoggingService extends Service {
 
     @Override
     public void onDestroy() {
-        Log.d(TAG, getTag() + ": onDestroy");
+        Log.d(TAG, "onDestroy");
+        for (Sampler s : mSamplers.values())
+            s.onDestroy();
     }
 
     /**
@@ -230,6 +243,10 @@ public abstract class LoggingService extends Service {
         PendingIntent activityPendingIntent = PendingIntent.getActivity(this, 0,
                 new Intent(this, MainActivity.class), 0);
 
+        StringBuilder text = new StringBuilder();
+        for (Sampler s : mSamplers.values())
+            text.append(s.getNotificationText()).append("\n");
+
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
                 // Actions are typically displayed by the system as a button adjacent to the notification content.
 
@@ -242,18 +259,12 @@ public abstract class LoggingService extends Service {
                 .setOngoing(true)
                 .setPriority(Notification.PRIORITY_HIGH)
                 .setSmallIcon(R.mipmap.ic_launcher)
+                .setContentTitle(getString(R.string.sonar_updated, DateFormat.getDateTimeInstance().format(new Date())))
+                .setContentText(text)
                 .setWhen(System.currentTimeMillis());
-
-        customiseNotification(builder);
 
         return builder.build();
     }
-
-    /**
-     * Subclasses can override this to add customisation to the generic Notification
-     * @param b the notification to customise
-     */
-    protected void customiseNotification(NotificationCompat.Builder b) {}
 
     /**
      * Returns true if this is currently a foreground service.
@@ -269,6 +280,7 @@ public abstract class LoggingService extends Service {
 
     /**
      * Start logging to the given URI.
+     *
      * @param suri URI to log to
      * @return true if logging to that URI was enabled
      */
@@ -289,11 +301,12 @@ public abstract class LoggingService extends Service {
             }
             mSampleWriter = new PrintWriter(fw);
             // Force the next sample to be recorded
-            mMustLogNextSample = true;
-            Log.d(TAG, getTag() + ": startLogging to '" + suri + "'");
+            for (Sampler s : mSamplers.values())
+                s.mMustLogNextSample = true;
+            Log.d(TAG, "startLogging to '" + suri + "'");
             return true;
         } catch (IOException ioe) {
-            Log.e(TAG, getTag() + ": startLogging failed: could not open '" + mLogUri + "' " + ioe);
+            Log.e(TAG, "startLogging failed: could not open '" + mLogUri + "' " + ioe);
             mSampleWriter = null;
             return false;
         }
@@ -309,7 +322,7 @@ public abstract class LoggingService extends Service {
         mSampleWriter = null;
     }
 
-    void logSample(Bundle sample) {
+    void logSample(Bundle sample, String source) {
         sample.putLong("time", new Date().getTime());
         if (mSampleWriter != null) {
             StringBuilder sb = new StringBuilder("<sample ");
@@ -322,10 +335,10 @@ public abstract class LoggingService extends Service {
 
         // Update notification content if running as a foreground service.
         if (isRunningInForeground())
-            mNotificationManager.notify(getNotificationId(), getNotification());
+            mNotificationManager.notify(NOTIFICATION_1D, getNotification());
         else {
             Intent intent = new Intent(ACTION_SAMPLE);
-            intent.putExtra(EXTRA_SAMPLE_SOURCE, getTag());
+            intent.putExtra(EXTRA_SAMPLE_SOURCE, source);
             intent.putExtra(EXTRA_SAMPLE_DATA, sample);
             sendBroadcast(intent);
         }

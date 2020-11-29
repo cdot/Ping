@@ -50,8 +50,7 @@ public class Settings {
     public static final int MIN_DEPTH_CHANGE_MAX = 5000; // mm
 
     // String representation of file URIs
-    public static final String PREF_SONAR_SAMPLE_FILE = "sonarSampleFile";
-    public static final String PREF_LOCATION_SAMPLE_FILE = "locationSampleFile";
+    public static final String PREF_SAMPLE_FILE = "sampleFile";
 
     // Configuration preferences reverse-engineered by sniffing packets sent to sonar device
 
@@ -116,8 +115,7 @@ public class Settings {
         ed.remove(PREF_RANGE);
         ed.remove(PREF_MIN_DEPTH_CHANGE);
         ed.remove(PREF_MIN_POS_CHANGE);
-        ed.remove(PREF_SONAR_SAMPLE_FILE);
-        ed.remove(PREF_LOCATION_SAMPLE_FILE);
+        ed.remove(PREF_SAMPLE_FILE);
         ed.remove(PREF_AUTOCONNECT);
         ed.commit();
     }

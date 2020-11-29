@@ -26,7 +26,6 @@ import android.bluetooth.le.ScanResult;
 import android.content.res.Resources;
 import android.os.Bundle;
 import android.os.ParcelUuid;
-import android.os.Parcelable;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -36,17 +35,14 @@ import android.widget.SimpleAdapter;
 
 import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
-import androidx.fragment.app.FragmentTransaction;
 
 import com.cdot.ping.databinding.DiscoveryFragmentBinding;
-import com.cdot.ping.services.SonarService;
+import com.cdot.ping.services.SonarSampler;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * Displays a list of available bluetooth devices and allows the user to select one.
@@ -112,7 +108,7 @@ public class DiscoveryFragment extends Fragment {
             Log.d(TAG, "onScanResult " + device.getAddress() + " " + device.getName() + " pairing state " + device.getBondState());
             // DIY filtering, because the system code doesn't work (see above)
             List<ParcelUuid> uuids = result.getScanRecord().getServiceUuids();
-            if (uuids != null && uuids.contains(new ParcelUuid(SonarService.BTS_CUSTOM))) {
+            if (uuids != null && uuids.contains(new ParcelUuid(SonarSampler.BTS_CUSTOM))) {
                 if (mAutoConnect) {
                     // First device that offers the service we want. Fingers crossed!
                     ((MainActivity)getActivity()).openDevice(device);

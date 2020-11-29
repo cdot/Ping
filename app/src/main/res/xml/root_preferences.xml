@@ -31,14 +31,9 @@
         android:title="@string/range_label" />
 
     <Preference
-        android:key="sonarSampleFile"
-        android:summary="@string/help_sonarSampleFile"
-        android:title="@string/sonarSampleFile" />
-
-    <Preference
-        android:key="locationSampleFile"
-        android:summary="@string/help_locationSampleFile"
-        android:title="@string/locationSampleFile" />
+        android:key="sampleFile"
+        android:summary="@string/help_sampleFile"
+        android:title="@string/sampleFile" />
 
     <SeekBarPreference
         android:key="minimumPositionChange"

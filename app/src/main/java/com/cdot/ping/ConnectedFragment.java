@@ -40,9 +40,9 @@ import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentTransaction;
 
 import com.cdot.ping.databinding.ConnectedFragmentBinding;
-import com.cdot.ping.services.LocationService;
+import com.cdot.ping.services.LocationSampler;
 import com.cdot.ping.services.LoggingService;
-import com.cdot.ping.services.SonarService;
+import com.cdot.ping.services.SonarSampler;
 
 /**
  * Fragment that handles user interaction when a device is connected.
@@ -61,7 +61,7 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
 
         public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();
-            if (SonarService.ACTION_CONNECTED.equals(action)) {
+            if (SonarSampler.ACTION_SONAR_CONNECTED.equals(action)) {
                 //mConnectedDevice = intent.getStringExtra(SonarService.EXTRA_DEVICE_ADDRESS);
                 Log.d(TAG, "Connected to " + mConnectedDevice);
                 updateSonarStateDisplay();
@@ -69,16 +69,16 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
                 // Set up (or confirm) configuration
                 ((MainActivity) getActivity()).settingsChanged();
 
-            } else if (SonarService.ACTION_DISCONNECTED.equals(action)) {
+            } else if (SonarSampler.ACTION_SONAR_DISCONNECTED.equals(action)) {
                 Log.d(TAG, "Disconnected from " + mConnectedDevice.getAddress());
                 updateSonarStateDisplay();
 
-            } else if (SonarService.ACTION_SAMPLE.equals(action)) {
+            } else if (LoggingService.ACTION_SAMPLE.equals(action)) {
                 String source = intent.getStringExtra(LoggingService.EXTRA_SAMPLE_SOURCE);
                 Bundle bund = intent.getBundleExtra(LoggingService.EXTRA_SAMPLE_DATA);
-                if (SonarService.TAG.equals(source))
+                if (SonarSampler.TAG.equals(source))
                     onSonarSample(bund);
-                else if (LocationService.TAG.equals(source))
+                else if (LocationSampler.TAG.equals(source))
                     onLocationSample((Location)bund.getParcelable("location"));
             }
         }
@@ -87,9 +87,9 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
     ConnectedFragment(BluetoothDevice device) {
         mConnectedDevice = device;
         mIntentFilter = new IntentFilter();
-        mIntentFilter.addAction(SonarService.ACTION_CONNECTED);
-        mIntentFilter.addAction(SonarService.ACTION_DISCONNECTED);
-        mIntentFilter.addAction(SonarService.ACTION_SAMPLE);
+        mIntentFilter.addAction(SonarSampler.ACTION_SONAR_CONNECTED);
+        mIntentFilter.addAction(SonarSampler.ACTION_SONAR_DISCONNECTED);
+        mIntentFilter.addAction(LoggingService.ACTION_SAMPLE);
     }
 
     private void registerBroadcastReceiver() {
@@ -113,7 +113,9 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
         mPrefs = new Settings(getActivity());
         mPrefs.registerOnSharedPreferenceChangeListener(this);
         registerBroadcastReceiver();
-        ((MainActivity) getActivity()).getSonarService().connect(mConnectedDevice);
+        LoggingService svc = ((MainActivity) getActivity()).getLoggingService();
+        SonarSampler sam = (SonarSampler)svc.getSampler(SonarSampler.TAG);
+        sam.connectToDevice(mConnectedDevice);
     }
 
     // Called after onCreate and before onViewCreated, or may get here from onAttach if the
@@ -182,9 +184,10 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
     }
 
     private void updateSonarStateDisplay() {
-        SonarService svc = ((MainActivity) getActivity()).getSonarService();
-        int state = svc.getState();
-        String reason = svc.getStateReason();
+        LoggingService svc = ((MainActivity) getActivity()).getLoggingService();
+        SonarSampler ss = (SonarSampler)svc.getSampler(SonarSampler.TAG);
+        int state = ss.getBluetoothState();
+        String reason = ss.getBluetoothStateReason();
         String s = String.format(getResources().getStringArray(R.array.bt_status)[state], reason);
         mBinding.connectionStatus.setText(s);
     }

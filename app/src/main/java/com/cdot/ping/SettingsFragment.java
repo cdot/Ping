@@ -18,13 +18,8 @@
  */
 package com.cdot.ping;
 
-import android.app.Activity;
-import android.content.Intent;
-import android.content.SharedPreferences;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
-import android.provider.DocumentsContract;
 import android.util.Log;
 
 import androidx.fragment.app.FragmentTransaction;
@@ -113,27 +108,15 @@ public class SettingsFragment extends PreferenceFragmentCompat {
 
         // Special handling for the sample file preferences, to bring up a dialog that will
         // test-create the file.
-        Preference poof = findPreference(Settings.PREF_SONAR_SAMPLE_FILE);
+
+        Preference poof = findPreference(Settings.PREF_SAMPLE_FILE);
         assert poof != null;
         poof.setOnPreferenceChangeListener(new SummaryUpdateListener());
-        summarise(poof, mPrefs.getString(Settings.PREF_SONAR_SAMPLE_FILE));
-
+        summarise(poof, mPrefs.getString(Settings.PREF_SAMPLE_FILE));
         poof.setOnPreferenceClickListener(new Preference.OnPreferenceClickListener() {
             @Override
             public boolean onPreferenceClick(Preference p) {
-                ((MainActivity)getActivity()).getFile(Settings.PREF_SONAR_SAMPLE_FILE, R.string.sonarSampleFile);
-                return true;
-            }
-        });
-
-        poof = findPreference(Settings.PREF_LOCATION_SAMPLE_FILE);
-        assert poof != null;
-        poof.setOnPreferenceChangeListener(new SummaryUpdateListener());
-        summarise(poof, mPrefs.getString(Settings.PREF_LOCATION_SAMPLE_FILE));
-        poof.setOnPreferenceClickListener(new Preference.OnPreferenceClickListener() {
-            @Override
-            public boolean onPreferenceClick(Preference p) {
-                ((MainActivity)getActivity()).getFile(Settings.PREF_LOCATION_SAMPLE_FILE, R.string.locationSampleFile);
+                ((MainActivity)getActivity()).getFile(Settings.PREF_SAMPLE_FILE, R.string.sampleFile);
                 return true;
             }
         });

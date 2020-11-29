@@ -19,16 +19,12 @@
 package com.cdot.ping.services;
 
 import android.location.Location;
-import android.os.Binder;
 import android.os.Bundle;
-import android.os.IBinder;
 import android.os.Looper;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
-import androidx.core.app.NotificationCompat;
 
-import com.cdot.ping.R;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationCallback;
 import com.google.android.gms.location.LocationRequest;
@@ -37,29 +33,11 @@ import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
 
-import java.text.DateFormat;
-import java.util.Date;
-
 /**
- * Location sampling service.
- * <p>
- * This is a a bound and started service that is automatically promoted to a foreground service
- * when all clients unbind.
- * <p>
- * For apps running in the background on "O" devices, location is computed only once every 10
- * minutes and delivered batched every 30 minutes. This restriction applies even to apps
- * targeting "N" or lower which are run on "O" devices. So a background service will only log
- * samples every 30 minutes, which is useless for Ping.
- * <p>
- * In this implementation, when the activity is removed from the foreground the service
- * automatically promotes itself to a foreground service with a Notification, and frequent
- * location updates continue. When the activity comes back to the foreground, the
- * foreground service stops, and the Notification is removed.
- * <p>
- * Substantially based on https://github.com/android/location-samples
+ * Location sampling, provides location samples to LoggingService
  */
-public class LocationService extends LoggingService {
-    public static final String TAG = LocationService.class.getSimpleName();
+public class LocationSampler extends Sampler {
+    public static final String TAG = LocationSampler.class.getSimpleName();
 
     /**
      * The desired interval for location updates. Inexact. Updates may be more or less frequent.
@@ -82,35 +60,17 @@ public class LocationService extends LoggingService {
     private Location mLastLoggedLocation;
     private double mMinDeltaPos = 0.5;
 
-    @Override // LoggingService
-    public String getTag() { return TAG; }
+    @Override // Sampler
+    void onAttach(LoggingService svc) {
+        super.onAttach(svc);
 
-    @Override // LoggingService
-    protected int getNotificationId() {
-        return 12345678;
-    };
-
-    public class LocationServiceBinder extends Binder {
-        public LocationService getService() {
-            return LocationService.this;
-        }
-    }
-
-    protected IBinder createBinder() {
-        return new LocationServiceBinder();
-    }
-
-    @Override
-    public void onCreate() {
-        super.onCreate();
-
-        mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
+        mFusedLocationClient = LocationServices.getFusedLocationProviderClient(mService);
 
         mLocationCallback = new LocationCallback() {
             @Override
             public void onLocationResult(LocationResult locationResult) {
                 super.onLocationResult(locationResult);
-                onNewLocation(locationResult.getLastLocation());
+                onLocationSample(locationResult.getLastLocation());
             }
         };
 
@@ -129,7 +89,7 @@ public class LocationService extends LoggingService {
                         @Override
                         public void onComplete(@NonNull Task<Location> task) {
                             if (task.isSuccessful() && task.getResult() != null) {
-                                onNewLocation(task.getResult());
+                                onLocationSample(task.getResult());
                             } else {
                                 Log.w(TAG, "Failed to get location");
                             }
@@ -140,8 +100,11 @@ public class LocationService extends LoggingService {
         }
     }
 
-    @Override // LoggingService
-    protected void onStoppedFromNotification() {
+    @Override // implements Sampler
+    public String getTag() { return TAG; }
+
+    @Override // implements Sampler
+    public void onStoppedFromNotification() {
         try {
             mFusedLocationClient.removeLocationUpdates(mLocationCallback);
         } catch (SecurityException unlikely) {
@@ -149,12 +112,10 @@ public class LocationService extends LoggingService {
         }
     }
 
-    @Override // LoggingService
-    protected void customiseNotification(NotificationCompat.Builder b) {
-        String text = mCurrentLocation == null ? "Unknown location" :
+    @Override // implements Sampler
+    public String getNotificationText() {
+        return mCurrentLocation == null ? "Unknown location" :
                 "(" + mCurrentLocation.getLatitude() + ", " + mCurrentLocation.getLongitude() + ")";
-        String title = getString(R.string.location_updated, DateFormat.getDateTimeInstance().format(new Date()));
-        b.setContentTitle(title).setContentText(text).setTicker(text);
     }
 
     /**
@@ -163,20 +124,9 @@ public class LocationService extends LoggingService {
      *
      * @param minDeltaPos min position move, in metres
      */
-    public void configure(double minDeltaPos) {
-        Log.d(TAG, "Received configure(" + minDeltaPos);
+    public void configureLocation(double minDeltaPos) {
+        Log.d(TAG, "configureLocation(" + minDeltaPos + ")");
         mMinDeltaPos = minDeltaPos;
-
-        /*if (mStartId == -1) {
-            startService(new Intent(getApplicationContext(), LocationService.class));
-            // Get an initial sample
-            try {
-                mFusedLocationClient.requestLocationUpdates(mLocationRequest,
-                        mLocationCallback, Looper.myLooper());
-            } catch (SecurityException unlikely) {
-                Log.e(TAG, "Lost location permission. Could not request updates. " + unlikely);
-            }
-        }*/
     }
 
     /*
@@ -184,7 +134,7 @@ public class LocationService extends LoggingService {
      * location's latitude and longitude, and with a radius equal to the locationAccuracy (metres), then
      * there is a 68% probability that the true location is inside the circle.
      */
-    private void onNewLocation(Location loc) {
+    private void onLocationSample(Location loc) {
         boolean acceptable = (mCurrentLocation == null)
                 // if new location has better accuracy, always use it
                 || (loc.getAccuracy() <= mCurrentLocation.getAccuracy())
@@ -202,7 +152,7 @@ public class LocationService extends LoggingService {
             mMustLogNextSample = false;
             Bundle sample = new Bundle();
             sample.putParcelable("location", loc);
-            logSample(sample);
+            mService.logSample(sample, TAG);
         }
     }
 }

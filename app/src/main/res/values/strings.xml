@@ -29,7 +29,7 @@
     <string name="help_autoconnect">Automatically connect to the first compatible device found. Otherwise wait for you to select a device.</string>
     <string name="help_change_device">Connect to a different device</string>
     <string name="help_device">Select a bluetooth device or scan for new devices</string>
-    <string name="help_locationSampleFile">Click to change the file to store location samples in.</string>
+    <string name="help_sampleFile">Click to change the file to store samples in</string>
     <string name="help_minimumDepthChange">The minimum depth difference that must be seen before a sample will be recorded, in metres</string>
     <string name="help_minimumPositionChange">The minimum horizontal distance that must be moved before a sample will be recorded, in metres</string>
     <string name="help_noise">Use higher settings for turbid water or where there are suspended solids</string>
@@ -37,14 +37,13 @@
     <string name="help_scan_all">Scanning for a compatible device&#x2026; touch a device to connect to it</string>
     <string name="help_scan_first">Scanning for a compatible device&#x2026;</string>
     <string name="help_sensitivity">Intensity of the sonar pulse. When the water is shallow, or there is noise in the water such as engine noise, select a lower sensitivity</string>
-    <string name="help_sonarSampleFile">Click to change the file to store sonar samples in.</string>
 
     <string name="latitude_value">Lat %1$.5g</string>
     <string name="launch_activity">Launch Ping</string>
     <string name="location_updated">Location: %1$s</string>
 
     <!-- Setting -->
-    <string name="locationSampleFile">Location Sample File</string>
+    <string name="sampleFile">Sample File</string>
 
     <string name="longitude_value">Lon %1$.5g</string>
     <string name="menuitem_settings">Settings</string>
@@ -109,12 +108,6 @@
     <string name="record_start">Start recording</string>
     <string name="record_stop">Stop recording</string>
 
-    <string name="sample_data">XX.XX</string>
-
-    <!-- Setting -->
-    <string name="sonarSampleFile">Sonar Sample File</string>
-
-    <!-- Setting -->
     <string name="sensitivity_value">Sensitivity %1$d</string>
     <string name="sensitivity_label">Sensitivity</string>
 
@@ -132,5 +125,5 @@
     <string name="temperature_value">Temperature %1$.2g</string>
     <string name="autoconnect_label">Auto Connect</string>
     <string name="help_bt_address">FF:FF:FF:FF:FF:FF</string>
-    <string name="sample_files_unset">Sample file locations must be set to enable recording</string>
+    <string name="sample_file_unset">Sample file location must be set to enable recording</string>
 </resources>

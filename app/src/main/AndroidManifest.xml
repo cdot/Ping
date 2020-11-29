@@ -27,15 +27,9 @@
             </intent-filter>
         </activity>
         <!-- See https://developer.android.com/guide/topics/manifest/service-element -->
-        <service android:name=".services.SonarService"
+        <service android:name=".services.LoggingService"
             android:description="@string/service_description"
             android:enabled="true" />
-        <service
-            android:name=".services.LocationService"
-            android:enabled="true" />
-        <!-- <service
-            android:name=".services.WhatTheFuck"
-            android:enabled="true" /> -->
     </application>
 
 </manifest>
