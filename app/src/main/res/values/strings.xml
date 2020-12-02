@@ -1,22 +1,17 @@
 <resources>
     <string name="app_name">Ping</string>
-    <string name="autoconnect_label">Auto Connect</string>
 
-    <string name="battery_value">Battery %1$d</string>
-
+    <!-- Status, address, reason -->
     <string-array name="bt_status">
-        <item>Disconnected</item>
-        <item>Connecting</item>
+        <item>Disconnected from %1$s: %2$s</item>
+        <item>Connecting to %1$s: %2$s</item>
         <item>Connected</item>
     </string-array>
 
     <string name="cancel">Cancel</string>
 
-    <string name="depth_value">Depth %1$.2g</string>
+    <string name="depth_unknown">Depth unknown</string>
     <string name="device">Device</string>
-
-    <string name="fish_depth_value">Fish Depth %1$.2g</string>
-    <string name="fish_type_value">Fish Type %1$.2g</string>
 
     <string name="help_autoconnect">Automatically connect to the first compatible device found. Otherwise wait for you to select a device.</string>
     <string name="help_bt_address">FF:FF:FF:FF:FF:FF</string>
@@ -31,20 +26,8 @@
     <string name="help_scan_first">Scanning for a compatible device&#x2026;</string>
     <string name="help_sensitivity">Intensity of the sonar pulse. When the water is shallow, or there is noise in the water such as engine noise, select a lower sensitivity</string>
 
-    <string name="latitude_value">Lat %1$.5g</string>
-    <string name="launch_activity">Open Ping</string>
-
-    <!-- Setting -->
-    <string name="sampleFile">Sample File</string>
-
-    <string name="longitude_value">Lon %1$.5g</string>
     <string name="menuitem_settings">Settings</string>
-    <string name="minimumDepthChange">Minimum depth change</string>
-    <string name="minimumPositionChange">Minimum position change</string>
 
-    <!-- Setting -->
-    <string name="noise_value">Noise filter %1$s</string>
-    <string name="noise_label">Noise</string>
     <!-- See Ping.NOISE_* -->
     <string-array name="noise_options">
         <item>Off</item>
@@ -58,6 +41,9 @@
         <item>2</item>
         <item>3</item>
     </string-array>
+    <string name="notification_launch">Open Ping</string>
+    <string name="notification_stop">Stop logging</string>
+    <string name="notification_title">Ping at %1$s</string>
 
     <string name="OK">OK</string>
 
@@ -72,9 +58,13 @@
         <item>Permission to administer Bluetooth devices is required</item>
         <item>Permission to access the fine location of this device is required</item>
     </string-array>
+    <string name="pref_autoconnect">Auto Connect</string>
+    <string name="pref_depth_delta">Minimum depth change</string>
+    <string name="pref_noise">Noise</string>
+    <string name="pref_range">Range</string>
+    <string name="pref_sample_file">Sample File</string>
+    <string name="pref_sensitivity">Sensitivity</string>
 
-    <string name="range_value">Range %1$s</string>
-    <string name="range_label">Range</string>
     <!-- See Ping.RANGE_* -->
     <string-array name="range_options">
         <item>3m</item>
@@ -96,6 +86,7 @@
     </string-array>
     <!-- reasons why bluetooth state changed -->
     <string name="reason_cleaning_up">: cleaning up</string>
+    <string name="reason_connection_lost">" - connection lost"</string>
     <string name="reason_uuid_ccc">: device does not offer descriptor CLIENT_CHARACTERISTIC_CONFIGURATION</string>
     <string name="reason_uuid_custom">: device does not offer service CUSTOM</string>
     <string name="reason_uuid_custom_sample">: device does not offer characteristic CUSTOM_SAMPLE</string>
@@ -107,13 +98,20 @@
     <string name="reason_ok"> OK</string>
 
     <string name="sample_file_unset">Sample file location must be set to enable recording</string>
-    <string name="sensitivity_value">Sensitivity %1$d</string>
-    <string name="sensitivity_label">Sensitivity</string>
     <string name="service_description">Background service for Ping</string>
-    <string name="sonar_updated">Sonar: %1$s</string>
     <string name="start_recording">Start recording</string>
-    <string name="stop_service">Stop logging</string>
-    <string name="strength_value">Strength %1$.2g</string>
 
-    <string name="temperature_value">Temperature %1$.2g</string>
+    <string name="val_battery">Battery: %1$d</string>
+    <string name="val_depth">Depth: %1$.2gm</string>
+    <string name="val_fish_depth">Fish Depth: %1$.2gm</string>
+    <string name="val_fish_strength">Fish Strength: %1$d</string>
+    <string name="val_latitude">Latitude: %1$.5g</string>
+    <string name="val_longitude">Longitude: %1$.5g</string>
+    <string name="val_noise">Noise filter: %1$s</string>
+    <string name="val_range">Range %1$s</string>
+    <string name="val_samples">Samples: %1$d</string>
+    <string name="val_sensitivity">Sensitivity: %1$d</string>
+    <string name="val_strength">Strength: %1$d</string>
+    <string name="val_temperature">Temperature: %1$.2g°C</string>
+    <string name="val_time">Time: %1$s</string>
 </resources>

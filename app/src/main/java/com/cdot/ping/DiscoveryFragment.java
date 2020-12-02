@@ -36,7 +36,7 @@ import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
 
 import com.cdot.ping.databinding.DiscoveryFragmentBinding;
-import com.cdot.ping.services.SonarSampler;
+import com.cdot.ping.samplers.SonarSampler;
 
 import java.util.ArrayList;
 import java.util.HashMap;

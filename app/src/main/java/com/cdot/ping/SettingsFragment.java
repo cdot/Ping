@@ -76,14 +76,6 @@ public class SettingsFragment extends PreferenceFragmentCompat {
         seekPref.setMax(Settings.SENSITIVITY_MAX);
         seekPref.setValue(mPrefs.getInt(Settings.PREF_SENSITIVITY));
 
-        seekPref = findPreference(Settings.PREF_MIN_POS_CHANGE);
-        assert seekPref != null;
-        seekPref.setOnPreferenceChangeListener(new SummaryUpdateListener());
-        seekPref.setMin(Settings.MIN_POS_CHANGE_MIN);
-        seekPref.setMax(Settings.MIN_POS_CHANGE_MAX);
-        summarise(seekPref, mPrefs.getInt(Settings.PREF_MIN_POS_CHANGE));
-        seekPref.setValue(mPrefs.getInt(Settings.PREF_MIN_POS_CHANGE));
-
         seekPref = findPreference(Settings.PREF_MIN_DEPTH_CHANGE);
         assert seekPref != null;
         seekPref.setOnPreferenceChangeListener(new SummaryUpdateListener());
@@ -114,7 +106,7 @@ public class SettingsFragment extends PreferenceFragmentCompat {
         poof.setOnPreferenceClickListener(new Preference.OnPreferenceClickListener() {
             @Override
             public boolean onPreferenceClick(Preference p) {
-                ((MainActivity)getActivity()).getFile(Settings.PREF_SAMPLE_FILE, R.string.sampleFile);
+                ((MainActivity)getActivity()).getFile(Settings.PREF_SAMPLE_FILE, R.string.pref_sample_file);
                 return true;
             }
         });
@@ -150,7 +142,6 @@ public class SettingsFragment extends PreferenceFragmentCompat {
             case Settings.PREF_RANGE:
                 return getResources().getStringArray(R.array.range_options)[(int) val];
             case Settings.PREF_MIN_DEPTH_CHANGE:
-            case Settings.PREF_MIN_POS_CHANGE:
                 return Double.toString((int) val / 1000.0); // convert mm to metres
             default:
                 return val.toString();

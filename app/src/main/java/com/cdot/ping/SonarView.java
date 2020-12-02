@@ -33,6 +33,8 @@ import android.view.View;
 
 import androidx.annotation.NonNull;
 
+import com.cdot.ping.samplers.SonarSampler;
+
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 import static java.lang.Thread.interrupted;
@@ -47,6 +49,14 @@ public class SonarView extends View {
     // Dimensions of the drawing bitmap
     private static final int BITMAP_HEIGHT = 3600; // cm resolution, max depth 36m
     private static final int BITMAP_WIDTH = 5000; // 1 sample per pixel
+    private static final int MAX_STRENGTH = 255;
+    private static final int MAX_DEPTH = 36;
+    private static final int DEPTH_RANGE = BITMAP_HEIGHT - MAX_STRENGTH;
+    private int depth2bm(double d) {
+        return (int)(MAX_STRENGTH / 2 + d * DEPTH_RANGE / MAX_DEPTH);
+    }
+
+    private int[] RANGES = new int[] { 3, 6, 9, 18, 24, 36, 36 };
 
     private Paint mPaint;
     private Shader mWaterShader, mBottomShader;
@@ -54,13 +64,16 @@ public class SonarView extends View {
     private Bitmap mDrawingBitmap;
     private Rect mDrawSrcRect;
     private Rect mDrawDestRect;
+    private Settings mSettings;
 
-    private ConcurrentLinkedQueue<Integer> mDepthQueue = new ConcurrentLinkedQueue<>();
+    private ConcurrentLinkedQueue<Bundle> mSampleQueue = new ConcurrentLinkedQueue<>();
     Thread mRenderThread;
 
     public SonarView(Context context, AttributeSet attrs) {
         super(context, attrs);
         setWillNotDraw(false);
+
+        mSettings = new Settings(context);
 
         mPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         mPaint.setAntiAlias(true);
@@ -78,25 +91,32 @@ public class SonarView extends View {
         mDrawDestRect = new Rect(0, 0, BITMAP_WIDTH, BITMAP_HEIGHT);
 
         mWaterShader = new LinearGradient(0, 0, 0, BITMAP_HEIGHT, Color.CYAN, Color.BLUE, Shader.TileMode.MIRROR);
-        mBottomShader = new LinearGradient(0, 0, 0, BITMAP_HEIGHT, Color.YELLOW, Color.BLACK, Shader.TileMode.MIRROR);
-
+        mBottomShader = new LinearGradient(0, 0, 0, BITMAP_HEIGHT, Color.GREEN, Color.BLACK, Shader.TileMode.MIRROR);
         mRenderThread = new Thread(new Runnable() {
             public void run() {
                 while (!interrupted()) {
-                    if (mDepthQueue.size() > 0) {
+                    if (mSampleQueue.size() > 0) {
                         synchronized (this) {
-                            int n = mDepthQueue.size();
+                            int n = mSampleQueue.size();
                             // Scroll the drawing bitmap to accommodate the queued samples
                             Rect srcRect = new Rect(1, 0, BITMAP_WIDTH - 1, BITMAP_HEIGHT);
                             Rect destRect = new Rect(srcRect);
                             destRect.offset(-n, 0);
                             mDrawingCanvas.drawBitmap(mDrawingBitmap, srcRect, destRect, null);
                             for (; n > 0; n--) {
-                                Integer depth = mDepthQueue.poll();
+                                Bundle sample = mSampleQueue.poll();
+                                float depth = (float) sample.getDouble(SonarSampler.G_DEPTH);
+                                float error = (float) sample.getDouble("error");
+                                int maxDepth = sample.getInt("maxdepth");
+                                float bottom = (depth - error) * BITMAP_HEIGHT / maxDepth;
+                                float top = (depth + error) * BITMAP_HEIGHT / maxDepth;
                                 mPaint.setShader(mWaterShader);
-                                mDrawingCanvas.drawLine(BITMAP_WIDTH - n, 0, BITMAP_WIDTH - n, depth, mPaint);
+                                mDrawingCanvas.drawLine(BITMAP_WIDTH - n, 0, BITMAP_WIDTH - n, bottom, mPaint);
                                 mPaint.setShader(mBottomShader);
-                                mDrawingCanvas.drawLine(BITMAP_WIDTH - n, depth, BITMAP_WIDTH - n, BITMAP_HEIGHT - 1, mPaint);
+                                mDrawingCanvas.drawLine(BITMAP_WIDTH - n, bottom, BITMAP_WIDTH - n, BITMAP_HEIGHT - 1, mPaint);
+                                Shader shader = new LinearGradient(0, bottom, 0, top, Color.YELLOW, Color.BLUE, Shader.TileMode.MIRROR);
+                                mPaint.setShader(shader);
+                                mDrawingCanvas.drawLine(BITMAP_WIDTH - n, bottom, BITMAP_WIDTH - n, top, mPaint);
                             }
                         }
 
@@ -152,7 +172,11 @@ public class SonarView extends View {
      * @param b a bundle that includes at least double "depth"
      */
     void sample(@NonNull Bundle b) {
-        int depth = (int) (b.getDouble("depth") * 100.0);
-        mDepthQueue.add(depth);
+        // Convert strength in the range 0..255 to an error in metres
+        int range = RANGES[mSettings.getInt(Settings.PREF_RANGE)];
+        b.putInt("maxdepth", range);
+        double maxError = range / RANGES.length;
+        b.putDouble("error", (MAX_STRENGTH - b.getInt(SonarSampler.I_STRENGTH)) * maxError / MAX_STRENGTH);
+        mSampleQueue.add(b);
     }
 }

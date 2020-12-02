@@ -27,7 +27,7 @@
             </intent-filter>
         </activity>
         <!-- See https://developer.android.com/guide/topics/manifest/service-element -->
-        <service android:name=".services.LoggingService"
+        <service android:name=".samplers.LoggingService"
             android:description="@string/service_description"
             android:enabled="true" />
     </application>

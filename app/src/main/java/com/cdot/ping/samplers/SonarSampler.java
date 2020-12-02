@@ -16,7 +16,7 @@
  * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
-package com.cdot.ping.services;
+package com.cdot.ping.samplers;
 
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
@@ -25,11 +25,13 @@ import android.bluetooth.BluetoothGattDescriptor;
 import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothProfile;
 import android.content.Intent;
+import android.content.res.Resources;
 import android.os.Bundle;
 import android.util.Log;
 
 import com.cdot.ping.R;
 
+import java.util.Date;
 import java.util.UUID;
 
 /**
@@ -58,16 +60,22 @@ public class SonarSampler extends Sampler {
     private static final String CLASS_NAME = SonarSampler.class.getCanonicalName();
 
     // Messages sent by the service
-    public static final String ACTION_SONAR_CONNECTED = CLASS_NAME + ".action_sonar_connected";
-    public static final String ACTION_SONAR_DISCONNECTED = CLASS_NAME + ".action_sonar_disconnected";
+    public static final String ACTION_BT_STATE = CLASS_NAME + ".action_bt_state";
 
     // Message extras
     public static final String EXTRA_DEVICE_ADDRESS = CLASS_NAME + ".device_address";
-    public static final String EXTRA_DISCONNECT_REASON = CLASS_NAME + ".disconnect_reason";
+    public static final String EXTRA_STATE = CLASS_NAME + ".state";
+    public static final String EXTRA_REASON = CLASS_NAME + ".reason";
 
-    // DISCONNECT_REASONs sent with ACTION_DISCONNECTED/EXTRA_DISCONNECT_REASON
-    //public static final int REASON_CANNOT_CONNECT = 0;
-    public static final int REASON_CONNECTION_LOST = 1;
+    // Keys into sample bundles. Fields have a single-character type, so L_TIME means "long TIME"
+    public static final String B_DRY = "dry";
+    public static final String L_TIME = "time";
+    public static final String G_DEPTH = "depth";
+    public static final String I_STRENGTH = "strength"; // Range 0..255
+    public static final String G_TEMPERATURE = "temp";
+    public static final String I_BATTERY = "bat"; // Range 0..6
+    public static final String G_FISHDEPTH = "fdepth";
+    public static final String I_FISHSTRENGTH = "fstrength"; // Range 0..15
 
     // ID bytes sent / received in every packet received from the sonar unit
     private static final byte ID0 = 83;
@@ -120,9 +128,6 @@ public class SonarSampler extends Sampler {
     public static final int BT_STATE_DISCONNECTED = 0;
     public static final int BT_STATE_CONNECTING = 1;
     public static final int BT_STATE_CONNECTED = 2;
-    private static final String[] BT_STATE_NAMES = {
-            "DISCONNECTED", "CONNECTING", "CONNECTED"
-    };
     private int mBluetoothState = BT_STATE_DISCONNECTED;
     private int mBluetoothStateReason;
 
@@ -150,14 +155,10 @@ public class SonarSampler extends Sampler {
                     Log.e(TAG, "mBluetoothGatt and gatt differ! Not expected");
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 Log.d(TAG, "Disconnected from " + gatt.getDevice().getName());
-                setBluetoothState(BT_STATE_DISCONNECTED, R.string.reason_gatt_disconnected);
                 if (mBluetoothGatt != null & gatt.getDevice().getAddress().equals(mBluetoothGatt.getDevice().getAddress()))
                     disconnectBluetooth(R.string.reason_cleaning_up);
 
-                Intent intent = new Intent(ACTION_SONAR_DISCONNECTED);
-                intent.putExtra(EXTRA_DEVICE_ADDRESS, gatt.getDevice().getAddress());
-                intent.putExtra(EXTRA_DISCONNECT_REASON, REASON_CONNECTION_LOST);
-                mService.sendBroadcast(intent);
+                setBluetoothState(BT_STATE_DISCONNECTED, R.string.reason_gatt_disconnected);
 
                 // Try to reconnect
                 Log.d(TAG, "Attempting to reconnect to " + gatt.getDevice().getName());
@@ -211,9 +212,6 @@ public class SonarSampler extends Sampler {
 
             // Tell the world we are ready for action
             setBluetoothState(BT_STATE_CONNECTED, R.string.reason_ok);
-            Intent intent = new Intent(ACTION_SONAR_CONNECTED);
-            intent.putExtra(EXTRA_DEVICE_ADDRESS, mBluetoothGatt.getDevice().getAddress());
-            mService.sendBroadcast(intent);
         }
 
         // triggered as a result of a remote characteristic notification
@@ -225,30 +223,19 @@ public class SonarSampler extends Sampler {
             // Wonder what data[5] is? Seems to be always 9
             //Log.d(TAG, "[5]=" + Integer.toHexString(data[5]));
             // There are several more bytes in the packet; wonder what they do?
-
-            /*Log.d(TAG, "Sample received from BLE peripheral"
-                    + (((data[4] & 0x8) != 0) ? " dry" : "")
-                    // Convert feet to metres
-                    + " D " + ((float) data[6] + (float) data[7] / 100.0f) + "ft"
-                    + " S " + data[8]
-                    // Convert feet to metres
-                    + " fD " + ((float) data[9] + (float) data[10] / 100f)
-                    + " fS " + (data[11] & 0xF)
-                    + " bat " + ((data[11] >> 4) & 0xF)
-                    + " T " + ((float) data[12] + (float) data[13]) + "°F");*/
-
+            // TODO: Might be worth logging the raw packets for later analysis
             Bundle b = new Bundle();
-            b.putInt("battery", (data[11] >> 4) & 0xF);
-            b.putDouble("depth", (data[4] & 0x8) != 0 ? 0 : (float) (ft2m * ((double) data[6] + (double) data[7] / 100.0)));
-            b.putDouble("fishDepth", ft2m * ((double) data[9] + (double) data[10] / 100.0));
-            // Fish strength is in a nibble, so potentially in the range 0-15. 0 is easy, it means no mid-water
-            // return. Above that, let's think. The beam is 90 degrees, so the size of the object is surely
-            // proportional to the depth? Unless that is already computed in the return. The maximum size of
-            // a fish is going to be a metre. At 36 meters that corresponds to 1.6 degrees of arc. Or
-            // does it vary according to the range? Do we care? Just return it as a percentage.
-            b.putDouble("fishStrength", 100.0 * (data[11] & 0xF) / 16.0);
-            b.putDouble("strength", 100.0 * data[8] / 128.0); // Guess our max is 128
-            b.putDouble("temperature", ((double) data[12] + (double) data[13] / 100.0 - 32.0) * 5.0 / 9.0);
+            // data[4] bit 4 means "dry"
+            b.putBoolean(B_DRY, (data[4] & 0x8) != 0);
+            b.putDouble(G_DEPTH, ft2m * ((double) data[6] + (double) data[7] / 100.0));
+            b.putInt(I_STRENGTH, (int)data[8] & 0xFF);
+            b.putDouble(G_FISHDEPTH, ft2m * ((double) data[9] + (double) data[10] / 100.0));
+            // Fish strength is in a nibble, so in the range 0-15. Just return it as a number
+            b.putInt(I_FISHSTRENGTH, (int)data[11] & 0xF);
+            b.putInt(I_BATTERY, (data[11] >> 4) & 0xF);
+            b.putDouble(G_TEMPERATURE, ((double) data[12] + (double) data[13] / 100.0 - 32.0) * 5.0 / 9.0);
+
+            b.putLong(L_TIME, new Date().getTime());
 
             onSonarSample(b);
         }
@@ -261,38 +248,66 @@ public class SonarSampler extends Sampler {
      * @param reason the reson for the change to this state
      */
     private void setBluetoothState(int state, int reason) {
-        Log.d(TAG, "State change to " + BT_STATE_NAMES[state] + " " + reason);
+        Log.d(TAG, "State change to " + state + " " + reason);
         mBluetoothState = state;
         mBluetoothStateReason = reason;
+        onBind();
     }
 
     /**
-     * Get the current BT_STATE for the service
-     *
-     * @return a BT_STATE
+     * Disconnects an established connection, or cancels a connection attempt currently in progress.
      */
-    public int getBluetoothState() {
-        return mBluetoothState;
+    private void disconnectBluetooth(int reason) {
+        setBluetoothState(BT_STATE_DISCONNECTED, reason);
+        if (mBluetoothGatt == null)
+            return;
+        mBluetoothGatt.disconnect();
+        mBluetoothGatt.close();
+        mBluetoothGatt = null;
     }
 
     /**
-     * Get the reason for the current BT_STATE for the service
-     *
-     * @return a string resource
+     * Update the last recorded sample
      */
-    public int getBluetoothStateReason() {
-        return mBluetoothStateReason;
+    private void onSonarSample(Bundle sample) {
+        if (mLoggingDisabled || !(mMustLogNextSample
+                || sample.getInt(SonarSampler.I_BATTERY) != mLastLoggedSample.getInt(SonarSampler.I_BATTERY)
+                || Math.abs(sample.getDouble("temperature") - mLastLoggedSample.getDouble(SonarSampler.G_TEMPERATURE)) >= MIN_DELTA_TEMPERATURE
+                || Math.abs(sample.getDouble(G_DEPTH) - mLastLoggedSample.getDouble(G_DEPTH)) >= mMinDeltaDepth))
+            return;
+
+        mMustLogNextSample = false;
+        mLastLoggedSample = new Bundle(sample);
+
+        mService.logSample(sample, TAG);
     }
 
-    /**
-     * Get the device the service is currently connected to
-     *
-     * @return the connected device
-     */
-    public BluetoothDevice getConnectedDevice() {
-        if (mBluetoothGatt == null || mBluetoothGatt.getDevice() == null)
-            return null;
-        return mBluetoothGatt.getDevice();
+    // Called when something is binding to the service
+    @Override // Sampler
+    void onBind() {
+        Log.d(TAG, "onBind sending broadcast refreshing BT state");
+        Intent intent = new Intent(ACTION_BT_STATE);
+        intent.putExtra(EXTRA_DEVICE_ADDRESS, mBluetoothGatt != null ? mBluetoothGatt.getDevice().getAddress() : null);
+        intent.putExtra(EXTRA_STATE, mBluetoothState);
+        intent.putExtra(EXTRA_REASON, mBluetoothStateReason);
+        mService.sendBroadcast(intent);
+    }
+
+    @Override // implements Sampler
+    public String getTag() { return TAG; }
+
+    @Override // implements Sampler
+    public String getNotificationStateText(Resources r) {
+        return mLastLoggedSample == null ? r.getString(R.string.depth_unknown) : r.getString(R.string.val_depth, mLastLoggedSample.getDouble(G_DEPTH));
+    }
+
+    @Override // implements Sampler
+    public void stopSampling() {
+        Log.d(TAG, "stopped logging");
+        // Note we will continue to handle the characteristic notifications coming from the device;
+        // we just won't be passing them on. Handling will only finish when the service is
+        // destroyed.
+        mLoggingDisabled = true;
     }
 
     @Override // Sampler
@@ -347,32 +362,6 @@ public class SonarSampler extends Sampler {
             setBluetoothState(BT_STATE_DISCONNECTED, R.string.reason_gatt_connect_failed);
     }
 
-    @Override // implements Sampler
-    public String getTag() { return TAG; }
-
-    @Override // implements Sampler
-    public String getNotificationText() {
-        return mLastLoggedSample == null ? "" : ("Depth " + mLastLoggedSample.getDouble("depth"));
-    }
-
-    @Override // implements Sampler
-    public void onStoppedFromNotification() {
-        mLoggingDisabled = true;
-    }
-
-    /**
-     * Disconnects an established connection, or cancels a connection attempt currently in progress.
-     */
-    private void disconnectBluetooth(int reason) {
-        Log.d(TAG, "disconnect because " + reason);
-        setBluetoothState(BT_STATE_DISCONNECTED, reason);
-        if (mBluetoothGatt == null)
-            return;
-        mBluetoothGatt.disconnect();
-        mBluetoothGatt.close();
-        mBluetoothGatt = null;
-    }
-
     /**
      * Configuration reverse-engineered by sniffing packets sent by the official FishFinder software
      *
@@ -424,20 +413,4 @@ public class SonarSampler extends Sampler {
         charaWrite.setWriteType(BluetoothGattCharacteristic./*WRITE_TYPE_DEFAULT*/WRITE_TYPE_NO_RESPONSE);
         mGattQueue.queue(new GattQueue.CharacteristicWrite(charaWrite));
     }
-
-    /**
-     * Update the last recorded sample
-     */
-    void onSonarSample(Bundle sample) {
-        if (mLoggingDisabled || !(mMustLogNextSample
-                || sample.getInt("battery") != mLastLoggedSample.getInt("battery")
-                || Math.abs(sample.getDouble("temperature") - mLastLoggedSample.getDouble("temperature")) >= MIN_DELTA_TEMPERATURE
-                || Math.abs(sample.getDouble("depth") - mLastLoggedSample.getDouble("depth")) >= mMinDeltaDepth))
-            return;
-
-        mMustLogNextSample = false;
-        mLastLoggedSample = new Bundle(sample);
-
-        mService.logSample(sample, TAG);
-     }
 }

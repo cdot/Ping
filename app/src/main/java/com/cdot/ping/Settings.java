@@ -39,11 +39,6 @@ public class Settings {
 
     // Sampling preferences
 
-    // Minimum position change (metres) before a new location sample is recorded
-    public static final String PREF_MIN_POS_CHANGE = "minimumPositionChange";
-    static final int MIN_POS_CHANGE_MIN = 100; // mm
-    static final int MIN_POS_CHANGE_MAX = 10000; // mm
-
     // Minimum depth change (metres) before a new depth sample is recorded
     public static final String PREF_MIN_DEPTH_CHANGE = "minimumDepthChange";
     public static final int MIN_DEPTH_CHANGE_MIN = 100; // mm
@@ -89,7 +84,6 @@ public class Settings {
             put(PREF_RANGE, RANGE_AUTO);
             put(PREF_NOISE, NOISE_OFF);
             put(PREF_MIN_DEPTH_CHANGE, 250); // mm
-            put(PREF_MIN_POS_CHANGE, 1000); // mm
         }
     };
 
@@ -114,7 +108,6 @@ public class Settings {
         ed.remove(PREF_NOISE);
         ed.remove(PREF_RANGE);
         ed.remove(PREF_MIN_DEPTH_CHANGE);
-        ed.remove(PREF_MIN_POS_CHANGE);
         ed.remove(PREF_SAMPLE_FILE);
         ed.remove(PREF_AUTOCONNECT);
         ed.commit();

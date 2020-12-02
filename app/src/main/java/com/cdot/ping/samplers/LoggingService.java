@@ -16,7 +16,7 @@
  * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
-package com.cdot.ping.services;
+package com.cdot.ping.samplers;
 
 import android.app.ActivityManager;
 import android.app.Notification;
@@ -42,6 +42,9 @@ import androidx.core.app.NotificationCompat;
 import com.cdot.ping.MainActivity;
 import com.cdot.ping.R;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.io.FileNotFoundException;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -55,12 +58,7 @@ import java.util.Map;
  * Log incoming samples to a file.
  * <p>
  * This is a bound and started service that is automatically promoted to a foreground service
- * when all clients unbind.
- * <p>
- * For apps running in the background on "O" devices, location is computed only once every 10
- * minutes and delivered batched every 30 minutes. This restriction applies even to apps
- * targeting "N" or lower which are run on "O" devices. So a background service will only log
- * samples every 30 minutes, which is useless for Ping.
+ * when all clients unbind. This is so sampling can continue even when the foreground app is closed.
  * <p>
  * In this implementation, when the activity is removed from the foreground the service
  * automatically promotes itself to a foreground service with a Notification, and frequent
@@ -72,7 +70,7 @@ import java.util.Map;
 public class LoggingService extends Service {
     public static final String TAG = LoggingService.class.getSimpleName();
 
-    protected static final String CLASS_NAME = LocationSampler.class.getCanonicalName();
+    protected static final String CLASS_NAME = LoggingService.class.getCanonicalName();
 
     public static final String ACTION_SAMPLE = CLASS_NAME + ".action_sample";
 
@@ -81,7 +79,7 @@ public class LoggingService extends Service {
 
     // Extra to tell us if we arrived in onStartCommand from the Notification
     protected static final String EXTRA_STARTED_FROM_NOTIFICATION =
-            LoggingService.class.getPackage().getName() + ".started_from_notification";
+            CLASS_NAME + ".started_from_notification";
 
     /**
      * Used to check whether the bound activity has really gone away and not unbound as part of an
@@ -96,6 +94,7 @@ public class LoggingService extends Service {
 
     // DEBUG: Set to true in subclasses to keep this service running even when all clients are unbound
     // and logging is disabled.
+    // TODO: set this false before pre-release testing
     protected boolean mKeepRunning = true;
 
     /**
@@ -166,9 +165,8 @@ public class LoggingService extends Service {
         // We got here because the user decided to kill the service from the notification.
         if (startedFromNotification) {
             Log.d(TAG, "stopped from notification");
-            for (Sampler s : mSamplers.values()) {
-                s.onStoppedFromNotification();
-            }
+            for (Sampler s : mSamplers.values())
+                s.stopSampling();
             stopSelf();
         } else
             Log.d(TAG, "started");
@@ -187,9 +185,11 @@ public class LoggingService extends Service {
         // Called when a client (MainActivity in case of this sample) comes to the foreground
         // and binds with this service. The service should cease to be a foreground service
         // when that happens.
-        Log.d(TAG, "in onBind()");
+        Log.d(TAG, "onBind()");
         stopForeground(true);
         mJustAConfigurationChange = false;
+        for (Sampler s : mSamplers.values())
+            s.onBind();
         return mBinder;
     }
 
@@ -198,7 +198,7 @@ public class LoggingService extends Service {
         // Called when a client (MainActivity in case of this sample) returns to the foreground
         // and binds once again with this service. The service should cease to be a foreground
         // service when that happens.
-        Log.d(TAG, "in onRebind()");
+        Log.d(TAG, "onRebind()");
         stopForeground(true);
         mJustAConfigurationChange = false;
         super.onRebind(intent);
@@ -214,7 +214,10 @@ public class LoggingService extends Service {
             Log.d(TAG, "Starting foreground service");
             startForeground(NOTIFICATION_1D, getNotification());
         } else {
+            // Service no longer required
             Log.d(TAG, "All unbound");
+            for (Sampler s : mSamplers.values())
+                s.stopSampling();
         }
 
         return true; // Ensures onRebind() is called when a client re-binds.
@@ -246,21 +249,21 @@ public class LoggingService extends Service {
 
         StringBuilder text = new StringBuilder();
         for (Sampler s : mSamplers.values())
-            text.append(s.getNotificationText()).append("\n");
+            text.append(s.getNotificationStateText(getResources())).append("\n");
 
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
                 // Actions are typically displayed by the system as a button adjacent to the notification content.
 
                 // This will restore the activity
-                .addAction(R.drawable.ic_launcher, getString(R.string.launch_activity), activityPendingIntent)
+                .addAction(R.drawable.ic_launcher, getString(R.string.notification_launch), activityPendingIntent)
 
                 // This will stop the service
-                .addAction(R.drawable.ic_cancel, getString(R.string.stop_service), servicePendingIntent)
+                .addAction(R.drawable.ic_cancel, getString(R.string.notification_stop), servicePendingIntent)
 
                 .setOngoing(true)
                 .setPriority(Notification.PRIORITY_HIGH)
                 .setSmallIcon(R.mipmap.ic_launcher)
-                .setContentTitle(getString(R.string.sonar_updated, DateFormat.getDateTimeInstance().format(new Date())))
+                .setContentTitle(getString(R.string.notification_title, DateFormat.getDateTimeInstance().format(new Date())))
                 .setContentText(text)
                 .setWhen(System.currentTimeMillis());
 
@@ -277,6 +280,40 @@ public class LoggingService extends Service {
                 return true;
         }
         return false;
+    }
+
+    /**
+     * Samplers call this to log a sample. Samples are written in JSON format.
+     * @param sample Bundle containing the sample. The content of the bundle is set by the Sampler.
+     * @param source TAG of the Sampler that generated the sample
+     */
+    void logSample(Bundle sample, String source) {
+        // Watermark the sample with data from samplers that want to contribute. In our case,
+        // the LocationSampler watermarks Sonar samples with a location.
+        for (Sampler s : mSamplers.values())
+            s.watermark(sample);
+        if (mSampleWriter != null) {
+            JSONObject json = new JSONObject();
+            try {
+                for (String key : sample.keySet()) {
+                    json.put(key, sample.get(key));
+                }
+                mSampleWriter.println(json);
+            } catch (JSONException ex) {
+                Log.e(TAG, ex.toString());
+            }
+        }
+
+        // Update notification content if running as a foreground service.
+        if (isRunningInForeground())
+            mNotificationManager.notify(NOTIFICATION_1D, getNotification());
+        else {
+            //Log.d(TAG, "Broadcasting sample from " + source);
+            Intent intent = new Intent(ACTION_SAMPLE);
+            intent.putExtra(EXTRA_SAMPLE_SOURCE, source);
+            intent.putExtra(EXTRA_SAMPLE_DATA, sample);
+            sendBroadcast(intent);
+        }
     }
 
     /**
@@ -317,27 +354,5 @@ public class LoggingService extends Service {
             return;
         mSampleWriter.close();
         mSampleWriter = null;
-    }
-
-    void logSample(Bundle sample, String source) {
-        sample.putLong("time", new Date().getTime());
-        if (mSampleWriter != null) {
-            StringBuilder sb = new StringBuilder("<sample ");
-            for (String key : sample.keySet()) {
-                sb.append(key).append("=").append('"').append(sample.get(key)).append('"');
-            }
-            sb.append(" />");
-            mSampleWriter.println(sb);
-        }
-
-        // Update notification content if running as a foreground service.
-        if (isRunningInForeground())
-            mNotificationManager.notify(NOTIFICATION_1D, getNotification());
-        else {
-            Intent intent = new Intent(ACTION_SAMPLE);
-            intent.putExtra(EXTRA_SAMPLE_SOURCE, source);
-            intent.putExtra(EXTRA_SAMPLE_DATA, sample);
-            sendBroadcast(intent);
-        }
     }
 }

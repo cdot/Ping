@@ -25,7 +25,6 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.res.Resources;
-import android.location.Location;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -41,9 +40,13 @@ import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentTransaction;
 
 import com.cdot.ping.databinding.ConnectedFragmentBinding;
-import com.cdot.ping.services.LocationSampler;
-import com.cdot.ping.services.LoggingService;
-import com.cdot.ping.services.SonarSampler;
+import com.cdot.ping.samplers.LocationSampler;
+import com.cdot.ping.samplers.LoggingService;
+import com.cdot.ping.samplers.SonarSampler;
+
+import java.text.Format;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 /**
  * Fragment that handles user interaction when a device is connected.
@@ -62,17 +65,14 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
 
         public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();
-            if (SonarSampler.ACTION_SONAR_CONNECTED.equals(action)) {
-                //mConnectedDevice = intent.getStringExtra(SonarService.EXTRA_DEVICE_ADDRESS);
-                Log.d(TAG, "Connected to " + mConnectedDevice);
-                updateSonarStateDisplay();
+            if (SonarSampler.ACTION_BT_STATE.equals(action)) {
+                int state = intent.getIntExtra(SonarSampler.EXTRA_STATE, SonarSampler.BT_STATE_DISCONNECTED);
+                String daddr = intent.getStringExtra(SonarSampler.EXTRA_DEVICE_ADDRESS);
+                int reason = intent.getIntExtra(SonarSampler.EXTRA_REASON, R.string.reason_ok);
+                updateSonarStateDisplay(state, reason, daddr);
 
-                // Set up (or confirm) configuration
-                ((MainActivity) getActivity()).settingsChanged();
-
-            } else if (SonarSampler.ACTION_SONAR_DISCONNECTED.equals(action)) {
-                Log.d(TAG, "Disconnected from " + mConnectedDevice.getAddress());
-                updateSonarStateDisplay();
+                if (state == SonarSampler.BT_STATE_CONNECTED)
+                    ((MainActivity) getActivity()).settingsChanged();
 
             } else if (LoggingService.ACTION_SAMPLE.equals(action)) {
                 String source = intent.getStringExtra(LoggingService.EXTRA_SAMPLE_SOURCE);
@@ -80,7 +80,7 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
                 if (SonarSampler.TAG.equals(source))
                     onSonarSample(bund);
                 else if (LocationSampler.TAG.equals(source))
-                    onLocationSample((Location)bund.getParcelable("location"));
+                    onLocationSample(bund);
             }
         }
     };
@@ -88,8 +88,7 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
     ConnectedFragment(BluetoothDevice device) {
         mConnectedDevice = device;
         mIntentFilter = new IntentFilter();
-        mIntentFilter.addAction(SonarSampler.ACTION_SONAR_CONNECTED);
-        mIntentFilter.addAction(SonarSampler.ACTION_SONAR_DISCONNECTED);
+        mIntentFilter.addAction(SonarSampler.ACTION_BT_STATE);
         mIntentFilter.addAction(LoggingService.ACTION_SAMPLE);
     }
 
@@ -115,7 +114,7 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
         mPrefs.registerOnSharedPreferenceChangeListener(this);
         registerBroadcastReceiver();
         LoggingService svc = ((MainActivity) getActivity()).getLoggingService();
-        SonarSampler sam = (SonarSampler)svc.getSampler(SonarSampler.TAG);
+        SonarSampler sam = (SonarSampler) svc.getSampler(SonarSampler.TAG);
         sam.connectToDevice(mConnectedDevice);
     }
 
@@ -149,14 +148,14 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
         });
 
         Resources r = getResources();
-        mBinding.batteryValue.setText(r.getString(R.string.battery_value, 0));
-        mBinding.depthValue.setText(r.getString(R.string.depth_value, 0.0));
-        mBinding.temperatureValue.setText(r.getString(R.string.temperature_value, 0.0));
-        mBinding.fishDepthValue.setText(r.getString(R.string.fish_depth_value, 0.0));
-        mBinding.fishTypeValue.setText(r.getString(R.string.fish_type_value, 0.0));
-        mBinding.strengthValue.setText(r.getString(R.string.strength_value, 0.0));
-        mBinding.latitude.setText(r.getString(R.string.latitude_value, 0.0));
-        mBinding.longitude.setText(r.getString(R.string.longitude_value, 0.0));
+        mBinding.batteryValue.setText(r.getString(R.string.val_battery, 0));
+        mBinding.depthValue.setText(r.getString(R.string.val_depth, 0.0));
+        mBinding.temperatureValue.setText(r.getString(R.string.val_temperature, 0.0));
+        mBinding.fishDepthValue.setText(r.getString(R.string.val_fish_depth, 0.0));
+        mBinding.fishTypeValue.setText(r.getString(R.string.val_fish_strength, 0));
+        mBinding.strengthValue.setText(r.getString(R.string.val_strength, 0));
+        mBinding.latitude.setText(r.getString(R.string.val_latitude, 0.0));
+        mBinding.longitude.setText(r.getString(R.string.val_longitude, 0.0));
         return mBinding.connectedFragment;
     }
 
@@ -166,7 +165,6 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
         Log.d(TAG, "onStart");
         super.onStart();
         registerBroadcastReceiver();
-        updateSonarStateDisplay();
     }
 
     /**
@@ -193,21 +191,18 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
     private void updatePreferencesDisplay() {
         Resources r = getResources();
         int i = mPrefs.getInt(Settings.PREF_SENSITIVITY);
-        mBinding.sensitivity.setText(r.getString(R.string.sensitivity_value, i));
+        mBinding.sensitivity.setText(r.getString(R.string.val_sensitivity, i));
         i = mPrefs.getInt(Settings.PREF_NOISE);
-        mBinding.noise.setText(r.getString(R.string.noise_value, r.getStringArray(R.array.noise_options)[i]));
+        mBinding.noise.setText(r.getString(R.string.val_noise, r.getStringArray(R.array.noise_options)[i]));
         i = mPrefs.getInt(Settings.PREF_RANGE);
-        mBinding.range.setText(r.getString(R.string.range_value, r.getStringArray(R.array.range_options)[i]));
+        mBinding.range.setText(r.getString(R.string.val_range, r.getStringArray(R.array.range_options)[i]));
     }
 
-    private void updateSonarStateDisplay() {
-        LoggingService svc = ((MainActivity) getActivity()).getLoggingService();
-        SonarSampler ss = (SonarSampler)svc.getSampler(SonarSampler.TAG);
-        int state = ss.getBluetoothState();
-        int reason = ss.getBluetoothStateReason();
+    private void updateSonarStateDisplay(int state, int reason, String daddr) {
         Resources r = getResources();
-        String s = r.getStringArray(R.array.bt_status)[state] + r.getString(reason);
-        mBinding.connectionStatus.setText(s);
+        String text = String.format(r.getStringArray(R.array.bt_status)[state], daddr, r.getString(reason));
+        Log.d(TAG, text);
+        mBinding.connectionStatus.setText(text);
     }
 
     @Override // Fragment
@@ -234,20 +229,25 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
 
         //Log.d(TAG, "Sonar sample received");
         Resources r = getResources();
-        mBinding.batteryValue.setText(r.getString(R.string.battery_value, data.getInt("battery")));
-        mBinding.depthValue.setText(r.getString(R.string.depth_value, data.getDouble("depth")));
-        mBinding.temperatureValue.setText(r.getString(R.string.temperature_value, data.getDouble("temperature")));
-        mBinding.fishDepthValue.setText(r.getString(R.string.fish_depth_value, data.getDouble("fishDepth")));
-        mBinding.fishTypeValue.setText(r.getString(R.string.fish_type_value, data.getDouble("fishStrength")));
-        mBinding.strengthValue.setText(r.getString(R.string.strength_value, data.getDouble("strength")));
+        mBinding.batteryValue.setText(r.getString(R.string.val_battery, data.getInt(SonarSampler.I_BATTERY)));
+        mBinding.depthValue.setText(r.getString(R.string.val_depth, data.getDouble(SonarSampler.G_DEPTH)));
+        mBinding.temperatureValue.setText(r.getString(R.string.val_temperature, data.getDouble(SonarSampler.G_TEMPERATURE)));
+        mBinding.fishDepthValue.setText(r.getString(R.string.val_fish_depth, data.getDouble(SonarSampler.G_FISHDEPTH)));
+        mBinding.fishTypeValue.setText(r.getString(R.string.val_fish_strength, data.getInt(SonarSampler.I_FISHSTRENGTH)));
+        mBinding.strengthValue.setText(r.getString(R.string.val_strength, data.getInt(SonarSampler.I_STRENGTH)));
+        // Sonar samples are watermarked with the location
+        onLocationSample(data);
+        Format f = new SimpleDateFormat("HH:mm:ss");
+        mBinding.time.setText(f.format(new Date(data.getLong(SonarSampler.L_TIME))));
+        mBinding.samplesReceived.setText(r.getString(R.string.val_samples, ++((MainActivity)getActivity()).sonarSampleCount));
 
         mBinding.sonarView.sample(data);
     }
 
     // Handle incoming sample from the location service
-    private void onLocationSample(Location loc) {
+    private void onLocationSample(Bundle data) {
         Resources r = getResources();
-        mBinding.latitude.setText(r.getString(R.string.latitude_value, loc.getLatitude()));
-        mBinding.longitude.setText(r.getString(R.string.longitude_value, loc.getLongitude()));
+        mBinding.latitude.setText(r.getString(R.string.val_latitude, data.getDouble(LocationSampler.G_LATITUDE)));
+        mBinding.longitude.setText(r.getString(R.string.val_longitude, data.getDouble(LocationSampler.G_LONGITUDE)));
     }
 }

@@ -64,7 +64,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
             <TextView
                 android:id="@+id/connectionStatus"
                 style="@style/cell"
-                android:text="@array/bt_status"
                 android:textColor="@color/colorAccent"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toEndOf="parent"
@@ -84,7 +83,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
             <TextView
                 android:id="@+id/range"
                 style="@style/cell"
-                android:text="@string/range_value"
+                android:text="@string/val_range"
                 app:layout_constraintEnd_toStartOf="@+id/sensitivity"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toTopOf="parent" />
@@ -92,7 +91,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
             <TextView
                 android:id="@+id/sensitivity"
                 style="@style/cell"
-                android:text="@string/sensitivity_value"
+                android:text="@string/val_sensitivity"
                 app:layout_constraintEnd_toStartOf="@+id/noise"
                 app:layout_constraintStart_toEndOf="@id/range"
                 app:layout_constraintTop_toTopOf="parent" />
@@ -100,7 +99,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
             <TextView
                 android:id="@+id/noise"
                 style="@style/cell"
-                android:text="@string/noise_value"
+                android:text="@string/val_noise"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toEndOf="@+id/sensitivity"
                 app:layout_constraintTop_toTopOf="parent" />
@@ -118,7 +117,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
             <TextView
                 android:id="@+id/latitude"
                 style="@style/cell"
-                android:text="@string/latitude_value"
+                android:text="@string/val_latitude"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toStartOf="@+id/longitude"
                 app:layout_constraintStart_toStartOf="parent"
@@ -127,7 +126,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
             <TextView
                 android:id="@+id/longitude"
                 style="@style/cell"
-                android:text="@string/longitude_value"
+                android:text="@string/val_longitude"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toEndOf="@id/latitude"
@@ -146,7 +145,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
             <TextView
                 android:id="@+id/depth_value"
                 style="@style/cell"
-                android:text="@string/depth_value"
+                android:text="@string/val_depth"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toStartOf="@+id/strength_value"
                 app:layout_constraintStart_toStartOf="parent"
@@ -155,7 +154,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
             <TextView
                 android:id="@+id/strength_value"
                 style="@style/cell"
-                android:text="@string/strength_value"
+                android:text="@string/val_strength"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toEndOf="@id/depth_value"
@@ -164,47 +163,17 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
         </androidx.constraintlayout.widget.ConstraintLayout>
 
         <androidx.constraintlayout.widget.ConstraintLayout
-            android:id="@+id/misc_values"
+            android:id="@+id/fish_values"
             style="@style/row"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            app:layout_constraintBottom_toTopOf="@+id/fish_values"
+            app:layout_constraintBottom_toTopOf="@+id/misc_values"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/depth_values">
 
             <TextView
-                android:id="@+id/temperature_value"
-                style="@style/cell"
-                android:text="@string/temperature_value"
-                app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintEnd_toStartOf="@+id/battery_value"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toTopOf="parent" />
-
-            <TextView
-                android:id="@+id/battery_value"
-                style="@style/cell"
-                android:text="@string/battery_value"
-                app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintStart_toEndOf="@id/temperature_value"
-                app:layout_constraintTop_toTopOf="parent" />
-
-        </androidx.constraintlayout.widget.ConstraintLayout>
-
-        <androidx.constraintlayout.widget.ConstraintLayout
-            android:id="@+id/fish_values"
-            style="@style/row"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/misc_values">
-
-            <TextView
                 android:id="@+id/fish_depth_value"
                 style="@style/cell"
-                android:text="@string/fish_depth_value"
+                android:text="@string/val_fish_depth"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toStartOf="@+id/fish_type_value"
                 app:layout_constraintStart_toStartOf="parent"
@@ -213,10 +182,70 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
             <TextView
                 android:id="@+id/fish_type_value"
                 style="@style/cell"
-                android:text="@string/fish_type_value"
+                android:text="@string/val_fish_strength"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toEndOf="@id/fish_depth_value"
+                app:layout_constraintTop_toTopOf="parent" />
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
+
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:id="@+id/misc_values1"
+            style="@style/row"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:layout_constraintBottom_toTopOf="@id/misc_values2"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/fish_values">
+
+            <TextView
+                android:id="@+id/temperature_value"
+                style="@style/cell"
+                android:text="@string/val_temperature"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toStartOf="@+id/battery_value"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <TextView
+                android:id="@+id/battery_value"
+                style="@style/cell"
+                android:text="@string/val_battery"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toEndOf="@id/temperature_value"
+                app:layout_constraintTop_toTopOf="parent" />
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
+
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:id="@+id/misc_values2"
+            style="@style/row"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:layout_constraintTop_toBottomOf="@id/misc_values1"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent">
+
+            <TextView
+                android:id="@+id/time"
+                style="@style/cell"
+                android:text="@string/val_time"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toStartOf="@id/samples_received"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <TextView
+                android:id="@+id/samples_received"
+                style="@style/cell"
+                android:text="@string/val_samples"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toEndOf="@id/time"
                 app:layout_constraintTop_toTopOf="parent" />
 
         </androidx.constraintlayout.widget.ConstraintLayout>

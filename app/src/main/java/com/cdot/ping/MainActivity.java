@@ -21,10 +21,12 @@ package com.cdot.ping;
 import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
+import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
@@ -43,9 +45,9 @@ import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentTransaction;
 
 import com.cdot.ping.databinding.MainActivityBinding;
-import com.cdot.ping.services.LocationSampler;
-import com.cdot.ping.services.LoggingService;
-import com.cdot.ping.services.SonarSampler;
+import com.cdot.ping.samplers.LocationSampler;
+import com.cdot.ping.samplers.LoggingService;
+import com.cdot.ping.samplers.SonarSampler;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -75,6 +77,10 @@ public class MainActivity extends AppCompatActivity {
     private double minDeltaD = -1;
     private String sampleFile = null;
     private double minDeltaP = -1;
+    /**
+     * Count of all Sonar samples received, ever
+     */
+    public int sonarSampleCount = 0;
 
     // Connections to services
 
@@ -109,6 +115,18 @@ public class MainActivity extends AppCompatActivity {
     // Tracks the bound state of the service.
     private boolean mLoggingServiceBound = false;
 
+    private int mSonarSamplerState = SonarSampler.BT_STATE_DISCONNECTED;
+    private String mSonarSamplerDevice = null;
+    private final BroadcastReceiver mBroadcastReceiver = new BroadcastReceiver() {
+        public void onReceive(Context context, Intent intent) {
+            String action = intent.getAction();
+            if (SonarSampler.ACTION_BT_STATE.equals(action)) {
+                mSonarSamplerState = intent.getIntExtra(SonarSampler.EXTRA_STATE, R.string.reason_ok);
+                mSonarSamplerDevice = intent.getStringExtra(SonarSampler.EXTRA_DEVICE_ADDRESS);
+            }
+        }
+    };
+
     // Lifecycle management
 
     // See https://developer.android.com/guide/components/activities/activity-lifecycle
@@ -130,9 +148,13 @@ public class MainActivity extends AppCompatActivity {
         super.onStart();
 
         mPrefs = new Settings(this);
+        IntentFilter inf = new IntentFilter();
+        inf.addAction(SonarSampler.ACTION_BT_STATE);
+        registerReceiver(mBroadcastReceiver, inf);
 
         // Bind to the service. If the service is in foreground mode, this signals to the service
         // that since this activity is in the foreground, the service can exit foreground mode.
+        // If the service is already running, it should ping us with the status.
         bindService(new Intent(this, LoggingService.class), mLoggingServiceConnection, Context.BIND_AUTO_CREATE);
     }
 
@@ -148,6 +170,7 @@ public class MainActivity extends AppCompatActivity {
             unbindService(mLoggingServiceConnection);
             mLoggingServiceBound = false;
         }
+        unregisterReceiver(mBroadcastReceiver);
 
         super.onStop();
     }
@@ -253,7 +276,7 @@ public class MainActivity extends AppCompatActivity {
         // must be non-null before device service can be started
         BluetoothAdapter bta = BluetoothAdapter.getDefaultAdapter();
         if (bta == null) {
-
+            Log.e(TAG, "No bluetooth on this device");
         } else if (bta.isEnabled())
             findASonarDevice();
         else
@@ -266,12 +289,11 @@ public class MainActivity extends AppCompatActivity {
         if (!mLoggingServiceBound)
             return;
 
-        SonarSampler sam = (SonarSampler) mLoggingService.getSampler(SonarSampler.TAG);
-        Log.d(TAG, "findASonarDevice conn " + sam.getConnectedDevice());
-        if (sam.getBluetoothState() >= SonarSampler.BT_STATE_CONNECTING) {
+        if (mSonarSamplerState >= SonarSampler.BT_STATE_CONNECTING) {
+            Log.d(TAG, "Already connected to " + mSonarSamplerDevice);
             // Service is CONNECTED or CONNECTING - skip discovery and jump straight
             // to connected
-            openDevice(sam.getConnectedDevice());
+            openDevice(mSonarSamplerDevice);
             return;
         }
 
@@ -281,7 +303,7 @@ public class MainActivity extends AppCompatActivity {
             // using the paired devices, so sniff them first
             BluetoothAdapter bta = BluetoothAdapter.getDefaultAdapter();
             if (bta == null) {
-                openDevice(null);
+                openDevice((BluetoothDevice)null);
                 return;
             } else {
                 Set<BluetoothDevice> pairedDevices = bta.getBondedDevices();
@@ -343,6 +365,11 @@ public class MainActivity extends AppCompatActivity {
         tx.replace(R.id.fragment_container, f, TAG).commit();
     }
 
+    void openDevice(String address) {
+        BluetoothAdapter bta = BluetoothAdapter.getDefaultAdapter();
+        openDevice(bta.getRemoteDevice(address));
+    }
+
     /**
      * Reconfigure the device according to the current options
      *
@@ -354,7 +381,6 @@ public class MainActivity extends AppCompatActivity {
         int new_noise = mPrefs.getInt(Settings.PREF_NOISE);
         int new_range = mPrefs.getInt(Settings.PREF_RANGE);
         int new_minDeltaD = mPrefs.getInt(Settings.PREF_MIN_DEPTH_CHANGE); // mm
-        int new_minDeltaP = mPrefs.getInt(Settings.PREF_MIN_POS_CHANGE); // mm
         String new_sampleFile = mPrefs.getString(Settings.PREF_SAMPLE_FILE);
 
         if (changes.length > 0) {
@@ -370,9 +396,6 @@ public class MainActivity extends AppCompatActivity {
                     break;
                 case Settings.PREF_MIN_DEPTH_CHANGE:
                     new_minDeltaD = (int) changes[1];
-                    break;
-                case Settings.PREF_MIN_POS_CHANGE:
-                    new_minDeltaP = (int) changes[1];
                     break;
                 case Settings.PREF_SAMPLE_FILE:
                     new_sampleFile = (String) changes[1];
@@ -393,17 +416,11 @@ public class MainActivity extends AppCompatActivity {
                 SonarSampler sam = (SonarSampler) mLoggingService.getSampler(SonarSampler.TAG);
                 sam.configureSonar(new_sensitivity, new_noise, new_range, new_minDeltaD / 1000.0);
             }
-
-            if (new_minDeltaP != minDeltaP) {
-                LocationSampler sam = (LocationSampler) mLoggingService.getSampler(LocationSampler.TAG);
-                sam.configureLocation(new_minDeltaP / 1000.0);
-            }
         }
 
         sensitivity = new_sensitivity;
         noise = new_noise;
         range = new_range;
-        minDeltaP = new_minDeltaP;
         minDeltaD = new_minDeltaD;
         sampleFile = new_sampleFile;
     }

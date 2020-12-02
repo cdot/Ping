@@ -16,8 +16,9 @@
  * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
-package com.cdot.ping.services;
+package com.cdot.ping.samplers;
 
+import android.content.res.Resources;
 import android.location.Location;
 import android.os.Bundle;
 import android.os.Looper;
@@ -25,6 +26,7 @@ import android.util.Log;
 
 import androidx.annotation.NonNull;
 
+import com.cdot.ping.R;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationCallback;
 import com.google.android.gms.location.LocationRequest;
@@ -34,21 +36,35 @@ import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
 
 /**
- * Location sampling, provides location samples to LoggingService
+ * Location sampling, provides location data to LoggingService.
+ *
+ * For apps running in the background on "O" devices, location is computed only once every 10
+ * minutes and delivered batched every 30 minutes. This restriction applies even to apps
+ * targeting "N" or lower which are run on "O" devices. So a background service will only log
+ * samples every 30 minutes, which is useless for Ping. LoggingService puts itself into
+ * foreground using a Notification, so is able to keep sampling at a foreground rate.
+ *
+ * Note that this Sampler doesn't log it's own samples, instead it is used to watermark samples
+ * coming from the SonarSampler with the location.
  */
 public class LocationSampler extends Sampler {
     public static final String TAG = LocationSampler.class.getSimpleName();
 
+    // Keys into sample bundles
+    public static final String G_LATITUDE = "lat";
+    public static final String G_LONGITUDE = "lon";
+
     /**
      * The desired interval for location updates. Inexact. Updates may be more or less frequent.
+     * For Ping, every 500ms should be plenty.
      */
-    private static final long UPDATE_INTERVAL_IN_MILLISECONDS = 10000;// in production, use 500;
+    private static final long UPDATE_INTERVAL = 500;
 
     /**
      * The fastest rate for active location updates. Updates will never be more frequent
      * than this value.
      */
-    private static final long FASTEST_UPDATE_INTERVAL_IN_MILLISECONDS = UPDATE_INTERVAL_IN_MILLISECONDS / 2;
+    private static final long FASTEST_UPDATE_INTERVAL = UPDATE_INTERVAL / 2;
 
     // Provides access to the Fused Location Provider API.
     private FusedLocationProviderClient mFusedLocationClient;
@@ -56,9 +72,8 @@ public class LocationSampler extends Sampler {
     // Callback for changes in location coming from location services
     private LocationCallback mLocationCallback;
 
+    // Last location delivered from the Location services
     private Location mCurrentLocation;
-    private Location mLastLoggedLocation;
-    private double mMinDeltaPos = 0.5;
 
     @Override // Sampler
     void onAttach(LoggingService svc) {
@@ -76,8 +91,8 @@ public class LocationSampler extends Sampler {
 
         // Parameters used by {@link com.google.android.gms.location.FusedLocationProviderApi}.
         LocationRequest locationRequest = new LocationRequest();
-        locationRequest.setInterval(UPDATE_INTERVAL_IN_MILLISECONDS);
-        locationRequest.setFastestInterval(FASTEST_UPDATE_INTERVAL_IN_MILLISECONDS);
+        locationRequest.setInterval(UPDATE_INTERVAL);
+        locationRequest.setFastestInterval(FASTEST_UPDATE_INTERVAL);
         locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
 
         try {
@@ -100,11 +115,12 @@ public class LocationSampler extends Sampler {
         }
     }
 
-    @Override // implements Sampler
+    @Override // Sampler
     public String getTag() { return TAG; }
 
-    @Override // implements Sampler
-    public void onStoppedFromNotification() {
+    @Override // Sampler
+    public void stopSampling() {
+        Log.d(TAG, "stopped sampling");
         try {
             mFusedLocationClient.removeLocationUpdates(mLocationCallback);
         } catch (SecurityException unlikely) {
@@ -112,21 +128,10 @@ public class LocationSampler extends Sampler {
         }
     }
 
-    @Override // implements Sampler
-    public String getNotificationText() {
-        return mCurrentLocation == null ? "Unknown location" :
-                "(" + mCurrentLocation.getLatitude() + ", " + mCurrentLocation.getLongitude() + ")";
-    }
-
-    /**
-     * Configure the minimum criteria for logging a new sample, and start the service if
-     * it's not already running
-     *
-     * @param minDeltaPos min position move, in metres
-     */
-    public void configureLocation(double minDeltaPos) {
-        Log.d(TAG, "configureLocation(" + minDeltaPos + ")");
-        mMinDeltaPos = minDeltaPos;
+    @Override // Sampler
+    public String getNotificationStateText(Resources r) {
+        return r.getString(R.string.val_latitude, mCurrentLocation.getLatitude()) + " " +
+                r.getString(R.string.val_longitude, mCurrentLocation.getLongitude());
     }
 
     /*
@@ -135,24 +140,31 @@ public class LocationSampler extends Sampler {
      * there is a 68% probability that the true location is inside the circle.
      */
     private void onLocationSample(Location loc) {
-        boolean acceptable = (mCurrentLocation == null)
+        if (mCurrentLocation == null
+                || mMustLogNextSample
                 // if new location has better accuracy, always use it
                 || (loc.getAccuracy() <= mCurrentLocation.getAccuracy())
                 // if we've moved further than the current location accuracy
-                || (mCurrentLocation.distanceTo(loc) > mCurrentLocation.getAccuracy());
+                || (mCurrentLocation.distanceTo(loc) > mCurrentLocation.getAccuracy())) {
 
-        if (!acceptable)
-            return;
+            mCurrentLocation = loc;
 
-        mCurrentLocation = loc;
+            if (mMustLogNextSample) {
+                // This sampler only logs samples when explicitly asked to do so. Otherwise it
+                // just watermarks the samples from other samplers with the current location.
+                Bundle b = new Bundle();
+                watermark(b);
+                mService.logSample(b, TAG);
+                mMustLogNextSample = false;
+            }
+        }
+    }
 
-        // Have we staggered far enough to justify logging a new sample?
-        if (mMustLogNextSample || mLastLoggedLocation == null || mLastLoggedLocation.distanceTo(mCurrentLocation) >= mMinDeltaPos) {
-            mLastLoggedLocation = mCurrentLocation;
-            mMustLogNextSample = false;
-            Bundle sample = new Bundle();
-            sample.putParcelable("location", loc);
-            mService.logSample(sample, TAG);
+    @Override // Sampler
+    void watermark(Bundle b) {
+        if (mCurrentLocation != null) {
+            b.putDouble(G_LATITUDE, mCurrentLocation.getLatitude());
+            b.putDouble(G_LONGITUDE, mCurrentLocation.getLongitude());
         }
     }
 }
