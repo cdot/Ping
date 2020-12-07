@@ -20,16 +20,13 @@ package com.cdot.ping;
 
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.util.Log;
 
 import androidx.preference.PreferenceManager;
 
 import java.util.HashMap;
 
 /**
- * Because of limitations with the Android Preference resources - specifically, ListPreference
- * assumes the value is always a String - it's simpler if all preferences are stored as Strings
- * to simplify conversion. This class is used to interface to SharePreferences and read/write
+ * This class is used to wrap to SharedPreferences and read/write
  * preferences as their expected types. It also carries the default values and range limits
  * for all preferences.
  */
@@ -43,6 +40,8 @@ public class Settings {
     public static final String PREF_MIN_DEPTH_CHANGE = "minimumDepthChange";
     public static final int MIN_DEPTH_CHANGE_MIN = 100; // mm
     public static final int MIN_DEPTH_CHANGE_MAX = 5000; // mm
+
+    public static final String PREF_MIN_POS_CHANGE = "minimumPositionChange";
 
     // String representation of file URIs
     public static final String PREF_SAMPLE_FILE = "sampleFile";
@@ -84,6 +83,7 @@ public class Settings {
             put(PREF_RANGE, RANGE_AUTO);
             put(PREF_NOISE, NOISE_OFF);
             put(PREF_MIN_DEPTH_CHANGE, 250); // mm
+            put(PREF_MIN_POS_CHANGE, 500); // mm
         }
     };
 
@@ -101,6 +101,7 @@ public class Settings {
         mPrefs = PreferenceManager.getDefaultSharedPreferences(cxt);
     }
 
+    /* Debug, use if you ever change the type of a preference
     public void clear() {
         Log.d(TAG, "Clearing all preference values");
         SharedPreferences.Editor ed = mPrefs.edit();
@@ -111,7 +112,7 @@ public class Settings {
         ed.remove(PREF_SAMPLE_FILE);
         ed.remove(PREF_AUTOCONNECT);
         ed.commit();
-    }
+    }*/
 
     /**
      * Get the current value of an int preference.

@@ -83,10 +83,11 @@ public class DiscoveryFragment extends Fragment {
                     Log.d(TAG, mId + "Scan failed, internal error");
                     break;
             }
-            // Try again with a new scanner
-            Log.d(TAG, mId + "Starting BLE scan again");
-            mIgnoreScanResults = false;
-            mBLEScanner.startScan(new ScanBack("RESTART"));
+            if (mBLEScanner != null) { // Try again
+                Log.d(TAG, mId + "Starting BLE scan again");
+                mIgnoreScanResults = false;
+                mBLEScanner.startScan(new ScanBack("RESTART"));
+            }
         }
 
         public void onBatchScanResults(List<ScanResult> results) {
@@ -108,7 +109,7 @@ public class DiscoveryFragment extends Fragment {
             if (uuids != null && uuids.contains(new ParcelUuid(SonarSampler.BTS_CUSTOM))) {
                 if (mAutoConnect) {
                     // First device that offers the service we want. Fingers crossed!
-                    ((MainActivity) getActivity()).openDevice(device);
+                    getMainActivity().switchToConnectedFragment(device);
                     return;
                 }
                 if (!mDeviceList.contains(device)) {
@@ -120,25 +121,31 @@ public class DiscoveryFragment extends Fragment {
         }
     }
 
+    private MainActivity getMainActivity() {
+        return ((MainActivity)getActivity());
+    }
+    
     // Fragment lifecycle
     // see https://developer.android.com/guide/fragments/lifecycle
 
     @Override // Fragment
     public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
-        mBinding = DiscoveryFragmentBinding.inflate(inflater, container, false);
+        if (savedInstanceState != null && savedInstanceState.getBoolean("autoconnect"))
+            mAutoConnect = true;
 
-        mBinding.discoveryHelp.setText(mAutoConnect ? R.string.help_scan_first : R.string.help_scan_all);
+        mBinding = DiscoveryFragmentBinding.inflate(inflater, container, false);
+        mBinding.discoveryHelpTV.setText(mAutoConnect ? R.string.help_scan_first : R.string.help_scan_all);
 
         // Listener invoked when a device is selected for pairing. This is attached even
         // if there is no bluetooth, so we can test/demo it.
         AdapterView.OnItemClickListener clickListener = new AdapterView.OnItemClickListener() {
             public void onItemClick(AdapterView<?> adapterView, View v, int arg2, long arg3) {
                 BluetoothDevice device = (BluetoothDevice) mDeviceViewItems.get(arg2).get("device");
-                ((MainActivity) getActivity()).openDevice(device);
+                getMainActivity().switchToConnectedFragment(device);
             }
         };
 
-        mBinding.discoveredDevices.setOnItemClickListener(clickListener);
+        mBinding.devicesLV.setOnItemClickListener(clickListener);
 
         // LE discovery. ScanFilter just doesn't work. A scan without filtering finds the device, a scan with
         // filtering never invokes the callback.
@@ -156,7 +163,7 @@ public class DiscoveryFragment extends Fragment {
         mBLEScanner.startScan(new ScanBack("FIRST"));
         updateDisplay();
 
-        return mBinding.discoveryFragment;
+        return mBinding.discoveryF;
     }
 
     @Override // Fragment
@@ -172,8 +179,19 @@ public class DiscoveryFragment extends Fragment {
         }
     }
 
+    // No-arguments constructor needed when waking app from sleep
+    DiscoveryFragment() {
+        this(false);
+    }
+
     DiscoveryFragment(boolean autoconnect) {
         mAutoConnect = autoconnect;
+    }
+
+    @Override // Fragment
+    public void onSaveInstanceState(Bundle bundle) {
+        super.onSaveInstanceState(bundle);
+        bundle.putBoolean("autoconnect", mAutoConnect);
     }
 
     // Update display after lists contents changed
@@ -187,7 +205,7 @@ public class DiscoveryFragment extends Fragment {
             map.put("device", dr);
             mDeviceViewItems.add(map);
         }
-        mBinding.discoveredDevices.setAdapter(new SimpleAdapter(
+        mBinding.devicesLV.setAdapter(new SimpleAdapter(
                 getActivity(),
                 mDeviceViewItems,
                 R.layout.listview_device,
@@ -195,8 +213,8 @@ public class DiscoveryFragment extends Fragment {
                         "address", "name"
                 },
                 new int[]{
-                        R.id.deviceAddress, R.id.deviceName
+                        R.id.deviceAddressTV, R.id.deviceNameTV
                 }));
-        mBinding.discoveredDevices.setStackFromBottom(false);
+        mBinding.devicesLV.setStackFromBottom(false);
     }
 }

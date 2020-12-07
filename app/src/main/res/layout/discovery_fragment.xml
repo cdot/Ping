@@ -18,12 +18,12 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 -->
 <androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:id="@+id/discovery_fragment"
+    android:id="@+id/discoveryF"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
     <ListView
-        android:id="@+id/discovered_devices"
+        android:id="@+id/devicesLV"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:divider="@drawable/list_divider"
@@ -31,17 +31,17 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/discovery_help">
+        app:layout_constraintTop_toBottomOf="@id/discoveryHelpTV">
 
     </ListView>
 
     <TextView
-        android:id="@+id/discovery_help"
+        android:id="@+id/discoveryHelpTV"
         style="@style/cell"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:textAppearance="@style/TextAppearance.AppCompat.Body1"
-        app:layout_constraintBottom_toTopOf="@id/discovered_devices"
+        app:layout_constraintBottom_toTopOf="@id/devicesLV"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />

@@ -18,8 +18,8 @@
  */
 package com.cdot.ping.samplers;
 
+import android.bluetooth.BluetoothDevice;
 import android.content.res.Resources;
-import android.os.Bundle;
 
 import androidx.annotation.CallSuper;
 
@@ -49,17 +49,7 @@ abstract class Sampler {
      * Something is binding to the logging service we're attached to. Use this to alert
      * the binder to current status.
      */
-    void onBind() {
-    }
-
-    /**
-     * Mark the sample with incidental information that the Sampler knows, but has not
-     * logged using logSample. This is used to combine location information with sonar samples
-     * before sending them to listeners.
-     * @param sample
-     */
-    void watermark(Bundle sample) {
-    }
+    void onBind() {}
 
     /**
      * Called when the app is stopped and recording is disabled (so not foregrounding), or the
@@ -81,5 +71,20 @@ abstract class Sampler {
     @CallSuper
     void onDestroy() {
         mService = null;
+    }
+
+    /**
+     * Connect one or more samplers to a bluetooth device
+     * @param btd
+     */
+    void connectToDevice(BluetoothDevice btd) {
+    }
+
+    /**
+     * Get the first bluetooth device that has been connected to by a sampler.
+     * @return the device
+     */
+    BluetoothDevice getConnectedDevice() {
+       return null;
     }
 }

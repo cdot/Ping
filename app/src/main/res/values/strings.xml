@@ -109,9 +109,13 @@
     <string name="val_longitude">Longitude: %1$.5g</string>
     <string name="val_noise">Noise filter: %1$s</string>
     <string name="val_range">Range %1$s</string>
-    <string name="val_samples">Samples: %1$d</string>
+    <string name="val_logging_count">Samples: %1$d</string>
+    <string name="val_logging_rate">Rate: %1$.2gHz</string>
+    <string name="val_logging_time">Time: %1$s</string>
     <string name="val_sensitivity">Sensitivity: %1$d</string>
     <string name="val_strength">Strength: %1$d</string>
     <string name="val_temperature">Temperature: %1$.2g°C</string>
-    <string name="val_time">Time: %1$s</string>
+    <string name="default_device_name">Unspecified Bluetooth Device</string>
+    <string name="could_not_start_logging">Could not start logging</string>
+    <string name="pref_pos_delta">Minimum position change</string>
 </resources>

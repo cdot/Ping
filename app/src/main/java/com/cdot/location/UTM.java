@@ -22,9 +22,6 @@ package com.cdot.location;
 import android.location.Location;
 import android.location.LocationManager;
 
-import com.cdot.ping.surveying.IN;
-import com.cdot.ping.surveying.Units;
-
 public class UTM {
 
     /**

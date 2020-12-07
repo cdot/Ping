@@ -16,28 +16,33 @@
         android:summary="@string/help_sensitivity"
         android:title="@string/pref_sensitivity" />
 
-    <com.cdot.ping.IntListPreference
+    <com.cdot.ping.android.IntListPreference
         android:entries="@array/noise_options"
         android:entryValues="@array/noise_values"
         android:key="noise"
         android:summary="@string/help_noise"
         android:title="@string/pref_noise" />
 
-    <com.cdot.ping.IntListPreference
+    <com.cdot.ping.android.IntListPreference
         android:entries="@array/range_options"
         android:entryValues="@array/range_values"
         android:key="range"
         android:summary="@string/help_range"
         android:title="@string/pref_range" />
 
-    <Preference
-        android:key="sampleFile"
-        android:summary="@string/help_sampleFile"
-        android:title="@string/pref_sample_file" />
-
     <SeekBarPreference
         android:key="minimumDepthChange"
         android:summary="@string/help_minimumDepthChange"
         android:title="@string/pref_depth_delta" />
+
+    <SeekBarPreference
+        android:key="minimumPositionChange"
+        android:summary="@string/help_minimumPositionChange"
+        android:title="@string/pref_pos_delta" />
+
+    <Preference
+        android:key="sampleFile"
+        android:summary="@string/help_sampleFile"
+        android:title="@string/pref_sample_file" />
 
 </androidx.preference.PreferenceScreen>

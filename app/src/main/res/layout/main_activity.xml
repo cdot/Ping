@@ -17,8 +17,8 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 -->
 <androidx.fragment.app.FragmentContainerView xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/fragment_container"
+    android:id="@+id/fragmentContainerL"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
-
+    <!-- This is the container for one of discovery_fragment or connected_fragment -->
 </androidx.fragment.app.FragmentContainerView>

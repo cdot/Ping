@@ -24,16 +24,17 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.bluetooth.BluetoothDevice;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.res.AssetFileDescriptor;
 import android.content.res.Configuration;
+import android.location.Location;
 import android.media.AudioAttributes;
 import android.net.Uri;
 import android.os.Binder;
 import android.os.Build;
-import android.os.Bundle;
 import android.os.IBinder;
 import android.util.Log;
 
@@ -42,17 +43,23 @@ import androidx.core.app.NotificationCompat;
 import com.cdot.ping.MainActivity;
 import com.cdot.ping.R;
 
-import org.json.JSONException;
-import org.json.JSONObject;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.xml.sax.InputSource;
 
-import java.io.FileNotFoundException;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.PrintWriter;
+import java.io.FileInputStream;
 import java.text.DateFormat;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.transform.OutputKeys;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
 
 /**
  * Log incoming samples to a file.
@@ -75,7 +82,6 @@ public class LoggingService extends Service {
     public static final String ACTION_SAMPLE = CLASS_NAME + ".action_sample";
 
     public static final String EXTRA_SAMPLE_DATA = CLASS_NAME + ".sample_data";
-    public static final String EXTRA_SAMPLE_SOURCE = CLASS_NAME + ".sample_source";
 
     // Extra to tell us if we arrived in onStartCommand from the Notification
     protected static final String EXTRA_STARTED_FROM_NOTIFICATION =
@@ -90,12 +96,10 @@ public class LoggingService extends Service {
 
     protected NotificationManager mNotificationManager;
 
-    protected PrintWriter mSampleWriter = null;
-
-    // DEBUG: Set to true in subclasses to keep this service running even when all clients are unbound
+    // Set to true to keep this service running even when all clients are unbound
     // and logging is disabled.
     // TODO: set this false before pre-release testing
-    protected boolean mKeepRunning = true;
+    private static final boolean DEBUG_IMMORTAL = false;
 
     /**
      * The identifier for the notification displayed for the foreground service.
@@ -122,8 +126,19 @@ public class LoggingService extends Service {
         return mSamplers.get(id);
     }
 
+    private double mAverageSamplingRate = 0; // rolling average sampling rate
+    private long mTotalSampleCount = 0;
+    private long mLastSampleTime = System.currentTimeMillis();
+    private long mRecordingStartTime = mLastSampleTime;
+
+    private Uri mGPXFileUri;
+    private Document mGPXDocument = null; // GPX document
+    private Element mGPX_trkseg = null; // GPX <trk>...</trk>
+
     @Override // Service
     public void onCreate() {
+        Log.d(TAG, "onCreate");
+
         mNotificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
 
         // Android O requires a Notification Channel.
@@ -134,7 +149,7 @@ public class LoggingService extends Service {
                     new NotificationChannel(CHANNEL_ID, name, NotificationManager.IMPORTANCE_LOW);
 
             // TODO: This doesn't seem to do anything with IMPORTANCE_DEFAULT, AFAICT code is correct
-            Uri soundUri = Uri.parse(ContentResolver.SCHEME_ANDROID_RESOURCE + "://"+ getApplicationContext().getPackageName() + "/" + R.raw.ping);
+            Uri soundUri = Uri.parse(ContentResolver.SCHEME_ANDROID_RESOURCE + "://" + getApplicationContext().getPackageName() + "/" + R.raw.ping);
             AudioAttributes.Builder ab = new AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_NOTIFICATION)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION);
@@ -150,11 +165,24 @@ public class LoggingService extends Service {
     /**
      * This is how users of the service add samplers to it. Doesn't check if the sampler is already
      * there!
+     *
      * @param s sampler to add
      */
     public void addSampler(Sampler s) {
         mSamplers.put(s.getTag(), s);
         s.onAttach(this);
+    }
+
+    public long getLoggingTime() {
+        return System.currentTimeMillis() - mRecordingStartTime;
+    }
+
+    public double getAverageSamplingRate() {
+        return mAverageSamplingRate;
+    }
+
+    public long getSampleCount() {
+        return mTotalSampleCount;
     }
 
     @Override
@@ -177,6 +205,7 @@ public class LoggingService extends Service {
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
+        Log.d(TAG, "onConfigurationChanged()");
         mJustAConfigurationChange = true;
     }
 
@@ -185,7 +214,7 @@ public class LoggingService extends Service {
         // Called when a client (MainActivity in case of this sample) comes to the foreground
         // and binds with this service. The service should cease to be a foreground service
         // when that happens.
-        Log.d(TAG, "onBind()");
+        Log.d(TAG, "onBind() conf " + mJustAConfigurationChange + " fg " + isRunningInForeground());
         stopForeground(true);
         mJustAConfigurationChange = false;
         for (Sampler s : mSamplers.values())
@@ -198,7 +227,7 @@ public class LoggingService extends Service {
         // Called when a client (MainActivity in case of this sample) returns to the foreground
         // and binds once again with this service. The service should cease to be a foreground
         // service when that happens.
-        Log.d(TAG, "onRebind()");
+        Log.d(TAG, "onRebind() conf " + mJustAConfigurationChange + " fg " + isRunningInForeground());
         stopForeground(true);
         mJustAConfigurationChange = false;
         super.onRebind(intent);
@@ -206,11 +235,11 @@ public class LoggingService extends Service {
 
     @Override
     public boolean onUnbind(Intent intent) {
-        Log.d(TAG, "in onUnbind()");
+        Log.d(TAG, "onUnbind()");
 
-        if (mJustAConfigurationChange)
+        if (mJustAConfigurationChange) {
             Log.d(TAG, "Unbinding due to a configuration change");
-        else if (mKeepRunning || mSampleWriter != null) {
+        } else if (DEBUG_IMMORTAL || mGPXDocument != null) {
             Log.d(TAG, "Starting foreground service");
             startForeground(NOTIFICATION_1D, getNotification());
         } else {
@@ -223,17 +252,32 @@ public class LoggingService extends Service {
         return true; // Ensures onRebind() is called when a client re-binds.
     }
 
-    @Override
+    @Override // Service
     public void onDestroy() {
+        // Why are we destroyed when the screen is rotated? Possibly because it is resource hungry.
         Log.d(TAG, "onDestroy");
-        for (Sampler s : mSamplers.values())
+        for (Sampler s : mSamplers.values()) {
+            s.stopSampling();
             s.onDestroy();
+        }
     }
 
+    public void connectToDevice(BluetoothDevice btd) {
+        for (Sampler s : mSamplers.values())
+            s.connectToDevice(btd);
+    }
+
+    public BluetoothDevice getConnectedDevice() {
+               for (Sampler s : mSamplers.values()) {
+                   BluetoothDevice dev = s.getConnectedDevice();
+                   if (dev != null) return dev;
+               }
+               return null;
+    }
     /**
      * Returns the {@link NotificationCompat} displayed in the notification drawers.
      */
-    Notification getNotification() {
+    private Notification getNotification() {
         Intent intent = new Intent(this, this.getClass());
 
         // Tell onStartCommand it was called from the Notification
@@ -270,6 +314,20 @@ public class LoggingService extends Service {
         return builder.build();
     }
 
+    // Write XML to mLogUri
+    private void saveSampleDocument() {
+        try {
+            AssetFileDescriptor afd = getContentResolver().openAssetFileDescriptor(mGPXFileUri, "w");
+            Transformer transformer = TransformerFactory.newInstance().newTransformer();
+            transformer.setOutputProperty(OutputKeys.INDENT, "yes");
+            DOMSource source = new DOMSource(mGPXDocument);
+            StreamResult result = new StreamResult(afd.createOutputStream());
+            transformer.transform(source, result);
+            afd.close();
+        } catch (Exception ignore) {
+        }
+    }
+
     /**
      * Returns true if this is currently a foreground service.
      */
@@ -282,26 +340,24 @@ public class LoggingService extends Service {
         return false;
     }
 
-    /**
-     * Samplers call this to log a sample. Samples are written in JSON format.
-     * @param sample Bundle containing the sample. The content of the bundle is set by the Sampler.
-     * @param source TAG of the Sampler that generated the sample
-     */
-    void logSample(Bundle sample, String source) {
-        // Watermark the sample with data from samplers that want to contribute. In our case,
-        // the LocationSampler watermarks Sonar samples with a location.
-        for (Sampler s : mSamplers.values())
-            s.watermark(sample);
-        if (mSampleWriter != null) {
-            JSONObject json = new JSONObject();
-            try {
-                for (String key : sample.keySet()) {
-                    json.put(key, sample.get(key));
-                }
-                mSampleWriter.println(json);
-            } catch (JSONException ex) {
-                Log.e(TAG, ex.toString());
-            }
+    // Called from LocationSampler
+    void onLocationSample(Location loc) {
+        ((SonarSampler) getSampler(SonarSampler.TAG)).setLocation(loc);
+    }
+
+    // Called from SonarSampler
+    void onSonarSample(Sample sample) {
+        // "real" device has a sample rate around 12Hz
+        long now = System.currentTimeMillis();
+        double samplingRate = 1000.0 / (now - mLastSampleTime);
+        mAverageSamplingRate = ((mAverageSamplingRate * mTotalSampleCount) + samplingRate) / (mTotalSampleCount + 1);
+        mTotalSampleCount++;
+        mLastSampleTime = now;
+
+        if (mGPXDocument != null) {
+            Element GPX_trkpt = sample.toGPX(mGPXDocument);
+            mGPX_trkseg.appendChild(GPX_trkpt);
+            saveSampleDocument();
         }
 
         // Update notification content if running as a foreground service.
@@ -310,10 +366,13 @@ public class LoggingService extends Service {
         else {
             //Log.d(TAG, "Broadcasting sample from " + source);
             Intent intent = new Intent(ACTION_SAMPLE);
-            intent.putExtra(EXTRA_SAMPLE_SOURCE, source);
             intent.putExtra(EXTRA_SAMPLE_DATA, sample);
             sendBroadcast(intent);
         }
+    }
+
+    public boolean isLogging() {
+        return mGPXDocument != null;
     }
 
     /**
@@ -321,28 +380,52 @@ public class LoggingService extends Service {
      *
      * @param suri URI to log to
      */
-    public void startLogging(String suri) {
-        Uri mLogUri = Uri.parse(suri);
+    public boolean startLogging(String suri) {
+        Log.d(TAG, "startLogging()");
+        mGPXFileUri = Uri.parse(suri);
         // Check it exists, create it if not
         try {
-            AssetFileDescriptor afd;
-            FileWriter fw = null;
+            DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+            dbf.setNamespaceAware(true);
+            dbf.setValidating(false);
+            DocumentBuilder db = dbf.newDocumentBuilder();
+            Element GPX_trk;
             try {
-                getContentResolver().openAssetFileDescriptor(mLogUri, "r").close();
-                afd = getContentResolver().openAssetFileDescriptor(mLogUri, "wa");
-                fw = new FileWriter(afd.getFileDescriptor());
-            } catch (FileNotFoundException fnfe) {
-                afd = getContentResolver().openAssetFileDescriptor(mLogUri, "w");
-                fw = new FileWriter(afd.getFileDescriptor());
+                AssetFileDescriptor afd = getContentResolver().openAssetFileDescriptor(mGPXFileUri, "r");
+                InputSource source = new InputSource(new FileInputStream(afd.getFileDescriptor()));
+                mGPXDocument = db.parse(source);
+                GPX_trk = (Element) mGPXDocument.getElementsByTagNameNS(GPX.NS_GPX, "trk").item(0);
+                afd.close();
+            } catch (Exception ouch) {
+                Log.e(TAG, ouch.toString());
+                mGPXDocument = db.newDocument();
+                mGPXDocument.setDocumentURI(suri);
+                mGPXDocument.setXmlVersion("1.1");
+                mGPXDocument.setXmlStandalone(true);
+                Element GPX_gpx = mGPXDocument.createElementNS(GPX.NS_GPX, "gpx");
+                GPX_gpx.setAttribute("version", "1.1");
+                GPX_gpx.setAttribute("creator", getApplicationContext().getResources().getString(R.string.app_name));
+                mGPXDocument.appendChild(GPX_gpx);
+                GPX_trk = mGPXDocument.createElementNS(GPX.NS_GPX, "trk");
+                GPX_gpx.appendChild(GPX_trk);
             }
-            mSampleWriter = new PrintWriter(fw);
+            // Create new trkseg element for this trace
+            mGPX_trkseg = mGPXDocument.createElementNS(GPX.NS_GPX, "trkseg");
+            GPX_trk.appendChild(mGPX_trkseg);
+
             // Force the next sample to be recorded
             for (Sampler s : mSamplers.values())
                 s.mMustLogNextSample = true;
+            mRecordingStartTime = System.currentTimeMillis();
+            mAverageSamplingRate = 0; // rolling average sampling rate
+            mTotalSampleCount = 0;
             Log.d(TAG, "startLogging to '" + suri + "'");
-        } catch (IOException ioe) {
-            Log.e(TAG, "startLogging failed: could not open '" + mLogUri + "' " + ioe);
-            mSampleWriter = null;
+            return true;
+        } catch (Exception ioe) {
+            Log.e(TAG, "startLogging failed: could not open '" + mGPXFileUri + "' " + ioe);
+            mGPXDocument = null;
+            mGPX_trkseg = null;
+            return false;
         }
     }
 
@@ -350,9 +433,8 @@ public class LoggingService extends Service {
      * Stop logging.
      */
     public void stopLogging() {
-        if (mSampleWriter == null)
-            return;
-        mSampleWriter.close();
-        mSampleWriter = null;
+        Log.d(TAG, "stopLogging()");
+        mGPXDocument = null;
+        mGPX_trkseg = null;
     }
 }

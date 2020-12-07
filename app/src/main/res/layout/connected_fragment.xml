@@ -18,234 +18,243 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 -->
 <androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:id="@+id/connected_fragment"
+    android:id="@+id/connectedFragmentL"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical">
 
     <androidx.constraintlayout.widget.ConstraintLayout
-        android:id="@+id/text_pane"
+        android:id="@+id/infoPaneL"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        app:layout_constraintBottom_toTopOf="@+id/sonarView"
+        app:layout_constraintBottom_toTopOf="@+id/sonarV"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent">
 
         <androidx.constraintlayout.widget.ConstraintLayout
-            android:id="@+id/device_details"
+            android:id="@+id/deviceInfoL"
             style="@style/row"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            app:layout_constraintBottom_toTopOf="@+id/settings"
+            app:layout_constraintBottom_toTopOf="@+id/locationInfoL"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent">
 
             <TextView
-                android:id="@+id/device_name"
+                android:id="@+id/deviceNameTV"
                 style="@style/cell"
                 android:text="@string/reason_no_device"
-                app:layout_constraintBottom_toTopOf="@+id/device_address"
-                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toStartOf="@+id/connectionStatusTV"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toTopOf="parent" />
 
-            <TextView
-                android:id="@+id/device_address"
+            <!--TextView
+                android:id="@+id/deviceAddressTV"
                 style="@style/cell"
                 android:text="@string/help_bt_address"
                 android:textAppearance="@style/TextAppearance.AppCompat.Small"
-                app:layout_constraintBottom_toTopOf="@id/connectionStatus"
+                app:layout_constraintBottom_toTopOf="@id/connectionStatusTV"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toBottomOf="@id/device_name" />
+                app:layout_constraintTop_toBottomOf="@id/deviceNameTV" / -->
 
             <TextView
-                android:id="@+id/connectionStatus"
+                android:id="@+id/connectionStatusTV"
                 style="@style/cell"
                 android:textColor="@color/colorAccent"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toBottomOf="@id/device_address" />
+                app:layout_constraintStart_toEndOf="@id/deviceNameTV"
+                app:layout_constraintTop_toTopOf="parent" />
 
         </androidx.constraintlayout.widget.ConstraintLayout>
 
-        <androidx.constraintlayout.widget.ConstraintLayout
-            android:id="@+id/settings"
+        <!--androidx.constraintlayout.widget.ConstraintLayout
+            android:id="@+id/settingsL"
             style="@style/row"
-            app:layout_constraintBottom_toTopOf="@+id/latlong_values"
+            app:layout_constraintBottom_toTopOf="@+id/locationInfoL"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/device_details">
+            app:layout_constraintTop_toBottomOf="@id/deviceInfoL">
 
             <TextView
-                android:id="@+id/range"
+                android:id="@+id/rangeTV"
                 style="@style/cell"
                 android:text="@string/val_range"
-                app:layout_constraintEnd_toStartOf="@+id/sensitivity"
+                app:layout_constraintEnd_toStartOf="@+id/sensitivityTV"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toTopOf="parent" />
 
             <TextView
-                android:id="@+id/sensitivity"
+                android:id="@+id/sensitivityTV"
                 style="@style/cell"
                 android:text="@string/val_sensitivity"
-                app:layout_constraintEnd_toStartOf="@+id/noise"
-                app:layout_constraintStart_toEndOf="@id/range"
+                app:layout_constraintEnd_toStartOf="@+id/noiseTV"
+                app:layout_constraintStart_toEndOf="@id/rangeTV"
                 app:layout_constraintTop_toTopOf="parent" />
 
             <TextView
-                android:id="@+id/noise"
+                android:id="@+id/noiseTV"
                 style="@style/cell"
                 android:text="@string/val_noise"
                 app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintStart_toEndOf="@+id/sensitivity"
+                app:layout_constraintStart_toEndOf="@+id/sensitivityTV"
                 app:layout_constraintTop_toTopOf="parent" />
 
-        </androidx.constraintlayout.widget.ConstraintLayout>
+        </androidx.constraintlayout.widget.ConstraintLayout -->
 
         <androidx.constraintlayout.widget.ConstraintLayout
-            android:id="@+id/latlong_values"
+            android:id="@+id/locationInfoL"
             style="@style/row"
-            app:layout_constraintBottom_toTopOf="@id/depth_values"
+            app:layout_constraintBottom_toTopOf="@id/depthInfoL"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/settings">
+            app:layout_constraintTop_toBottomOf="@id/deviceInfoL">
 
             <TextView
-                android:id="@+id/latitude"
+                android:id="@+id/latitudeTV"
                 style="@style/cell"
                 android:text="@string/val_latitude"
                 app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintEnd_toStartOf="@+id/longitude"
+                app:layout_constraintEnd_toStartOf="@+id/longitudeTV"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toTopOf="parent" />
 
             <TextView
-                android:id="@+id/longitude"
+                android:id="@+id/longitudeTV"
                 style="@style/cell"
                 android:text="@string/val_longitude"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintStart_toEndOf="@id/latitude"
+                app:layout_constraintStart_toEndOf="@id/latitudeTV"
                 app:layout_constraintTop_toTopOf="parent" />
 
         </androidx.constraintlayout.widget.ConstraintLayout>
 
         <androidx.constraintlayout.widget.ConstraintLayout
-            android:id="@+id/depth_values"
+            android:id="@+id/depthInfoL"
             style="@style/row"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/latlong_values">
+            app:layout_constraintTop_toBottomOf="@id/locationInfoL">
 
             <TextView
-                android:id="@+id/depth_value"
+                android:id="@+id/depthTV"
                 style="@style/cell"
                 android:text="@string/val_depth"
                 app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintEnd_toStartOf="@+id/strength_value"
+                app:layout_constraintEnd_toStartOf="@+id/strengthTV"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toTopOf="parent" />
 
             <TextView
-                android:id="@+id/strength_value"
+                android:id="@+id/strengthTV"
                 style="@style/cell"
                 android:text="@string/val_strength"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintStart_toEndOf="@id/depth_value"
+                app:layout_constraintStart_toEndOf="@id/depthTV"
                 app:layout_constraintTop_toTopOf="parent" />
 
         </androidx.constraintlayout.widget.ConstraintLayout>
 
         <androidx.constraintlayout.widget.ConstraintLayout
-            android:id="@+id/fish_values"
+            android:id="@+id/fishInfoL"
             style="@style/row"
-            app:layout_constraintBottom_toTopOf="@+id/misc_values"
+            app:layout_constraintBottom_toTopOf="@+id/tempAndBatInfoL"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/depth_values">
+            app:layout_constraintTop_toBottomOf="@id/depthInfoL">
 
             <TextView
-                android:id="@+id/fish_depth_value"
+                android:id="@+id/fishDepthTV"
                 style="@style/cell"
                 android:text="@string/val_fish_depth"
                 app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintEnd_toStartOf="@+id/fish_type_value"
+                app:layout_constraintEnd_toStartOf="@+id/fishStrengthTV"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toTopOf="parent" />
 
             <TextView
-                android:id="@+id/fish_type_value"
+                android:id="@+id/fishStrengthTV"
                 style="@style/cell"
                 android:text="@string/val_fish_strength"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintStart_toEndOf="@id/fish_depth_value"
+                app:layout_constraintStart_toEndOf="@id/fishDepthTV"
                 app:layout_constraintTop_toTopOf="parent" />
 
         </androidx.constraintlayout.widget.ConstraintLayout>
 
         <androidx.constraintlayout.widget.ConstraintLayout
-            android:id="@+id/misc_values1"
+            android:id="@+id/tempAndBatInfoL"
             style="@style/row"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            app:layout_constraintBottom_toTopOf="@id/misc_values2"
+            app:layout_constraintBottom_toTopOf="@id/generalInfoL"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/fish_values">
+            app:layout_constraintTop_toBottomOf="@id/fishInfoL">
 
             <TextView
-                android:id="@+id/temperature_value"
+                android:id="@+id/tempTV"
                 style="@style/cell"
                 android:text="@string/val_temperature"
                 app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintEnd_toStartOf="@+id/battery_value"
+                app:layout_constraintEnd_toStartOf="@+id/batteryTV"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toTopOf="parent" />
 
             <TextView
-                android:id="@+id/battery_value"
+                android:id="@+id/batteryTV"
                 style="@style/cell"
                 android:text="@string/val_battery"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintStart_toEndOf="@id/temperature_value"
+                app:layout_constraintStart_toEndOf="@id/tempTV"
                 app:layout_constraintTop_toTopOf="parent" />
 
         </androidx.constraintlayout.widget.ConstraintLayout>
 
         <androidx.constraintlayout.widget.ConstraintLayout
-            android:id="@+id/misc_values2"
+            android:id="@+id/generalInfoL"
             style="@style/row"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            app:layout_constraintTop_toBottomOf="@id/misc_values1"
+            app:layout_constraintTop_toBottomOf="@id/tempAndBatInfoL"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintBottom_toBottomOf="parent">
 
             <TextView
-                android:id="@+id/time"
+                android:id="@+id/logRateTV"
                 style="@style/cell"
-                android:text="@string/val_time"
-                app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintEnd_toStartOf="@id/samples_received"
+                android:text="@string/val_logging_rate"
+                app:layout_constraintEnd_toStartOf="@id/logCountTV"
                 app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintTop_toTopOf="parent" />
 
             <TextView
-                android:id="@+id/samples_received"
+                android:id="@+id/logCountTV"
                 style="@style/cell"
-                android:text="@string/val_samples"
+                android:text="@string/val_logging_count"
+                app:layout_constraintEnd_toStartOf="@id/logTimeTV"
+                app:layout_constraintStart_toEndOf="@id/logRateTV"
                 app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <TextView
+                android:id="@+id/logTimeTV"
+                style="@style/cell"
+                android:text="@string/val_logging_time"
                 app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintStart_toEndOf="@id/time"
+                app:layout_constraintStart_toEndOf="@id/logCountTV"
+                app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintTop_toTopOf="parent" />
 
         </androidx.constraintlayout.widget.ConstraintLayout>
@@ -253,22 +262,22 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
     </androidx.constraintlayout.widget.ConstraintLayout>
 
     <com.cdot.ping.SonarView
-        android:id="@+id/sonarView"
+        android:id="@+id/sonarV"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/text_pane" />
+        app:layout_constraintTop_toBottomOf="@id/infoPaneL" />
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/record"
+        android:id="@+id/recordFAB"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_margin="16dp"
         android:contentDescription="@string/start_recording"
         android:src="@android:drawable/ic_media_play"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
+        app:layout_constraintTop_toTopOf="@id/sonarV"
+        app:layout_constraintStart_toStartOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

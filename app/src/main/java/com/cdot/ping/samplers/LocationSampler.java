@@ -20,7 +20,6 @@ package com.cdot.ping.samplers;
 
 import android.content.res.Resources;
 import android.location.Location;
-import android.os.Bundle;
 import android.os.Looper;
 import android.util.Log;
 
@@ -50,10 +49,6 @@ import com.google.android.gms.tasks.Task;
 public class LocationSampler extends Sampler {
     public static final String TAG = LocationSampler.class.getSimpleName();
 
-    // Keys into sample bundles
-    public static final String G_LATITUDE = "lat";
-    public static final String G_LONGITUDE = "lon";
-
     /**
      * The desired interval for location updates. Inexact. Updates may be more or less frequent.
      * For Ping, every 500ms should be plenty.
@@ -74,6 +69,8 @@ public class LocationSampler extends Sampler {
 
     // Last location delivered from the Location services
     private Location mCurrentLocation;
+
+    private double mMinDeltaPos = 1; //m
 
     @Override // Sampler
     void onAttach(LoggingService svc) {
@@ -134,37 +131,31 @@ public class LocationSampler extends Sampler {
                 r.getString(R.string.val_longitude, mCurrentLocation.getLongitude());
     }
 
+    public void configure(double mdp) {
+        mMinDeltaPos = mdp;
+        mMustLogNextSample = true;
+    }
+
     /*
      * Accuracy is the radius of 68% confidence. If you draw a circle centered at this
      * location's latitude and longitude, and with a radius equal to the locationAccuracy (metres), then
      * there is a 68% probability that the true location is inside the circle.
      */
     private void onLocationSample(Location loc) {
+        if (mService == null)
+            return; // Service has been destroyed
+
         if (mCurrentLocation == null
                 || mMustLogNextSample
                 // if new location has better accuracy, always use it
-                || (loc.getAccuracy() <= mCurrentLocation.getAccuracy())
-                // if we've moved further than the current location accuracy
-                || (mCurrentLocation.distanceTo(loc) > mCurrentLocation.getAccuracy())) {
+                || (loc.getAccuracy() < mCurrentLocation.getAccuracy())
+                // if we've moved further than the current location accuracy or the target min delta
+                || (mCurrentLocation.distanceTo(loc) > Math.min(mCurrentLocation.getAccuracy(), mMinDeltaPos))) {
 
             mCurrentLocation = loc;
 
-            if (mMustLogNextSample) {
-                // This sampler only logs samples when explicitly asked to do so. Otherwise it
-                // just watermarks the samples from other samplers with the current location.
-                Bundle b = new Bundle();
-                watermark(b);
-                mService.logSample(b, TAG);
-                mMustLogNextSample = false;
-            }
-        }
-    }
-
-    @Override // Sampler
-    void watermark(Bundle b) {
-        if (mCurrentLocation != null) {
-            b.putDouble(G_LATITUDE, mCurrentLocation.getLatitude());
-            b.putDouble(G_LONGITUDE, mCurrentLocation.getLongitude());
+            mService.onLocationSample(mCurrentLocation);
+            mMustLogNextSample = false;
         }
     }
 }

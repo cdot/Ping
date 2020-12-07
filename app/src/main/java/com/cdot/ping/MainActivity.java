@@ -21,12 +21,10 @@ package com.cdot.ping;
 import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
-import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
@@ -67,25 +65,22 @@ public class MainActivity extends AppCompatActivity {
     private Settings mPrefs;
     private String mPickingFileFor;
 
-    private boolean mRecordingOn = false;
-
     // Cache of current settings, so we can detect when they change. Initial crazy values will be
     // replaced as soon as settingsChanged is called (which it will be when the services start)
     private int sensitivity = -1;
     private int noise = -1;
     private int range = -1;
-    private double minDeltaD = -1;
+    private int minDeltaD = -1;
+    private float minDeltaPos = -1;
     private String sampleFile = null;
-    private double minDeltaP = -1;
-    /**
-     * Count of all Sonar samples received, ever
-     */
-    public int sonarSampleCount = 0;
 
     // Connections to services
 
-    // A reference to the service used to get location updates.
-    private LoggingService mLoggingService = null;
+    // A reference to the service used to get location updates. Used by Fragments.
+    LoggingService mLoggingService = null;
+    // Tracks the bound state of the service. Only meaningful if mLoggingService != null
+    private boolean mLoggingServiceBound = false;
+
     // Monitors the state of the connection to the location service.
     private final ServiceConnection mLoggingServiceConnection = new ServiceConnection() {
 
@@ -112,56 +107,74 @@ public class MainActivity extends AppCompatActivity {
             mLoggingServiceBound = false;
         }
     };
-    // Tracks the bound state of the service.
-    private boolean mLoggingServiceBound = false;
 
-    private int mSonarSamplerState = SonarSampler.BT_STATE_DISCONNECTED;
-    private String mSonarSamplerDevice = null;
+    /*USELESS handled in ConnectedFragment
     private final BroadcastReceiver mBroadcastReceiver = new BroadcastReceiver() {
         public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();
             if (SonarSampler.ACTION_BT_STATE.equals(action)) {
                 mSonarSamplerState = intent.getIntExtra(SonarSampler.EXTRA_STATE, R.string.reason_ok);
-                mSonarSamplerDevice = intent.getStringExtra(SonarSampler.EXTRA_DEVICE_ADDRESS);
             }
         }
-    };
+    };*/
 
     // Lifecycle management
 
+//    @Override // Activity
+//    protected void onSaveInstanceState(Bundle bits) {
+//        super.onSaveInstanceState(bits);
+//    }
+
+    @Override // Activity
+    protected void onRestoreInstanceState(Bundle bits) {
+        sensitivity = mPrefs.getInt(Settings.PREF_SENSITIVITY);
+        noise = mPrefs.getInt(Settings.PREF_NOISE);
+        range = mPrefs.getInt(Settings.PREF_RANGE);
+        minDeltaD = mPrefs.getInt(Settings.PREF_MIN_DEPTH_CHANGE);
+        minDeltaPos = mPrefs.getInt(Settings.PREF_MIN_POS_CHANGE);
+        super.onRestoreInstanceState(bits);
+    }
+
     // See https://developer.android.com/guide/components/activities/activity-lifecycle
-    @Override
+    @Override // Activity
     protected void onCreate(Bundle savedInstanceState) {
         Log.d(TAG, "onCreate");
         super.onCreate(savedInstanceState);
 
+        /* Or android:screenOrientation="locked" on the activity tag in AndroidManifest.xml to
+         prevent configuration changes. This is because a configuration change inevitably ends up
+         killing the logging service, I guess because it is resource hungry?
+         Use this if it can't be fixed.
+          @see https://android.jlelse.eu/handling-orientation-changes-in-android-7072958c442a */
+        //setRequestedOrientation (ActivityInfo.SCREEN_ORIENTATION_LOCKED);
+
         MainActivityBinding binding = MainActivityBinding.inflate(getLayoutInflater());
-        setContentView(binding.fragmentContainer);
+        setContentView(binding.fragmentContainerL);
 
         getPermissions();
     }
 
     // See https://developer.android.com/guide/components/activities/activity-lifecycle
-    @Override
+    @Override // Activity
     protected void onStart() {
-        Log.d(TAG, "onStart, binding service");
+        Log.d(TAG, "onStart");
         super.onStart();
-
-        mPrefs = new Settings(this);
-        IntentFilter inf = new IntentFilter();
-        inf.addAction(SonarSampler.ACTION_BT_STATE);
-        registerReceiver(mBroadcastReceiver, inf);
 
         // Bind to the service. If the service is in foreground mode, this signals to the service
         // that since this activity is in the foreground, the service can exit foreground mode.
         // If the service is already running, it should ping us with the status.
-        bindService(new Intent(this, LoggingService.class), mLoggingServiceConnection, Context.BIND_AUTO_CREATE);
+        bindService(new Intent(getApplicationContext(), LoggingService.class), mLoggingServiceConnection, Context.BIND_AUTO_CREATE);
+
+        mPrefs = new Settings(this);
+        /*USELESS IntentFilter inf = new IntentFilter();
+        inf.addAction(SonarSampler.ACTION_BT_STATE);
+        registerReceiver(mBroadcastReceiver, inf);*/
     }
 
     // See https://developer.android.com/guide/components/activities/activity-lifecycle
-    @Override
+    @Override // Activity
     protected void onStop() {
-        Log.d(TAG, "onStop (unbinding service)");
+        Log.d(TAG, "onStop");
         // Unbind from the services. This signals to the service that this activity is no longer
         // in the foreground, and the service can respond by promoting itself to a foreground
         // service.
@@ -170,21 +183,9 @@ public class MainActivity extends AppCompatActivity {
             unbindService(mLoggingServiceConnection);
             mLoggingServiceBound = false;
         }
-        unregisterReceiver(mBroadcastReceiver);
+        /*USELESS unregisterReceiver(mBroadcastReceiver);*/
 
         super.onStop();
-    }
-
-    // See https://developer.android.com/guide/components/activities/activity-lifecycle
-    @Override // Activity
-    public void onDestroy() {
-        Log.d(TAG, "onDestroy called");
-        super.onDestroy();
-        if (!mRecordingOn)
-            // If the MainActivity is destroyed and logging isn't enabled, then shut the service down.
-            // TODO: when the service realises the mainactivity has gone it should have shut down
-            // anyway. This is overkill.
-            stopService(new Intent(this, LoggingService.class));
     }
 
     // Handling permissions
@@ -245,17 +246,19 @@ public class MainActivity extends AppCompatActivity {
             requestPermissions(missing.toArray(new String[0]), REQUEST_PERMISSIONS);
     }
 
-    // Handle results from getPermissions() startActivityForResult.
-    @Override// Activity
+    // Handle results from getPermissions() and startActivityForResult.
+    @Override // Activity
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+
         if (requestCode == REQUEST_ENABLE_BLUETOOTH) {
             Log.d(TAG, "REQUEST_ENABLE_BLUETOOTH received");
             if (resultCode == Activity.RESULT_OK)
                 findASonarDevice();
+
         } else if (requestCode == REQUEST_CHOOSE_FILE) {
-            // Handle result from switching to the file selection activities used to select log file destinations
-            // in the SettingsFragment
+            // This request is made from getFile(). It would have been cleaner to handle that in
+            // SettingsFragment, but I couldn't get it to work.
             Uri uri = data.getData();
             // Persist granted access across reboots
             int takeFlags = data.getFlags() & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
@@ -277,6 +280,7 @@ public class MainActivity extends AppCompatActivity {
         BluetoothAdapter bta = BluetoothAdapter.getDefaultAdapter();
         if (bta == null) {
             Log.e(TAG, "No bluetooth on this device");
+            Toast.makeText(this, R.string.help_no_bluetooth, Toast.LENGTH_LONG).show();
         } else if (bta.isEnabled())
             findASonarDevice();
         else
@@ -286,14 +290,15 @@ public class MainActivity extends AppCompatActivity {
 
     // Start looking for a sonar device. Called once permissions have been established.
     private void findASonarDevice() {
-        if (!mLoggingServiceBound)
+        if (!mLoggingServiceBound) {
+            Log.e(TAG, "findASonarDevice but the logging service isn't bound yet");
             return;
+        }
 
-        if (mSonarSamplerState >= SonarSampler.BT_STATE_CONNECTING) {
-            Log.d(TAG, "Already connected to " + mSonarSamplerDevice);
-            // Service is CONNECTED or CONNECTING - skip discovery and jump straight
-            // to connected
-            openDevice(mSonarSamplerDevice);
+        // We know the logging service is bound, and it may already be sampling. If so,
+        if (mLoggingService.getConnectedDevice() != null) {
+            Log.d(TAG, "Already connected to " + mLoggingService.getConnectedDevice().getName());
+            switchToConnectedFragment();
             return;
         }
 
@@ -303,20 +308,19 @@ public class MainActivity extends AppCompatActivity {
             // using the paired devices, so sniff them first
             BluetoothAdapter bta = BluetoothAdapter.getDefaultAdapter();
             if (bta == null) {
-                openDevice((BluetoothDevice)null);
+                Toast.makeText(this, R.string.help_no_bluetooth, Toast.LENGTH_LONG).show();
                 return;
-            } else {
-                Set<BluetoothDevice> pairedDevices = bta.getBondedDevices();
-                if (pairedDevices.size() > 0) {
-                    for (BluetoothDevice device : pairedDevices) {
-                        Parcelable[] uuids = device.getUuids();
-                        if (uuids != null) {
-                            for (Parcelable p : uuids) {
-                                if (SonarSampler.BTS_CUSTOM.toString().equals(p.toString())) {
-                                    Log.i(TAG, "paired device " + device.getName());
-                                    openDevice(device);
-                                    return;
-                                }
+            }
+            Set<BluetoothDevice> pairedDevices = bta.getBondedDevices();
+            if (pairedDevices.size() > 0) {
+                for (BluetoothDevice device : pairedDevices) {
+                    Parcelable[] uuids = device.getUuids();
+                    if (uuids != null) {
+                        for (Parcelable p : uuids) {
+                            if (SonarSampler.BTS_CUSTOM.toString().equals(p.toString())) {
+                                Log.i(TAG, "opening paired device " + device.getName());
+                                switchToConnectedFragment(device);
+                                return;
                             }
                         }
                     }
@@ -325,7 +329,7 @@ public class MainActivity extends AppCompatActivity {
         }
         // Need to find a device
         FragmentTransaction tx = getSupportFragmentManager().beginTransaction();
-        tx.replace(R.id.fragment_container, new DiscoveryFragment(ac), TAG).commit();
+        tx.replace(R.id.fragmentContainerL, new DiscoveryFragment(ac), TAG).commit();
     }
 
     // equals() when either string could be null
@@ -344,30 +348,21 @@ public class MainActivity extends AppCompatActivity {
         return mLoggingService;
     }
 
+    void switchToConnectedFragment() {
+        // Switch to the ConnectedFragment to monitor connection
+        Fragment f = new ConnectedFragment();
+        FragmentTransaction tx = getSupportFragmentManager().beginTransaction();
+        tx.replace(R.id.fragmentContainerL, f, TAG).commit();
+    }
+
     /**
      * Start interacting with the given device
      *
      * @param device device to connect to
      */
-    void openDevice(BluetoothDevice device) {
-        if (device == null)
-            Log.d(TAG, "no device");
-        else {
-            Log.d(TAG, "device selected " + device.getAddress() + " " + device.getName());
-
-            // Remember the connected device so we can reconnect
-            mPrefs.put(Settings.PREF_DEVICE, device.getName());
-        }
-
-        // Switch to the ConnectedFragment to monitor connection
-        Fragment f = new ConnectedFragment(device);
-        FragmentTransaction tx = getSupportFragmentManager().beginTransaction();
-        tx.replace(R.id.fragment_container, f, TAG).commit();
-    }
-
-    void openDevice(String address) {
-        BluetoothAdapter bta = BluetoothAdapter.getDefaultAdapter();
-        openDevice(bta.getRemoteDevice(address));
+    void switchToConnectedFragment(BluetoothDevice device) {
+        mLoggingService.connectToDevice(device);
+        switchToConnectedFragment();
     }
 
     /**
@@ -381,6 +376,7 @@ public class MainActivity extends AppCompatActivity {
         int new_noise = mPrefs.getInt(Settings.PREF_NOISE);
         int new_range = mPrefs.getInt(Settings.PREF_RANGE);
         int new_minDeltaD = mPrefs.getInt(Settings.PREF_MIN_DEPTH_CHANGE); // mm
+        float new_minDeltaPos = mPrefs.getInt(Settings.PREF_MIN_POS_CHANGE); // mm
         String new_sampleFile = mPrefs.getString(Settings.PREF_SAMPLE_FILE);
 
         if (changes.length > 0) {
@@ -404,7 +400,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         if (mLoggingService != null) {
-            if (mRecordingOn && !sameString(new_sampleFile, sampleFile)) {
+            if (!sameString(new_sampleFile, sampleFile) && mLoggingService.isLogging()) {
                 mLoggingService.stopLogging();
                 mLoggingService.startLogging(new_sampleFile);
             }
@@ -414,7 +410,12 @@ public class MainActivity extends AppCompatActivity {
                     || new_range != range
                     || new_minDeltaD != minDeltaD) {
                 SonarSampler sam = (SonarSampler) mLoggingService.getSampler(SonarSampler.TAG);
-                sam.configureSonar(new_sensitivity, new_noise, new_range, new_minDeltaD / 1000.0);
+                sam.configure(new_sensitivity, new_noise, new_range, new_minDeltaD / 1000.0);
+            }
+
+            if (new_minDeltaPos != minDeltaPos) {
+                LocationSampler sam = (LocationSampler) mLoggingService.getSampler(LocationSampler.TAG);
+                sam.configure(new_minDeltaPos);
             }
         }
 
@@ -423,6 +424,7 @@ public class MainActivity extends AppCompatActivity {
         range = new_range;
         minDeltaD = new_minDeltaD;
         sampleFile = new_sampleFile;
+        minDeltaPos = new_minDeltaPos;
     }
 
     /**
@@ -431,21 +433,24 @@ public class MainActivity extends AppCompatActivity {
      *
      * @return the new state of recording.
      */
-    boolean toggleRecording() {
-        boolean on = !mRecordingOn;
+    void toggleRecording() {
+        if (mLoggingService == null)
+            return;
+        boolean on = !mLoggingService.isLogging();
+
         Log.d(TAG, "Recording " + on);
         if (on) {
             // Make sure required prefs are set
             if (mPrefs.getString(Settings.PREF_SAMPLE_FILE) == null) {
                 Toast.makeText(this, R.string.sample_file_unset, Toast.LENGTH_LONG).show();
                 on = false;
-            } else if (mLoggingService != null)
-                mLoggingService.startLogging(mPrefs.getString(Settings.PREF_SAMPLE_FILE));
-        } else if (mRecordingOn && mLoggingService != null)
+            } else if (mLoggingService != null) {
+                on = mLoggingService.startLogging(mPrefs.getString(Settings.PREF_SAMPLE_FILE));
+                if (!on)
+                    Toast.makeText(this, R.string.could_not_start_logging, Toast.LENGTH_LONG).show();
+            }
+        } else
             mLoggingService.stopLogging();
-
-        mRecordingOn = on;
-        return on;
     }
 
     /**
@@ -458,7 +463,7 @@ public class MainActivity extends AppCompatActivity {
         Log.d(TAG, "initiate get file for " + pref);
         Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
-        intent.setType("text/xml");
+        intent.setType("application/gpx+xml");
         intent.putExtra(Intent.EXTRA_TITLE, getResources().getString(titleR));
         // Passing data in the intent doesn't work
         //intent.putExtra(EXTRA_PREFERENCE_NAME, pref);

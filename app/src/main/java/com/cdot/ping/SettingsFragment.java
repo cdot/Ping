@@ -28,6 +28,8 @@ import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
 import androidx.preference.SeekBarPreference;
 
+import com.cdot.ping.android.IntListPreference;
+
 /**
  * Fragment to handle the display and manipulation of settings
  */
@@ -118,7 +120,7 @@ public class SettingsFragment extends PreferenceFragmentCompat {
             @Override
             public boolean onPreferenceClick(Preference preference) {
                 FragmentTransaction tx = getParentFragmentManager().beginTransaction();
-                tx.replace(R.id.fragment_container, new DiscoveryFragment(false), DiscoveryFragment.TAG);
+                tx.replace(R.id.fragmentContainerL, new DiscoveryFragment(false), DiscoveryFragment.TAG);
                 tx.addToBackStack(null);
                 tx.commit();
                 return false;

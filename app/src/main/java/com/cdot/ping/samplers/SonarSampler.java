@@ -26,11 +26,12 @@ import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothProfile;
 import android.content.Intent;
 import android.content.res.Resources;
-import android.os.Bundle;
+import android.location.Location;
 import android.util.Log;
 
 import com.cdot.ping.R;
 
+import java.nio.ByteBuffer;
 import java.util.Date;
 import java.util.UUID;
 
@@ -58,6 +59,7 @@ public class SonarSampler extends Sampler {
     public static final String TAG = SonarSampler.class.getSimpleName();
 
     private static final String CLASS_NAME = SonarSampler.class.getCanonicalName();
+    private static final int DoubleBYTES = Double.SIZE / 8;
 
     // Messages sent by the service
     public static final String ACTION_BT_STATE = CLASS_NAME + ".action_bt_state";
@@ -67,15 +69,8 @@ public class SonarSampler extends Sampler {
     public static final String EXTRA_STATE = CLASS_NAME + ".state";
     public static final String EXTRA_REASON = CLASS_NAME + ".reason";
 
-    // Keys into sample bundles. Fields have a single-character type, so L_TIME means "long TIME"
-    public static final String B_DRY = "dry";
-    public static final String L_TIME = "time";
-    public static final String G_DEPTH = "depth";
-    public static final String I_STRENGTH = "strength"; // Range 0..255
-    public static final String G_TEMPERATURE = "temp";
-    public static final String I_BATTERY = "bat"; // Range 0..6
-    public static final String G_FISHDEPTH = "fdepth";
-    public static final String I_FISHSTRENGTH = "fstrength"; // Range 0..15
+    // Keys into sample bundles.
+    public static final String P_SONAR = "sonar";
 
     // ID bytes sent / received in every packet received from the sonar unit
     private static final byte ID0 = 83;
@@ -96,6 +91,9 @@ public class SonarSampler extends Sampler {
     // The write characteristic is used for sending packets to the device. The only command I can
     // find that FishFinder devices support is "configure".
     public static final UUID BTC_CUSTOM_CONFIGURE = UUID.fromString("0000fff2-0000-1000-8000-00805f9b34fb");
+
+    // Characteristic notified by PingTest to report location information
+    public static final UUID BTC_CUSTOM_LOCATION = UUID.fromString("0000fff3-0000-1000-8000-00805f9b34fb");
 
     // Bluetooth Descriptors BTD_*
     public static final UUID BTD_CLIENT_CHARACTERISTIC_CONFIGURATION = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
@@ -134,12 +132,25 @@ public class SonarSampler extends Sampler {
     // Minimum depth change between recorded samples
     public static final double MINIMUM_DELTA_DEPTH_DEFAULT = 0.5; // metres
     private double mMinDeltaDepth = MINIMUM_DELTA_DEPTH_DEFAULT;
-    private Bundle mLastLoggedSample = null;
+    private Sample mLastLoggedSample = null;
     private boolean mLoggingDisabled = false;
     private static final double MIN_DELTA_TEMPERATURE = 1.0; // degrees C
 
     private BluetoothGatt mBluetoothGatt;
     private GattQueue mGattQueue;
+
+    // Set true if a location packet is received from PingTest - after it is set true, no more samples
+    // will be accepted from LocationService
+    private boolean mLocationsFromPingTest = false;
+
+    // The most recent location passed to the sampler, must never be null
+    private Location mCurrentLocation = new Location(TAG);
+
+    // Convert a double encoded in two bytes as realpart/fracpart to a double
+    private static double b2g(byte real, byte frac) {
+        int r = (int) real & 0xFF, f = (int) frac & 0xFF;
+        return ((double) r + (double) f / 100.0);
+    }
 
     // Callback that extends BluetootGattCallback
     class GattBack extends GattQueue.Callback {
@@ -154,9 +165,10 @@ public class SonarSampler extends Sampler {
                     // mBluetoothGatt should have been set from the result of connectGatt in connect()
                     Log.e(TAG, "mBluetoothGatt and gatt differ! Not expected");
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-                Log.d(TAG, "Disconnected from " + gatt.getDevice().getName());
-                if (mBluetoothGatt != null & gatt.getDevice().getAddress().equals(mBluetoothGatt.getDevice().getAddress()))
+                if (mBluetoothGatt != null & gatt != null && gatt.getDevice().getAddress().equals(mBluetoothGatt.getDevice().getAddress())) {
+                    Log.d(TAG, "Disconnected from " + gatt.getDevice().getName());
                     disconnectBluetooth(R.string.reason_cleaning_up);
+                }
 
                 setBluetoothState(BT_STATE_DISCONNECTED, R.string.reason_gatt_disconnected);
 
@@ -210,6 +222,16 @@ public class SonarSampler extends Sampler {
             descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
             mGattQueue.queue(new GattQueue.DescriptorWrite(descriptor));
 
+            cha = bgs.getCharacteristic(BTC_CUSTOM_LOCATION);
+            if (cha != null) {
+                gatt.setCharacteristicNotification(cha, true);
+                descriptor = cha.getDescriptor(BTD_CLIENT_CHARACTERISTIC_CONFIGURATION);
+                if (descriptor != null) {
+                    descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+                    mGattQueue.queue(new GattQueue.DescriptorWrite(descriptor));
+                }
+            }
+
             // Tell the world we are ready for action
             setBluetoothState(BT_STATE_CONNECTED, R.string.reason_ok);
         }
@@ -218,27 +240,88 @@ public class SonarSampler extends Sampler {
         @Override // BluetoothGattCallback
         public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
             byte[] data = characteristic.getValue();
-            if (data.length < 14 || data[0] != ID0 || data[1] != ID1)
-                throw new IllegalArgumentException("Bad data block");
-            // Wonder what data[5] is? Seems to be always 9
-            //Log.d(TAG, "[5]=" + Integer.toHexString(data[5]));
-            // There are several more bytes in the packet; wonder what they do?
-            // TODO: Might be worth logging the raw packets for later analysis
-            Bundle b = new Bundle();
-            // data[4] bit 4 means "dry"
-            b.putBoolean(B_DRY, (data[4] & 0x8) != 0);
-            b.putDouble(G_DEPTH, ft2m * ((double) data[6] + (double) data[7] / 100.0));
-            b.putInt(I_STRENGTH, (int)data[8] & 0xFF);
-            b.putDouble(G_FISHDEPTH, ft2m * ((double) data[9] + (double) data[10] / 100.0));
-            // Fish strength is in a nibble, so in the range 0-15. Just return it as a number
-            b.putInt(I_FISHSTRENGTH, (int)data[11] & 0xF);
-            b.putInt(I_BATTERY, (data[11] >> 4) & 0xF);
-            b.putDouble(G_TEMPERATURE, ((double) data[12] + (double) data[13] / 100.0 - 32.0) * 5.0 / 9.0);
 
-            b.putLong(L_TIME, new Date().getTime());
-
-            onSonarSample(b);
+            if (BTC_CUSTOM_SAMPLE.equals(characteristic.getUuid()))
+                decodeSonarSample(data);
+            else if (BTC_CUSTOM_LOCATION.equals(characteristic.getUuid()))
+                decodeLocationSample(data);
         }
+
+        // Accept a location coming from PingTest
+        private synchronized void decodeLocationSample(byte[] data) {
+            ByteBuffer byteBuffer = ByteBuffer.allocate(Double.BYTES);
+            byteBuffer.put(data, 0, Double.BYTES);
+            byteBuffer.flip();
+            mCurrentLocation.setLatitude(byteBuffer.getDouble());
+            byteBuffer.clear();
+            byteBuffer.put(data, Double.BYTES, Double.BYTES);
+            byteBuffer.flip();
+            mCurrentLocation.setLongitude(byteBuffer.getDouble());
+            mLocationsFromPingTest = true;
+        }
+
+        private synchronized void decodeSonarSample(byte[] data) {
+            // Packets we are receiving are 18 bytes, though I've only managed to work out a subset.
+            // The rest don't seem to change; possibly other devices use them?
+
+            if (data.length != 18 || data[0] != ID0 || data[1] != ID1) {
+                Log.e(TAG, "Bad signature " + data.length + " " + data[0] + " " + data[1]);
+                return;
+            }
+
+            int checksum = 0;
+            for (int i = 0; i < 17; i++)
+                checksum = (checksum + data[i]) & 0xFF;
+            int packcs = (int) data[17] & 0xFF;
+            if (packcs != checksum) {
+                // It's ok to throw in the callback, we will see the trace in the debug but otherwise
+                // it won't stop us
+                Log.e(TAG, "Bad checksum " + packcs + " != " + checksum);
+                return;
+            }
+
+            Sample sample = new Sample();
+
+            // data[2], data[3] unknown, always seem to be 0
+            if (data[2] != 0) Log.d(TAG, "Mysterious 2 = " + data[2]);
+            if (data[3] != 0) Log.d(TAG, "Mysterious 3 = " + data[3]);
+
+            if ((data[4] & 0xF7) != 0) Log.d(TAG, "Mysterious 4 = " + data[4]);
+
+            sample.time = new Date().getTime();
+            sample.isDry = (data[4] & 0x8) != 0;
+
+            // data[5] unknown, seems to be always 9 (1001)
+            if (data[5] != 9) Log.d(TAG, "Mysterious 5 = " + data[5]);
+
+            sample.depth = ft2m * b2g(data[6], data[7]);
+
+            sample.strength = (int) data[8] & 0xFF;
+
+            sample.fishDepth = ft2m * b2g(data[9], data[10]);
+
+            // Fish strength is in a nibble, so in the range 0-15. Just return it as a number
+            sample.fishStrength = (int) data[11] & 0xF;
+            sample.battery = (data[11] >> 4) & 0xF;
+            sample.temperature = (b2g(data[12], data[13]) - 32.0) * 5.0 / 9.0;
+
+            // data[14], data[15], data[16] always 0
+            if (data[14] != 0) Log.d(TAG, "Mysterious 14 = " + data[14]);
+            if (data[15] != 0) Log.d(TAG, "Mysterious 15 = " + data[15]);
+            if (data[16] != 0) Log.d(TAG, "Mysterious 16 = " + data[16]);
+            // data[17] is a checksum of data[0]..data[16]
+
+            /*String mess = Integer.toString(data.length);
+            for (int i = 0; i < data.length; i++) mess += (i == 0 ? "[" : ",") + ((int)data[i] & 0xFF);
+            Log.d(TAG, mess + "]");*/
+
+            onSampleReceived(sample);
+        }
+    }
+
+    public void setLocation(Location loc) {
+        if (!mLocationsFromPingTest)
+            mCurrentLocation = loc;
     }
 
     /**
@@ -269,22 +352,33 @@ public class SonarSampler extends Sampler {
     /**
      * Update the last recorded sample
      */
-    private void onSonarSample(Bundle sample) {
-        if (mLoggingDisabled || !(mMustLogNextSample
-                || sample.getInt(SonarSampler.I_BATTERY) != mLastLoggedSample.getInt(SonarSampler.I_BATTERY)
-                || Math.abs(sample.getDouble("temperature") - mLastLoggedSample.getDouble(SonarSampler.G_TEMPERATURE)) >= MIN_DELTA_TEMPERATURE
-                || Math.abs(sample.getDouble(G_DEPTH) - mLastLoggedSample.getDouble(G_DEPTH)) >= mMinDeltaDepth))
+    private void onSampleReceived(Sample sample) {
+        if (mLoggingDisabled || mService == null)
             return;
 
-        mMustLogNextSample = false;
-        mLastLoggedSample = new Bundle(sample);
+        if (mMustLogNextSample
+                // Log if battery level has changed
+                || sample.battery != mLastLoggedSample.battery
+                // Log if temperature has changed enough
+                || Math.abs(sample.temperature - mLastLoggedSample.temperature) >= MIN_DELTA_TEMPERATURE
+                // Log if depth has changed enough, and it's not dry
+                || !sample.isDry && (Math.abs(sample.depth - mLastLoggedSample.depth) >= mMinDeltaDepth)) {
+            mMustLogNextSample = false;
+            mLastLoggedSample = sample;
 
-        mService.logSample(sample, TAG);
+            sample.location = mCurrentLocation;
+
+            mService.onSonarSample(sample);
+        }
     }
 
     // Called when something is binding to the service
     @Override // Sampler
     void onBind() {
+        if (mService == null) {
+            Log.d(TAG, "onBind mService is null");
+            return;
+        }
         Log.d(TAG, "onBind sending broadcast refreshing BT state");
         Intent intent = new Intent(ACTION_BT_STATE);
         intent.putExtra(EXTRA_DEVICE_ADDRESS, mBluetoothGatt != null ? mBluetoothGatt.getDevice().getAddress() : null);
@@ -294,11 +388,13 @@ public class SonarSampler extends Sampler {
     }
 
     @Override // implements Sampler
-    public String getTag() { return TAG; }
+    public String getTag() {
+        return TAG;
+    }
 
     @Override // implements Sampler
     public String getNotificationStateText(Resources r) {
-        return mLastLoggedSample == null ? r.getString(R.string.depth_unknown) : r.getString(R.string.val_depth, mLastLoggedSample.getDouble(G_DEPTH));
+        return mLastLoggedSample == null ? r.getString(R.string.depth_unknown) : r.getString(R.string.val_depth, mLastLoggedSample.depth);
     }
 
     @Override // implements Sampler
@@ -321,10 +417,18 @@ public class SonarSampler extends Sampler {
         super.onDestroy();
     }
 
+    @Override // Sampler
+    public BluetoothDevice getConnectedDevice() {
+        if (mBluetoothGatt == null)
+            return null;
+        return mBluetoothGatt.getDevice();
+    }
+
     /**
      * Connect to a bluetooth device. Will disconnect() currently connected device
      * first if it is not the desired device.
      */
+    @Override
     public void connectToDevice(BluetoothDevice btd) {
 
         if (btd == null) {
@@ -370,8 +474,8 @@ public class SonarSampler extends Sampler {
      * @param range         0..6 (3, 6, 9, 18, 24, 36, auto)
      * @param minDeltaDepth min depth change, in metres
      */
-    public void configureSonar(int sensitivity, int noise, int range, double minDeltaDepth) {
-        Log.d(TAG, "configureSonar(" + sensitivity + "," + noise + "," + range + "," + minDeltaDepth + ")");
+    public void configure(int sensitivity, int noise, int range, double minDeltaDepth) {
+        Log.d(TAG, "configure(" + sensitivity + "," + noise + "," + range + "," + minDeltaDepth + ")");
         mMinDeltaDepth = minDeltaDepth;
 
         if (mBluetoothState != BT_STATE_CONNECTED)
