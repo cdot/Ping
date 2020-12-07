@@ -205,7 +205,8 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
         mHaveNewSamples = true;
 
         // Don't do this from the display timer, we want a different feedback schedule
-        mBinding.sonarV.sample(mLastSample);
+        if (mBinding != null && mBinding.sonarV != null)
+            mBinding.sonarV.sample(mLastSample);
     }
 
 
@@ -214,7 +215,8 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
         super.onSaveInstanceState(bits);
         if (getLoggingService() != null && getLoggingService().getConnectedDevice() != null)
             bits.putString("device", getLoggingService().getConnectedDevice().getAddress());
-        mBinding.sonarV.onSaveInstanceState(bits);
+        if (mBinding != null && mBinding.sonarV != null)
+            mBinding.sonarV.onSaveInstanceState(bits);
     }
 
     @Override // SharedPreferences.OnSharedPreferenceChangeListener
@@ -237,7 +239,8 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
                     getLoggingService().connectToDevice(bd);
             }
         }
-
+        if (getLoggingService() != null)
+            getLoggingService().setKeepAlive(false);
         mPrefs = new Settings(getActivity());
         mPrefs.registerOnSharedPreferenceChangeListener(this);
         registerBroadcastReceiver();
@@ -309,6 +312,8 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
     @Override // Fragment
     public boolean onOptionsItemSelected(MenuItem item) {
         if (item.getItemId() == R.id.menu_settings) {
+            if (getLoggingService() != null)
+                getLoggingService().setKeepAlive(true);
             FragmentTransaction tx = getParentFragmentManager().beginTransaction();
             tx.replace(R.id.fragmentContainerL, new SettingsFragment(), SettingsFragment.TAG);
             tx.addToBackStack(null);

@@ -96,8 +96,11 @@ public class MainActivity extends AppCompatActivity {
                 mLoggingService.addSampler(new SonarSampler());
             if (mLoggingService.getSampler(LocationSampler.TAG) == null)
                 mLoggingService.addSampler(new LocationSampler());
-
-            findASonarDevice();
+            // Setting the sample file means a change in the activity, so when it comes back the
+            // service is re-bound. If we started in SettingsFragment, we need to get back there.
+            Fragment frag = getSupportFragmentManager().findFragmentByTag(SettingsFragment.TAG);
+            if (frag == null || !frag.isVisible())
+                connectSonarDevice();
         }
 
         @Override // ServiceConnection
@@ -226,7 +229,7 @@ public class MainActivity extends AppCompatActivity {
             }
         }
         if (granted)
-            findASonarDevice();
+            connectSonarDevice();
         else
             // Try again to get permissions. We need them! They'll crack eventually.
             getPermissions();
@@ -254,7 +257,7 @@ public class MainActivity extends AppCompatActivity {
         if (requestCode == REQUEST_ENABLE_BLUETOOTH) {
             Log.d(TAG, "REQUEST_ENABLE_BLUETOOTH received");
             if (resultCode == Activity.RESULT_OK)
-                findASonarDevice();
+                connectSonarDevice();
 
         } else if (requestCode == REQUEST_CHOOSE_FILE) {
             // This request is made from getFile(). It would have been cleaner to handle that in
@@ -271,6 +274,12 @@ public class MainActivity extends AppCompatActivity {
             edit.apply();
             // ...and brute-force the fragment into updating the cache
             frag.onFileSelected(mPickingFileFor, uri);
+
+            FragmentTransaction tx = getSupportFragmentManager().beginTransaction();
+            tx.replace(R.id.fragmentContainerL, frag, SettingsFragment.TAG);
+            tx.addToBackStack(null);
+            tx.commit();
+
         }
     }
 
@@ -282,14 +291,14 @@ public class MainActivity extends AppCompatActivity {
             Log.e(TAG, "No bluetooth on this device");
             Toast.makeText(this, R.string.help_no_bluetooth, Toast.LENGTH_LONG).show();
         } else if (bta.isEnabled())
-            findASonarDevice();
+            connectSonarDevice();
         else
             // Bluetooth is not enabled; prompt until it is
             startActivityForResult(new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE), REQUEST_ENABLE_BLUETOOTH);
     }
 
     // Start looking for a sonar device. Called once permissions have been established.
-    private void findASonarDevice() {
+    private void connectSonarDevice() {
         if (!mLoggingServiceBound) {
             Log.e(TAG, "findASonarDevice but the logging service isn't bound yet");
             return;

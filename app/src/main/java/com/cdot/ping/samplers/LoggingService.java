@@ -98,8 +98,7 @@ public class LoggingService extends Service {
 
     // Set to true to keep this service running even when all clients are unbound
     // and logging is disabled.
-    // TODO: set this false before pre-release testing
-    private static final boolean DEBUG_IMMORTAL = false;
+    private boolean mKeepAlive = false;
 
     /**
      * The identifier for the notification displayed for the foreground service.
@@ -185,6 +184,10 @@ public class LoggingService extends Service {
         return mTotalSampleCount;
     }
 
+    public void setKeepAlive(boolean on) {
+        mKeepAlive = on;
+    }
+
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         Log.d(TAG, "onStartCommand");
@@ -239,7 +242,7 @@ public class LoggingService extends Service {
 
         if (mJustAConfigurationChange) {
             Log.d(TAG, "Unbinding due to a configuration change");
-        } else if (DEBUG_IMMORTAL || mGPXDocument != null) {
+        } else if (mKeepAlive || mGPXDocument != null) {
             Log.d(TAG, "Starting foreground service");
             startForeground(NOTIFICATION_1D, getNotification());
         } else {
