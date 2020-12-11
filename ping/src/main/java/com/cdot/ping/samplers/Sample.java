@@ -18,42 +18,22 @@
  */
 package com.cdot.ping.samplers;
 
-import android.location.Location;
-import android.os.Build;
 import android.os.Parcel;
 import android.os.Parcelable;
+import android.util.Log;
 
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
 import java.util.Date;
 import java.util.TimeZone;
 
 public class Sample implements Parcelable {
-    public boolean isDry; // contacts not conducting
-    public long time;
-    public double depth;
-    public int strength; // Range 0..255
-    public double temperature;
-    public int battery; // Range 0..6
-    public double fishDepth;
-    public int fishStrength; // Range 0..15
-    public Location location;
-
-    Sample() {
-    }
-
-    protected Sample(Parcel in) {
-        isDry = in.readByte() != 0;
-        time = in.readLong();
-        depth = in.readDouble();
-        strength = in.readInt();
-        temperature = in.readDouble();
-        battery = in.readInt();
-        fishDepth = in.readDouble();
-        fishStrength = in.readInt();
-        location = in.readParcelable(Location.class.getClassLoader());
-    }
+    public static final String TAG = Sample.class.getSimpleName();
 
     public static final Creator<Sample> CREATOR = new Creator<Sample>() {
         @Override
@@ -67,31 +47,107 @@ public class Sample implements Parcelable {
         }
     };
 
+    // Number of bytes in a serialised sample
+    public static final int BYTES = Long.BYTES // time
+            + 2 * Double.BYTES // lat, long
+            + Float.BYTES // depth
+            + 1; // strength
+
+    public long time;
+    public double latitude;
+    public double longitude;
+    public float depth;
+    public int strength; // Range 0..255
+
+    // Remaining fileds are not serialised
+    public float temperature;
+    public float fishDepth;
+    public int fishStrength; // Range 0..15
+    public byte battery; // Range 0..6
+
+    public Sample() {
+    }
+
+    /**
+     * Construct a new sample
+     * @param lat latitude
+     * @param lon longitude
+     * @param d depth
+     * @param s strength
+     */
+    public Sample(double lat, double lon, float d, int s) {
+        time = System.currentTimeMillis();
+        depth = d;
+        latitude = lat;
+        longitude = lon;
+        strength = s;
+    }
+
+    /**
+     * Create from a serialised data stream
+     */
+    Sample(DataInputStream dis) throws IOException {
+        time = dis.readLong();
+        latitude = dis.readDouble();
+        longitude = dis.readDouble();
+        depth = dis.readFloat();
+        strength = dis.readUnsignedByte();
+    }
+
+    // Serialise
+    byte[] getBytes() {
+        ByteArrayOutputStream bs = new ByteArrayOutputStream();
+        DataOutputStream dos = new DataOutputStream(bs);
+        try {
+            dos.writeLong(time);
+            dos.writeDouble(latitude);
+            dos.writeDouble(longitude);
+            dos.writeFloat(depth);
+            dos.writeByte(strength);
+        } catch (IOException ioe) {
+            Log.e(TAG, "getBytes error " + ioe);
+        }
+        return bs.toByteArray();
+    }
+
     @Override
     public int describeContents() {
         return 0;
     }
 
-    @Override
+    // Parcels are used to send samples internally
+    protected Sample(Parcel in) {
+        time = in.readLong();
+        latitude = in.readDouble();
+        longitude = in.readDouble();
+        depth = in.readFloat();
+        fishDepth = in.readFloat();
+        strength = (short) in.readInt();
+        fishStrength = (short) in.readInt();
+        temperature = in.readFloat();
+        battery = in.readByte();
+    }
+
+    @Override // implement Parcelable
     public void writeToParcel(Parcel parcel, int i) {
-        parcel.writeByte((byte) (isDry ? 1 : 0));
         parcel.writeLong(time);
-        parcel.writeDouble(depth);
+        parcel.writeDouble(latitude);
+        parcel.writeDouble(longitude);
+        parcel.writeFloat(depth);
+        parcel.writeFloat(fishDepth);
         parcel.writeInt(strength);
-        parcel.writeDouble(temperature);
-        parcel.writeInt(battery);
-        parcel.writeDouble(fishDepth);
         parcel.writeInt(fishStrength);
-        parcel.writeParcelable(location, 0);
+        parcel.writeFloat(temperature);
+        parcel.writeByte(battery);
     }
 
     public Element toGPX(Document doc) {
         Element GPX_trkpt = doc.createElementNS(GPX.NS_GPX, "trkpt");
-        GPX_trkpt.setAttribute("lat", Double.toString(location.getLatitude()));
-        GPX_trkpt.setAttribute("lon", Double.toString(location.getLongitude()));
+        GPX_trkpt.setAttribute("lat", Double.toString(latitude));
+        GPX_trkpt.setAttribute("lon", Double.toString(longitude));
 
         Element GPX_ele = doc.createElementNS(GPX.NS_GPX, "ele");
-        GPX_ele.setTextContent(Double.toString(location.getAltitude() - (isDry ? 0 : depth)));
+        GPX_ele.setTextContent(Double.toString(depth < 0 ? 0 : depth));
         GPX_trkpt.appendChild(GPX_ele);
 
         Element GPX_time = doc.createElementNS(GPX.NS_GPX, "time");
@@ -109,12 +165,12 @@ public class Sample implements Parcelable {
             GPX_ping.setAttribute("fdepth", Double.toString(fishDepth));
         if (fishStrength > 0)
             GPX_ping.setAttribute("fstrength", Integer.toString(fishStrength));
-        if (location.getAccuracy() > 0)
+        /*if (location.getAccuracy() > 0)
             GPX_ping.setAttribute("hacc", Float.toString(location.getAccuracy()));
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             if (location.getVerticalAccuracyMeters() > 0)
                 GPX_ping.setAttribute("vacc", Float.toString(location.getVerticalAccuracyMeters()));
-        }
+        }*/
         GPX_extensions.appendChild(GPX_ping);
         GPX_trkpt.appendChild(GPX_extensions);
         return GPX_trkpt;

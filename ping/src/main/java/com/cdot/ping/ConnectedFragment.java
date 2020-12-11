@@ -44,21 +44,18 @@ import com.cdot.ping.samplers.LoggingService;
 import com.cdot.ping.samplers.Sample;
 import com.cdot.ping.samplers.SonarSampler;
 
-import java.text.SimpleDateFormat;
-
 /**
  * Fragment that handles user interaction when a device is connected.
  */
 public class ConnectedFragment extends Fragment implements SharedPreferences.OnSharedPreferenceChangeListener {
     private static final String TAG = ConnectedFragment.class.getSimpleName();
-
     private ConnectedFragmentBinding mBinding;
-    private Settings mPrefs;
-    private IntentFilter mIntentFilter;
-    private static final SimpleDateFormat SAMPLE_TIME_FORMAT = new SimpleDateFormat("HH:mm:ss");
-
+    private final IntentFilter mIntentFilter;
     // Handle broadcasts from the service
     private boolean mReceiverRegistered = false;
+    private Sample mLastSample = null;
+    // Used to calculate the incoming sample rate
+    private Boolean mHaveNewSamples = false; // display update
     private final BroadcastReceiver mBroadcastReceiver = new BroadcastReceiver() {
 
         public void onReceive(Context context, Intent intent) {
@@ -77,54 +74,7 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
             }
         }
     };
-
-    private Sample mLastSample = null;
-    // Used to calculate the incoming sample rate
-    private Boolean mHaveNewSamples = false; // display update
     private Thread mDisplayThread;
-
-    private class DisplayThread extends Thread {
-        DisplayThread() {
-            super(new Runnable() {
-                public void run() {
-                    while (!interrupted()) {
-                        if (mHaveNewSamples) {
-
-                            Resources r = getResources();
-                            mBinding.batteryTV.setText(r.getString(R.string.val_battery, mLastSample.battery));
-                            mBinding.depthTV.setText(r.getString(R.string.val_depth, mLastSample.depth));
-                            mBinding.tempTV.setText(r.getString(R.string.val_temperature, mLastSample.temperature));
-                            mBinding.fishDepthTV.setText(r.getString(R.string.val_fish_depth, mLastSample.fishDepth));
-                            mBinding.fishStrengthTV.setText(r.getString(R.string.val_fish_strength, mLastSample.fishStrength));
-                            mBinding.strengthTV.setText(r.getString(R.string.val_strength, mLastSample.strength));
-
-                            if (mLastSample.location != null) {
-                                mBinding.latitudeTV.setText(r.getString(R.string.val_latitude, mLastSample.location.getLatitude()));
-                                mBinding.longitudeTV.setText(r.getString(R.string.val_longitude, mLastSample.location.getLongitude()));
-                            }
-
-                            LoggingService svc = getLoggingService();
-                            if (svc != null) {
-                                mBinding.logTimeTV.setText(r.getString(R.string.val_logging_time, formatDeltaTime(svc.getLoggingTime())));
-                                mBinding.logRateTV.setText(r.getString(R.string.val_logging_rate, svc.getAverageSamplingRate()));
-                                mBinding.logCountTV.setText(r.getString(R.string.val_logging_count, svc.getSampleCount()));
-                            } else {
-                                mBinding.logTimeTV.setText("?");
-                                mBinding.logRateTV.setText("?");
-                                mBinding.logCountTV.setText("?");
-                            }
-
-                            mHaveNewSamples = false;
-                        }
-                    }
-                    try {
-                        Thread.sleep(500);
-                    } catch (InterruptedException ignore) {
-                    }
-                }
-            });
-        }
-    }
 
     public ConnectedFragment() {
         mIntentFilter = new IntentFilter();
@@ -143,7 +93,7 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
     }
 
     private MainActivity getMainActivity() {
-        return ((MainActivity)getActivity());
+        return ((MainActivity) getActivity());
     }
 
     private LoggingService getLoggingService() {
@@ -173,15 +123,6 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
         mBinding.noiseTV.setText(r.getString(R.string.val_noise, r.getStringArray(R.array.noise_options)[i]));
         i = mPrefs.getInt(Settings.PREF_RANGE);
         mBinding.rangeTV.setText(r.getString(R.string.val_range, r.getStringArray(R.array.range_options)[i]));*/
-        LoggingService svc = getLoggingService();
-        int bmr;
-        if (svc == null)
-            bmr = android.R.drawable.ic_menu_search;
-        else if (svc.isLogging())
-            bmr = android.R.drawable.ic_media_pause;
-        else
-            bmr = android.R.drawable.ic_media_play;
-        mBinding.recordFAB.setImageDrawable(r.getDrawable(bmr, getActivity().getTheme()));
     }
 
     private void updateSonarStateDisplay(int state, int reason, String daddr) {
@@ -205,17 +146,16 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
         mHaveNewSamples = true;
 
         // Don't do this from the display timer, we want a different feedback schedule
-        if (mBinding != null && mBinding.sonarV != null)
+        if (mBinding != null)
             mBinding.sonarV.sample(mLastSample);
     }
-
 
     @Override // Activity
     public void onSaveInstanceState(@NonNull Bundle bits) {
         super.onSaveInstanceState(bits);
         if (getLoggingService() != null && getLoggingService().getConnectedDevice() != null)
             bits.putString("device", getLoggingService().getConnectedDevice().getAddress());
-        if (mBinding != null && mBinding.sonarV != null)
+        if (mBinding != null)
             mBinding.sonarV.onSaveInstanceState(bits);
     }
 
@@ -228,6 +168,7 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
     // Fragment lifecycle
     // see https://developer.android.com/guide/fragments/lifecycle
 
+    @Override // Fragment
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         if (savedInstanceState != null) {
@@ -239,10 +180,11 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
                     getLoggingService().connectToDevice(bd);
             }
         }
+        Settings prefs = new Settings(getActivity());
+        // May be coming back from Settings service, make sure KeepAlive is set in service
         if (getLoggingService() != null)
             getLoggingService().setKeepAlive(false);
-        mPrefs = new Settings(getActivity());
-        mPrefs.registerOnSharedPreferenceChangeListener(this);
+        prefs.registerOnSharedPreferenceChangeListener(this);
         registerBroadcastReceiver();
     }
 
@@ -266,8 +208,7 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
         mBinding.recordFAB.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                getMainActivity().toggleRecording();
-                updatePreferencesDisplay();
+                getMainActivity().writeGPX();
             }
         });
 
@@ -312,6 +253,7 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
     @Override // Fragment
     public boolean onOptionsItemSelected(MenuItem item) {
         if (item.getItemId() == R.id.menu_settings) {
+            // Tell the logging service not to bail during SettingsFragment
             if (getLoggingService() != null)
                 getLoggingService().setKeepAlive(true);
             FragmentTransaction tx = getParentFragmentManager().beginTransaction();
@@ -320,5 +262,46 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
             tx.commit();
         }
         return super.onOptionsItemSelected(item);
+    }
+
+    private class DisplayThread extends Thread {
+        DisplayThread() {
+            super(new Runnable() {
+                public void run() {
+                    while (!interrupted()) {
+                        if (mHaveNewSamples) {
+
+                            Resources r = getResources();
+                            mBinding.batteryTV.setText(r.getString(R.string.val_battery, mLastSample.battery));
+                            mBinding.depthTV.setText(r.getString(R.string.val_depth, mLastSample.depth));
+                            mBinding.tempTV.setText(r.getString(R.string.val_temperature, mLastSample.temperature));
+                            mBinding.fishDepthTV.setText(r.getString(R.string.val_fish_depth, mLastSample.fishDepth));
+                            mBinding.fishStrengthTV.setText(r.getString(R.string.val_fish_strength, mLastSample.fishStrength));
+                            mBinding.strengthTV.setText(r.getString(R.string.val_strength, mLastSample.strength));
+
+                            mBinding.latitudeTV.setText(r.getString(R.string.val_latitude, mLastSample.latitude));
+                            mBinding.longitudeTV.setText(r.getString(R.string.val_longitude, mLastSample.longitude));
+
+                            LoggingService svc = getLoggingService();
+                            if (svc != null) {
+                                //mBinding.logTimeTV.setText(r.getString(R.string.val_logging_time, formatDeltaTime(svc.getLoggingTime())));
+                                mBinding.logRateTV.setText(r.getString(R.string.val_logging_rate, svc.getAverageSamplingRate()));
+                                mBinding.logCountTV.setText(r.getString(R.string.val_logging_count, svc.getSampleCount()));
+                            } else {
+                                //mBinding.logTimeTV.setText("?");
+                                mBinding.logRateTV.setText("?");
+                                mBinding.logCountTV.setText("?");
+                            }
+
+                            mHaveNewSamples = false;
+                        }
+                    }
+                    try {
+                        Thread.sleep(500);
+                    } catch (InterruptedException ignore) {
+                    }
+                }
+            });
+        }
     }
 }

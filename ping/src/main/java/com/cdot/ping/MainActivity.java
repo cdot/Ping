@@ -26,13 +26,11 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.ServiceConnection;
-import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.os.Parcelable;
-import android.provider.DocumentsContract;
 import android.util.Log;
 import android.widget.Toast;
 
@@ -40,6 +38,7 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentTransaction;
 
 import com.cdot.ping.databinding.MainActivityBinding;
@@ -47,6 +46,7 @@ import com.cdot.ping.samplers.LocationSampler;
 import com.cdot.ping.samplers.LoggingService;
 import com.cdot.ping.samplers.SonarSampler;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -61,23 +61,21 @@ public class MainActivity extends AppCompatActivity {
     private final static int REQUEST_ENABLE_BLUETOOTH = 1;
     private static final int REQUEST_PERMISSIONS = 2;
     private static final int REQUEST_CHOOSE_FILE = 3;
-
-    private Settings mPrefs;
-    private String mPickingFileFor;
-
-    // Cache of current settings, so we can detect when they change. Initial crazy values will be
-    // replaced as soon as settingsChanged is called (which it will be when the services start)
-    private int sensitivity = -1;
-    private int noise = -1;
-    private int range = -1;
-    private int minDeltaD = -1;
-    private float minDeltaPos = -1;
-    private String sampleFile = null;
-
-    // Connections to services
-
     // A reference to the service used to get location updates. Used by Fragments.
     LoggingService mLoggingService = null;
+    private Settings mPrefs;
+    private String mPickingFileFor;
+    // Cache of current settings, so we can detect when they change. Initial values will be
+    // replaced as soon as settingsChanged is called (which it will be when the service starts)
+    private int sensitivity = Settings.SENSITIVITY_MIN;
+    private int noise = Settings.NOISE_OFF;
+    private int range = Settings.RANGE_AUTO;
+    private int minDeltaD = Settings.MIN_DEPTH_CHANGE_MAX;
+    private float minDeltaPos = Settings.MIN_POS_CHANGE_MAX;
+    private int maxSamples = Settings.MAX_SAMPLES_MIN;
+
+    // Connections to services
+    private String sampleFile = null;
     // Tracks the bound state of the service. Only meaningful if mLoggingService != null
     private boolean mLoggingServiceBound = false;
 
@@ -128,13 +126,20 @@ public class MainActivity extends AppCompatActivity {
 //        super.onSaveInstanceState(bits);
 //    }
 
+    // equals() when either string could be null
+    private static boolean sameString(String a, String b) {
+        if (a == b) return true;
+        return a != null && a.equals(b);
+    }
+
     @Override // Activity
-    protected void onRestoreInstanceState(Bundle bits) {
+    protected void onRestoreInstanceState(@NonNull Bundle bits) {
         sensitivity = mPrefs.getInt(Settings.PREF_SENSITIVITY);
         noise = mPrefs.getInt(Settings.PREF_NOISE);
         range = mPrefs.getInt(Settings.PREF_RANGE);
         minDeltaD = mPrefs.getInt(Settings.PREF_MIN_DEPTH_CHANGE);
         minDeltaPos = mPrefs.getInt(Settings.PREF_MIN_POS_CHANGE);
+        maxSamples = mPrefs.getInt(Settings.PREF_MAX_SAMPLES);
         super.onRestoreInstanceState(bits);
     }
 
@@ -174,6 +179,8 @@ public class MainActivity extends AppCompatActivity {
         registerReceiver(mBroadcastReceiver, inf);*/
     }
 
+    // Handling permissions
+
     // See https://developer.android.com/guide/components/activities/activity-lifecycle
     @Override // Activity
     protected void onStop() {
@@ -190,8 +197,6 @@ public class MainActivity extends AppCompatActivity {
 
         super.onStop();
     }
-
-    // Handling permissions
 
     // Handle the result of requestPermissions()
     @Override // Activity
@@ -264,22 +269,15 @@ public class MainActivity extends AppCompatActivity {
             // SettingsFragment, but I couldn't get it to work.
             Uri uri = data.getData();
             // Persist granted access across reboots
-            int takeFlags = data.getFlags() & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-            getContentResolver().takePersistableUriPermission(uri, takeFlags);
-            SettingsFragment frag = (SettingsFragment) getSupportFragmentManager().findFragmentByTag(SettingsFragment.TAG);
-            // Can't see any obvious way of getting this value back into the cache used in the
-            // SettingsFragment, stuff it into shared preferences.....
-            SharedPreferences.Editor edit = android.preference.PreferenceManager.getDefaultSharedPreferences(this).edit();
-            edit.putString(mPickingFileFor, uri.toString());
-            edit.apply();
-            // ...and brute-force the fragment into updating the cache
-            frag.onFileSelected(mPickingFileFor, uri);
-
-            FragmentTransaction tx = getSupportFragmentManager().beginTransaction();
-            tx.replace(R.id.fragmentContainerL, frag, SettingsFragment.TAG);
-            tx.addToBackStack(null);
-            tx.commit();
-
+            //int takeFlags = data.getFlags() & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+            //getContentResolver().takePersistableUriPermission(uri, takeFlags);
+            try {
+                mLoggingService.writeGPX(uri);
+                Toast.makeText(this, R.string.write_gpx_OK, Toast.LENGTH_SHORT).show();
+            } catch (IOException ioe) {
+                Log.e(TAG, "writeGPX " + ioe);
+                Toast.makeText(this, R.string.write_gpx_failed, Toast.LENGTH_LONG).show();
+            }
         }
     }
 
@@ -341,13 +339,6 @@ public class MainActivity extends AppCompatActivity {
         tx.replace(R.id.fragmentContainerL, new DiscoveryFragment(ac), TAG).commit();
     }
 
-    // equals() when either string could be null
-    private static boolean sameString(String a, String b) {
-        if (a == b) return true;
-        if (a == null || !a.equals(b)) return false;
-        return true;
-    }
-
     /**
      * Get the logging service, so it can be quizzed for state information
      *
@@ -360,8 +351,11 @@ public class MainActivity extends AppCompatActivity {
     void switchToConnectedFragment() {
         // Switch to the ConnectedFragment to monitor connection
         Fragment f = new ConnectedFragment();
-        FragmentTransaction tx = getSupportFragmentManager().beginTransaction();
-        tx.replace(R.id.fragmentContainerL, f, TAG).commit();
+        FragmentManager fm = getSupportFragmentManager();
+        if (!fm.isDestroyed()) {
+            FragmentTransaction tx = fm.beginTransaction();
+            tx.replace(R.id.fragmentContainerL, f, TAG).commit();
+        }
     }
 
     /**
@@ -384,9 +378,10 @@ public class MainActivity extends AppCompatActivity {
         int new_sensitivity = mPrefs.getInt(Settings.PREF_SENSITIVITY);
         int new_noise = mPrefs.getInt(Settings.PREF_NOISE);
         int new_range = mPrefs.getInt(Settings.PREF_RANGE);
+        int new_maxSamples = mPrefs.getInt(Settings.PREF_MAX_SAMPLES);
         int new_minDeltaD = mPrefs.getInt(Settings.PREF_MIN_DEPTH_CHANGE); // mm
-        float new_minDeltaPos = mPrefs.getInt(Settings.PREF_MIN_POS_CHANGE); // mm
-        String new_sampleFile = mPrefs.getString(Settings.PREF_SAMPLE_FILE);
+        int new_minDeltaPos = mPrefs.getInt(Settings.PREF_MIN_POS_CHANGE); // mm
+        //String new_gpxFile = mPrefs.getString(Settings.PREF_GPX_FILE);
 
         if (changes.length > 0) {
             switch ((String) changes[0]) {
@@ -402,84 +397,52 @@ public class MainActivity extends AppCompatActivity {
                 case Settings.PREF_MIN_DEPTH_CHANGE:
                     new_minDeltaD = (int) changes[1];
                     break;
-                case Settings.PREF_SAMPLE_FILE:
-                    new_sampleFile = (String) changes[1];
+                case Settings.PREF_MIN_POS_CHANGE:
+                    new_minDeltaPos = (int) changes[1];
                     break;
+                case Settings.PREF_MAX_SAMPLES:
+                    new_maxSamples = (int) changes[1];
+                    break;
+                //case Settings.PREF_GPX_FILE:
+                //    new_gpxFile = (String) changes[1];
+                //    break;
             }
         }
 
         if (mLoggingService != null) {
-            if (!sameString(new_sampleFile, sampleFile) && mLoggingService.isLogging()) {
+            /*if (!sameString(new_gpxFile, sampleFile) && mLoggingService.isLogging()) {
                 mLoggingService.stopLogging();
-                mLoggingService.startLogging(new_sampleFile);
-            }
+                mLoggingService.startLogging(new_gpxFile);
+            }*/
 
             if (new_sensitivity != sensitivity
                     || new_noise != noise
                     || new_range != range
-                    || new_minDeltaD != minDeltaD) {
+                    || new_minDeltaD != minDeltaD
+                    || new_minDeltaPos != minDeltaPos) {
                 SonarSampler sam = (SonarSampler) mLoggingService.getSampler(SonarSampler.TAG);
-                sam.configure(new_sensitivity, new_noise, new_range, new_minDeltaD / 1000.0);
+                sam.configure(new_sensitivity, new_noise, new_range, new_minDeltaD / 1000f, new_minDeltaPos / 1000f);
             }
-
-            if (new_minDeltaPos != minDeltaPos) {
-                LocationSampler sam = (LocationSampler) mLoggingService.getSampler(LocationSampler.TAG);
-                sam.configure(new_minDeltaPos);
-            }
+            if (new_maxSamples != maxSamples)
+                mLoggingService.setMaxSamples(new_maxSamples);
         }
 
         sensitivity = new_sensitivity;
         noise = new_noise;
         range = new_range;
         minDeltaD = new_minDeltaD;
-        sampleFile = new_sampleFile;
+        //sampleFile = new_gpxFile;
         minDeltaPos = new_minDeltaPos;
+        maxSamples = new_maxSamples;
     }
 
-    /**
-     * Toggle the state of recording. Both locations and samples are added to their respective log files,
-     * so long as a valid logfile location is configured.
-     *
-     * @return the new state of recording.
-     */
-    void toggleRecording() {
-        if (mLoggingService == null)
-            return;
-        boolean on = !mLoggingService.isLogging();
-
-        Log.d(TAG, "Recording " + on);
-        if (on) {
-            // Make sure required prefs are set
-            if (mPrefs.getString(Settings.PREF_SAMPLE_FILE) == null) {
-                Toast.makeText(this, R.string.sample_file_unset, Toast.LENGTH_LONG).show();
-                on = false;
-            } else if (mLoggingService != null) {
-                on = mLoggingService.startLogging(mPrefs.getString(Settings.PREF_SAMPLE_FILE));
-                if (!on)
-                    Toast.makeText(this, R.string.could_not_start_logging, Toast.LENGTH_LONG).show();
-            }
-        } else
-            mLoggingService.stopLogging();
-    }
-
-    /**
-     * Initiate a file selection activity, delegated from SettingsFragment
-     *
-     * @param pref   preference for which we are trying to get a value
-     * @param titleR title to use for the file chooser
-     */
-    void getFile(String pref, int titleR) {
-        Log.d(TAG, "initiate get file for " + pref);
+    public void writeGPX() {
         Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("application/gpx+xml");
-        intent.putExtra(Intent.EXTRA_TITLE, getResources().getString(titleR));
-        // Passing data in the intent doesn't work
-        //intent.putExtra(EXTRA_PREFERENCE_NAME, pref);
-        mPickingFileFor = pref;
-        String curVal = mPrefs.getString(pref);
-        intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, curVal);
+        intent.putExtra(Intent.EXTRA_TITLE, getResources().getString(R.string.help_sampleFile));
 
+        mLoggingService.setKeepAlive(true);
         startActivityForResult(intent, REQUEST_CHOOSE_FILE);
     }
 }

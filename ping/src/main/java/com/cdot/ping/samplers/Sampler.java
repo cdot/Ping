@@ -42,14 +42,15 @@ abstract class Sampler {
      */
     @CallSuper
     void onAttach(LoggingService service) {
-       mService = service;
+        mService = service;
     }
 
     /**
      * Something is binding to the logging service we're attached to. Use this to alert
      * the binder to current status.
      */
-    void onBind() {}
+    void onBind() {
+    }
 
     /**
      * Called when the app is stopped and recording is disabled (so not foregrounding), or the
@@ -61,9 +62,12 @@ abstract class Sampler {
     /**
      * Get the text string this sampler contributes to the notification. This string should
      * incorporate the most recent sample, and the connected state of the sampler.
+     *
      * @return a text string illustrating the current state of the sampler.
      */
-    public abstract String getNotificationStateText(Resources r);
+    public String getNotificationStateText(Resources r) {
+        return "";
+    }
 
     /**
      * The logging service is being destroyed. Note that stopSampling will already have been called.
@@ -75,16 +79,18 @@ abstract class Sampler {
 
     /**
      * Connect one or more samplers to a bluetooth device
-     * @param btd
+     *
+     * @param btd device to connect
      */
     void connectToDevice(BluetoothDevice btd) {
     }
 
     /**
      * Get the first bluetooth device that has been connected to by a sampler.
+     *
      * @return the device
      */
     BluetoothDevice getConnectedDevice() {
-       return null;
+        return null;
     }
 }

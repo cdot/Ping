@@ -16,6 +16,7 @@
     <string name="help_autoconnect">Automatically connect to the first compatible device found. Otherwise wait for you to select a device.</string>
     <string name="help_bt_address">FF:FF:FF:FF:FF:FF</string>
     <string name="help_change_device">Connect to a different device</string>
+    <string name="help_maxSamples">Maximum number of samples to save before overwriting older samples. The number in brackets is the amount of memory required.</string>
     <string name="help_minimumDepthChange">The minimum depth difference that must be seen before a sample will be recorded, in metres</string>
     <string name="help_minimumPositionChange">The minimum horizontal distance that must be moved before a sample will be recorded, in metres</string>
     <string name="help_no_bluetooth">No bluetooth support on this device</string>
@@ -60,7 +61,9 @@
     </string-array>
     <string name="pref_autoconnect">Auto Connect</string>
     <string name="pref_depth_delta">Minimum depth change</string>
+    <string name="pref_max_samples">Maximum samples</string>
     <string name="pref_noise">Noise</string>
+    <string name="pref_pos_delta">Minimum position change</string>
     <string name="pref_range">Range</string>
     <string name="pref_sample_file">Sample File</string>
     <string name="pref_sensitivity">Sensitivity</string>
@@ -117,5 +120,6 @@
     <string name="val_temperature">Temperature: %1$.2g°C</string>
     <string name="default_device_name">Unspecified Bluetooth Device</string>
     <string name="could_not_start_logging">Could not start logging</string>
-    <string name="pref_pos_delta">Minimum position change</string>
+    <string name="write_gpx_failed">Could not write GPX file</string>
+    <string name="write_gpx_OK">GPX data written</string>
 </resources>

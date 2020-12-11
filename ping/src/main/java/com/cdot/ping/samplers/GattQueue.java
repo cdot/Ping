@@ -48,136 +48,39 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  */
 class GattQueue {
 
+    static final Map<Integer, String> BLE_STATUS = new HashMap<Integer, String>() {
+        {
+            put(0x00, "STATUS_CODE_SUCCESS");
+            put(0x01, "STATUS_CODE_UNKNOWN_BTLE_COMMAND");
+            put(0x02, "STATUS_CODE_UNKNOWN_CONNECTION_IDENTIFIER");
+            put(0x05, "AUTHENTICATION_FAILURE");
+            put(0x06, "STATUS_CODE_PIN_OR_KEY_MISSING");
+            put(0x07, "MEMORY_CAPACITY_EXCEEDED");
+            put(0x08, "CONNECTION_TIMEOUT");
+            put(0x0C, "STATUS_CODE_COMMAND_DISALLOWED");
+            put(0x12, "STATUS_CODE_INVALID_BTLE_COMMAND_PARAMETERS");
+            put(0x13, "REMOTE_USER_TERMINATED_CONNECTION");
+            put(0x14, "REMOTE_DEV_TERMINATION_DUE_TO_LOW_RESOURCES");
+            put(0x15, "REMOTE_DEV_TERMINATION_DUE_TO_POWER_OFF");
+            put(0x16, "LOCAL_HOST_TERMINATED_CONNECTION");
+            put(0x1A, "UNSUPPORTED_REMOTE_FEATURE");
+            put(0x1E, "STATUS_CODE_INVALID_LMP_PARAMETERS");
+            put(0x1F, "STATUS_CODE_UNSPECIFIED_ERROR");
+            put(0x22, "STATUS_CODE_LMP_RESPONSE_TIMEOUT");
+            put(0x24, "STATUS_CODE_LMP_PDU_NOT_ALLOWED");
+            put(0x28, "INSTANT_PASSED");
+            put(0x29, "PAIRING_WITH_UNIT_KEY_UNSUPPORTED");
+            put(0x2A, "DIFFERENT_TRANSACTION_COLLISION");
+            put(0x3A, "CONTROLLER_BUSY");
+            put(0x3B, "CONN_INTERVAL_UNACCEPTABLE");
+            put(0x3C, "DIRECTED_ADVERTISER_TIMEOUT");
+            put(0x3D, "CONN_TERMINATED_DUE_TO_MIC_FAILURE");
+            put(0x3E, "CONN_FAILED_TO_BE_ESTABLISHED");
+            put(0x81, "GATT internal error");
+            put(0x85, "Dreaded 133 bug");
+        }
+    };
     private static final String TAG = GattQueue.class.getSimpleName();
-
-    // Callback for a read operation on a characteristic or descriptor
-    public interface ReadCallback {
-        void call(byte[] value);
-    }
-
-    /**
-     * Base class of Gatt read/write operations
-     */
-    public static abstract class Operation {
-        private static final int DEFAULT_TIMEOUT_IN_MILLIS = 10000;
-
-        public abstract void execute(BluetoothGatt bluetoothGatt);
-
-        public int getTimeoutInMillis() {
-            return DEFAULT_TIMEOUT_IN_MILLIS;
-        }
-    }
-
-    /**
-     * Wrapper for BluetoothGatt#readCharacteristic
-     */
-    public static class CharacteristicRead extends Operation {
-
-        private final ReadCallback mCallback;
-        private final BluetoothGattCharacteristic mCh;
-
-        public CharacteristicRead(BluetoothGattCharacteristic characteristic, ReadCallback callback) {
-            mCh = characteristic;
-            mCallback = callback;
-        }
-
-        @Override
-        public void execute(BluetoothGatt gatt) {
-            Log.d(TAG, "reading from characteristic " + mCh.getUuid());
-            gatt.readCharacteristic(mCh);
-        }
-
-        public void onRead(BluetoothGattCharacteristic characteristic) {
-            if (mCallback != null)
-                mCallback.call(characteristic.getValue());
-        }
-
-        @NonNull
-        public String toString() {
-            return "Read characteristic " + mCh.getUuid();
-        }
-    }
-
-    /**
-     * Wrapper for BluetoothGatt#writeCharacteristic
-     */
-    public static class CharacteristicWrite extends Operation {
-
-        private BluetoothGattCharacteristic mCh;
-
-        public CharacteristicWrite(BluetoothGattCharacteristic characteristic) {
-            mCh = characteristic;
-        }
-
-        @Override
-        public void execute(BluetoothGatt gatt) {
-            Log.d(TAG, "writing to characteristic " + mCh.getUuid());
-            gatt.writeCharacteristic(mCh);
-        }
-
-        @NonNull
-        public String toString() {
-            return "Write characteristic " + mCh.getUuid();
-        }
-    }
-
-    /**
-     * Wrapper for BluetoothGatt#readDescriptor
-     */
-    public static class DescriptorRead extends Operation {
-
-        private final ReadCallback mCallback;
-        private final BluetoothGattDescriptor mDe;
-
-        public DescriptorRead(BluetoothGattDescriptor descriptor, ReadCallback callback) {
-            mDe = descriptor;
-            mCallback = callback;
-        }
-
-        @Override
-        public void execute(BluetoothGatt gatt) {
-            Log.d(TAG, "reading from descriptor " + mDe.getUuid());
-            gatt.readDescriptor(mDe);
-        }
-
-        public void onRead(BluetoothGattDescriptor descriptor) {
-            if (mCallback != null)
-                mCallback.call(descriptor.getValue());
-        }
-
-        @NonNull
-        public String toString() {
-            return "Read descriptor " + mDe.getUuid();
-        }
-    }
-
-    /**
-     * Wrapper for BluetoothGatt#writeDescriptor
-     */
-    public static class DescriptorWrite extends Operation {
-        private BluetoothGattDescriptor mDe;
-
-        public DescriptorWrite(BluetoothGattDescriptor descriptor) {
-            mDe = descriptor;
-        }
-
-        @Override
-        public void execute(BluetoothGatt gatt) {
-            Log.d(TAG, "writing to descriptor " + mDe.getUuid());
-            gatt.writeDescriptor(mDe);
-        }
-
-        @NonNull
-        public String toString() {
-            return "Write descriptor " + mDe.getUuid();
-        }
-    }
-
-    private ConcurrentLinkedQueue<Operation> mQueue = new ConcurrentLinkedQueue<>();
-    private Operation mCurrentOperation = null;
-    private Timer mCurrentOperationTimeout = null;
-    private BluetoothGatt mBluetoothGatt;
-
     // DEBUG describe the device
     // Also acts as a test of the queue
     private static final String[] PERMISSIONS_BITS = new String[]{
@@ -191,7 +94,6 @@ class GattQueue {
             "PERMISSION_WRITE_SIGNED", // 0x80
             "PERMISSION_WRITE_SIGNED_MITM" // 0x100;
     };
-
     private static final String[] PROPERTIES_BITS = new String[]{
             "PROPERTY_BROADCAST", // 0x1
             "PROPERTY_READ", // 0x2
@@ -202,6 +104,20 @@ class GattQueue {
             "PROPERTY_SIGNED_WRITE", // 0x40
             "PROPERTY_EXTENDED_PROPS" // 0x80
     };
+    private final ConcurrentLinkedQueue<Operation> mQueue = new ConcurrentLinkedQueue<>();
+    private Operation mCurrentOperation = null;
+    private Timer mCurrentOperationTimeout = null;
+    private final BluetoothGatt mBluetoothGatt;
+    /**
+     * Create a new queue for sequencing GATT operations
+     *
+     * @param gatt the device being managed
+     * @param cb   callback handler
+     */
+    public GattQueue(BluetoothGatt gatt, Callback cb) {
+        mBluetoothGatt = gatt;
+        cb.setQueue(this);
+    }
 
     private static String describeBits(final String[] names, int val) {
         StringBuilder descr = new StringBuilder();
@@ -257,40 +173,181 @@ class GattQueue {
         }
         queue(postOp);
     }
+
+    /**
+     * Called when an operation is complete, either because of a callback or because it timed out
+     */
+    private synchronized void operationComplete() {
+        if (mCurrentOperation == null) {
+            Log.e(TAG, "operationComplete, but no current operation");
+            return;
+        }
+        mCurrentOperation = null;
+        if (mCurrentOperationTimeout != null)
+            mCurrentOperationTimeout.cancel();
+        mCurrentOperationTimeout = null;
+    }
+
+    /**
+     * Pick the next operation off the queue
+     */
+    private synchronized void startNextOperation() {
+        if (mQueue.size() == 0)
+            return;
+
+        // Get the next operation
+        mCurrentOperation = mQueue.poll();
+        Log.v(TAG, "Starting operation " + mCurrentOperation);
+
+        // Initiate timeout timer
+        mCurrentOperationTimeout = new Timer();
+        mCurrentOperationTimeout.schedule(new TimerTask() {
+            public void run() {
+                Log.d(TAG, "Operation timed out " + mCurrentOperation);
+                mCurrentOperationTimeout = null;
+                operationComplete();
+                startNextOperation();
+            }
+        }, mCurrentOperation.getTimeoutInMillis());
+
+        mCurrentOperation.execute(mBluetoothGatt);
+    }
+
+    /**
+     * Add an operation to the queue, and start it if nothing is currently running
+     *
+     * @param operation subclass of GattManager#Operation
+     */
+    public synchronized void queue(Operation operation) {
+        mQueue.add(operation);
+        Log.v(TAG, "Queueing operation " + operation);
+        if (mCurrentOperation == null)
+            startNextOperation();
+    }
+
+    // Callback for a read operation on a characteristic or descriptor
+    public interface ReadCallback {
+        void call(byte[] value);
+    }
     // END OF DEBUG
 
-    static final Map<Integer, String> BLE_STATUS = new HashMap<Integer, String>() {
-        {
-            put(0x00, "STATUS_CODE_SUCCESS");
-            put(0x01, "STATUS_CODE_UNKNOWN_BTLE_COMMAND");
-            put(0x02, "STATUS_CODE_UNKNOWN_CONNECTION_IDENTIFIER");
-            put(0x05, "AUTHENTICATION_FAILURE");
-            put(0x06, "STATUS_CODE_PIN_OR_KEY_MISSING");
-            put(0x07, "MEMORY_CAPACITY_EXCEEDED");
-            put(0x08, "CONNECTION_TIMEOUT");
-            put(0x0C, "STATUS_CODE_COMMAND_DISALLOWED");
-            put(0x12, "STATUS_CODE_INVALID_BTLE_COMMAND_PARAMETERS");
-            put(0x13, "REMOTE_USER_TERMINATED_CONNECTION");
-            put(0x14, "REMOTE_DEV_TERMINATION_DUE_TO_LOW_RESOURCES");
-            put(0x15, "REMOTE_DEV_TERMINATION_DUE_TO_POWER_OFF");
-            put(0x16, "LOCAL_HOST_TERMINATED_CONNECTION");
-            put(0x1A, "UNSUPPORTED_REMOTE_FEATURE");
-            put(0x1E, "STATUS_CODE_INVALID_LMP_PARAMETERS");
-            put(0x1F, "STATUS_CODE_UNSPECIFIED_ERROR");
-            put(0x22, "STATUS_CODE_LMP_RESPONSE_TIMEOUT");
-            put(0x24, "STATUS_CODE_LMP_PDU_NOT_ALLOWED");
-            put(0x28, "INSTANT_PASSED");
-            put(0x29, "PAIRING_WITH_UNIT_KEY_UNSUPPORTED");
-            put(0x2A, "DIFFERENT_TRANSACTION_COLLISION");
-            put(0x3A, "CONTROLLER_BUSY");
-            put(0x3B, "CONN_INTERVAL_UNACCEPTABLE");
-            put(0x3C, "DIRECTED_ADVERTISER_TIMEOUT");
-            put(0x3D, "CONN_TERMINATED_DUE_TO_MIC_FAILURE");
-            put(0x3E, "CONN_FAILED_TO_BE_ESTABLISHED");
-            put(0x81, "GATT internal error");
-            put(0x85, "Dreaded 133 bug");
+    /**
+     * Base class of Gatt read/write operations
+     */
+    public static abstract class Operation {
+        private static final int DEFAULT_TIMEOUT_IN_MILLIS = 10000;
+
+        public abstract void execute(BluetoothGatt bluetoothGatt);
+
+        public int getTimeoutInMillis() {
+            return DEFAULT_TIMEOUT_IN_MILLIS;
         }
-    };
+    }
+
+    /**
+     * Wrapper for BluetoothGatt#readCharacteristic
+     */
+    public static class CharacteristicRead extends Operation {
+
+        private final ReadCallback mCallback;
+        private final BluetoothGattCharacteristic mCh;
+
+        public CharacteristicRead(BluetoothGattCharacteristic characteristic, ReadCallback callback) {
+            mCh = characteristic;
+            mCallback = callback;
+        }
+
+        @Override
+        public void execute(BluetoothGatt gatt) {
+            Log.d(TAG, "reading from characteristic " + mCh.getUuid());
+            gatt.readCharacteristic(mCh);
+        }
+
+        public void onRead(BluetoothGattCharacteristic characteristic) {
+            if (mCallback != null)
+                mCallback.call(characteristic.getValue());
+        }
+
+        @NonNull
+        public String toString() {
+            return "Read characteristic " + mCh.getUuid();
+        }
+    }
+
+    /**
+     * Wrapper for BluetoothGatt#writeCharacteristic
+     */
+    public static class CharacteristicWrite extends Operation {
+
+        private final BluetoothGattCharacteristic mCh;
+
+        public CharacteristicWrite(BluetoothGattCharacteristic characteristic) {
+            mCh = characteristic;
+        }
+
+        @Override
+        public void execute(BluetoothGatt gatt) {
+            Log.d(TAG, "writing to characteristic " + mCh.getUuid());
+            gatt.writeCharacteristic(mCh);
+        }
+
+        @NonNull
+        public String toString() {
+            return "Write characteristic " + mCh.getUuid();
+        }
+    }
+
+    /**
+     * Wrapper for BluetoothGatt#readDescriptor
+     */
+    public static class DescriptorRead extends Operation {
+
+        private final ReadCallback mCallback;
+        private final BluetoothGattDescriptor mDe;
+
+        public DescriptorRead(BluetoothGattDescriptor descriptor, ReadCallback callback) {
+            mDe = descriptor;
+            mCallback = callback;
+        }
+
+        @Override
+        public void execute(BluetoothGatt gatt) {
+            Log.d(TAG, "reading from descriptor " + mDe.getUuid());
+            gatt.readDescriptor(mDe);
+        }
+
+        public void onRead(BluetoothGattDescriptor descriptor) {
+            if (mCallback != null)
+                mCallback.call(descriptor.getValue());
+        }
+
+        @NonNull
+        public String toString() {
+            return "Read descriptor " + mDe.getUuid();
+        }
+    }
+
+    /**
+     * Wrapper for BluetoothGatt#writeDescriptor
+     */
+    public static class DescriptorWrite extends Operation {
+        private final BluetoothGattDescriptor mDe;
+
+        public DescriptorWrite(BluetoothGattDescriptor descriptor) {
+            mDe = descriptor;
+        }
+
+        @Override
+        public void execute(BluetoothGatt gatt) {
+            Log.d(TAG, "writing to descriptor " + mDe.getUuid());
+            gatt.writeDescriptor(mDe);
+        }
+
+        @NonNull
+        public String toString() {
+            return "Write descriptor " + mDe.getUuid();
+        }
+    }
 
     /**
      * Subclass of BluetoothGattCallback that is designed to sit behind the caller's
@@ -366,67 +423,5 @@ class GattQueue {
             mQ.operationComplete();
             mQ.startNextOperation();
         }
-    }
-
-    /**
-     * Called when an operation is complete, either because of a callback or because it timed out
-     */
-    private synchronized void operationComplete() {
-        if (mCurrentOperation == null) {
-            Log.e(TAG, "operationComplete, but no current operation");
-            return;
-        }
-        mCurrentOperation = null;
-        if (mCurrentOperationTimeout != null)
-            mCurrentOperationTimeout.cancel();
-        mCurrentOperationTimeout = null;
-    }
-
-    /**
-     * Pick the next operation off the queue
-     */
-    private synchronized void startNextOperation() {
-        if (mQueue.size() == 0)
-            return;
-
-        // Get the next operation
-        mCurrentOperation = mQueue.poll();
-        Log.v(TAG, "Starting operation " + mCurrentOperation);
-
-        // Initiate timeout timer
-        mCurrentOperationTimeout = new Timer();
-        mCurrentOperationTimeout.schedule(new TimerTask() {
-            public void run() {
-                Log.d(TAG, "Operation timed out " + mCurrentOperation);
-                mCurrentOperationTimeout = null;
-                operationComplete();
-                startNextOperation();
-            }
-        }, mCurrentOperation.getTimeoutInMillis());
-
-        mCurrentOperation.execute(mBluetoothGatt);
-    }
-
-    /**
-     * Create a new queue for sequencing GATT operations
-     *
-     * @param gatt the device being managed
-     * @param cb   callback handler
-     */
-    public GattQueue(BluetoothGatt gatt, Callback cb) {
-        mBluetoothGatt = gatt;
-        cb.setQueue(this);
-    }
-
-    /**
-     * Add an operation to the queue, and start it if nothing is currently running
-     *
-     * @param operation subclass of GattManager#Operation
-     */
-    public synchronized void queue(Operation operation) {
-        mQueue.add(operation);
-        Log.v(TAG, "Queueing operation " + operation);
-        if (mCurrentOperation == null)
-            startNextOperation();
     }
 }

@@ -18,14 +18,12 @@
  */
 package com.cdot.ping.samplers;
 
-import android.content.res.Resources;
 import android.location.Location;
 import android.os.Looper;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
 
-import com.cdot.ping.R;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationCallback;
 import com.google.android.gms.location.LocationRequest;
@@ -36,13 +34,13 @@ import com.google.android.gms.tasks.Task;
 
 /**
  * Location sampling, provides location data to LoggingService.
- *
+ * <p>
  * For apps running in the background on "O" devices, location is computed only once every 10
  * minutes and delivered batched every 30 minutes. This restriction applies even to apps
  * targeting "N" or lower which are run on "O" devices. So a background service will only log
  * samples every 30 minutes, which is useless for Ping. LoggingService puts itself into
  * foreground using a Notification, so is able to keep sampling at a foreground rate.
- *
+ * <p>
  * Note that this Sampler doesn't log it's own samples, instead it is used to watermark samples
  * coming from the SonarSampler with the location.
  */
@@ -66,11 +64,6 @@ public class LocationSampler extends Sampler {
 
     // Callback for changes in location coming from location services
     private LocationCallback mLocationCallback;
-
-    // Last location delivered from the Location services
-    private Location mCurrentLocation;
-
-    private double mMinDeltaPos = 1; //m
 
     @Override // Sampler
     void onAttach(LoggingService svc) {
@@ -113,7 +106,9 @@ public class LocationSampler extends Sampler {
     }
 
     @Override // Sampler
-    public String getTag() { return TAG; }
+    public String getTag() {
+        return TAG;
+    }
 
     @Override // Sampler
     public void stopSampling() {
@@ -125,17 +120,6 @@ public class LocationSampler extends Sampler {
         }
     }
 
-    @Override // Sampler
-    public String getNotificationStateText(Resources r) {
-        return r.getString(R.string.val_latitude, mCurrentLocation.getLatitude()) + " " +
-                r.getString(R.string.val_longitude, mCurrentLocation.getLongitude());
-    }
-
-    public void configure(double mdp) {
-        mMinDeltaPos = mdp;
-        mMustLogNextSample = true;
-    }
-
     /*
      * Accuracy is the radius of 68% confidence. If you draw a circle centered at this
      * location's latitude and longitude, and with a radius equal to the locationAccuracy (metres), then
@@ -145,17 +129,6 @@ public class LocationSampler extends Sampler {
         if (mService == null)
             return; // Service has been destroyed
 
-        if (mCurrentLocation == null
-                || mMustLogNextSample
-                // if new location has better accuracy, always use it
-                || (loc.getAccuracy() < mCurrentLocation.getAccuracy())
-                // if we've moved further than the current location accuracy or the target min delta
-                || (mCurrentLocation.distanceTo(loc) > Math.min(mCurrentLocation.getAccuracy(), mMinDeltaPos))) {
-
-            mCurrentLocation = loc;
-
-            mService.onLocationSample(mCurrentLocation);
-            mMustLogNextSample = false;
-        }
+        mService.onLocationSample(loc);
     }
 }

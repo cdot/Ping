@@ -40,9 +40,9 @@
         android:summary="@string/help_minimumPositionChange"
         android:title="@string/pref_pos_delta" />
 
-    <Preference
-        android:key="sampleFile"
-        android:summary="@string/help_sampleFile"
-        android:title="@string/pref_sample_file" />
+    <SeekBarPreference
+        android:key="maxSamples"
+        android:summary="@string/help_maxSamples"
+        android:title="@string/pref_max_samples" />
 
 </androidx.preference.PreferenceScreen>

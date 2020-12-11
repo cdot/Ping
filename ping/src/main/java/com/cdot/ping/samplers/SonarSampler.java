@@ -59,7 +59,6 @@ public class SonarSampler extends Sampler {
     public static final String TAG = SonarSampler.class.getSimpleName();
 
     private static final String CLASS_NAME = SonarSampler.class.getCanonicalName();
-    private static final int DoubleBYTES = Double.SIZE / 8;
 
     // Messages sent by the service
     public static final String ACTION_BT_STATE = CLASS_NAME + ".action_bt_state";
@@ -68,9 +67,6 @@ public class SonarSampler extends Sampler {
     public static final String EXTRA_DEVICE_ADDRESS = CLASS_NAME + ".device_address";
     public static final String EXTRA_STATE = CLASS_NAME + ".state";
     public static final String EXTRA_REASON = CLASS_NAME + ".reason";
-
-    // Keys into sample bundles.
-    public static final String P_SONAR = "sonar";
 
     // ID bytes sent / received in every packet received from the sonar unit
     private static final byte ID0 = 83;
@@ -130,11 +126,11 @@ public class SonarSampler extends Sampler {
     private int mBluetoothStateReason;
 
     // Minimum depth change between recorded samples
-    public static final double MINIMUM_DELTA_DEPTH_DEFAULT = 0.5; // metres
-    private double mMinDeltaDepth = MINIMUM_DELTA_DEPTH_DEFAULT;
+    public static final float MINIMUM_DELTA_DEPTH_DEFAULT = 0.5f; // metres
+    private float mMinDeltaDepth = MINIMUM_DELTA_DEPTH_DEFAULT;
     private Sample mLastLoggedSample = null;
     private boolean mLoggingDisabled = false;
-    private static final double MIN_DELTA_TEMPERATURE = 1.0; // degrees C
+    private static final float MIN_DELTA_TEMPERATURE = 1.0f; // degrees C
 
     private BluetoothGatt mBluetoothGatt;
     private GattQueue mGattQueue;
@@ -143,13 +139,17 @@ public class SonarSampler extends Sampler {
     // will be accepted from LocationService
     private boolean mLocationsFromPingTest = false;
 
-    // The most recent location passed to the sampler, must never be null
+    // The most recent location given to the sampler, must never be null
     private Location mCurrentLocation = new Location(TAG);
+    // The location most recently logged
+    private Location mLastLoggedLocation = mCurrentLocation;
+
+    private float mMinDeltaPos = 1; //m
 
     // Convert a double encoded in two bytes as realpart/fracpart to a double
-    private static double b2g(byte real, byte frac) {
+    private static float b2f(byte real, byte frac) {
         int r = (int) real & 0xFF, f = (int) frac & 0xFF;
-        return ((double) r + (double) f / 100.0);
+        return ((float) r + (float) f / 100.0f);
     }
 
     // Callback that extends BluetootGattCallback
@@ -289,21 +289,21 @@ public class SonarSampler extends Sampler {
             if ((data[4] & 0xF7) != 0) Log.d(TAG, "Mysterious 4 = " + data[4]);
 
             sample.time = new Date().getTime();
-            sample.isDry = (data[4] & 0x8) != 0;
+            boolean isDry = (data[4] & 0x8) != 0;
 
             // data[5] unknown, seems to be always 9 (1001)
             if (data[5] != 9) Log.d(TAG, "Mysterious 5 = " + data[5]);
 
-            sample.depth = ft2m * b2g(data[6], data[7]);
+            sample.depth = isDry ? -0.01f : ft2m * b2f(data[6], data[7]);
 
-            sample.strength = (int) data[8] & 0xFF;
+            sample.strength = (short)((int)data[8] & 0xFF);
 
-            sample.fishDepth = ft2m * b2g(data[9], data[10]);
+            sample.fishDepth = ft2m * b2f(data[9], data[10]);
 
             // Fish strength is in a nibble, so in the range 0-15. Just return it as a number
-            sample.fishStrength = (int) data[11] & 0xF;
-            sample.battery = (data[11] >> 4) & 0xF;
-            sample.temperature = (b2g(data[12], data[13]) - 32.0) * 5.0 / 9.0;
+            sample.fishStrength = (short)((int)data[11] & 0xF);
+            sample.battery = (byte)((data[11] >> 4) & 0xF);
+            sample.temperature = (b2f(data[12], data[13]) - 32.0f) * 5.0f / 9.0f;
 
             // data[14], data[15], data[16] always 0
             if (data[14] != 0) Log.d(TAG, "Mysterious 14 = " + data[14]);
@@ -315,10 +315,36 @@ public class SonarSampler extends Sampler {
             for (int i = 0; i < data.length; i++) mess += (i == 0 ? "[" : ",") + ((int)data[i] & 0xFF);
             Log.d(TAG, mess + "]");*/
 
-            onSampleReceived(sample);
+            if (mLoggingDisabled || mService == null)
+                return;
+
+            sample.latitude = mCurrentLocation.getLatitude();
+            sample.longitude = mCurrentLocation.getLongitude();
+
+            if (mMustLogNextSample
+                    // Log if battery level has changed
+                    || sample.battery != mLastLoggedSample.battery
+                    // Log if temperature has changed enough
+                    || Math.abs(sample.temperature - mLastLoggedSample.temperature) >= MIN_DELTA_TEMPERATURE
+                    // Log if depth has changed enough, and it's not dry
+                    || Math.abs(sample.depth - mLastLoggedSample.depth) >= mMinDeltaDepth
+                    // if we've moved further than the current location accuracy or the target min delta
+                    || (mLastLoggedLocation.distanceTo(mCurrentLocation) > mMinDeltaPos)) {
+
+                mMustLogNextSample = false;
+                mLastLoggedSample = sample;
+
+                mLastLoggedLocation = new Location(mCurrentLocation);
+
+                mService.logSample(sample);
+            }
         }
     }
 
+    /**
+     * Location being set from LocationSampler (view LoggingService)
+     * @param loc location to set
+     */
     public void setLocation(Location loc) {
         if (!mLocationsFromPingTest)
             mCurrentLocation = loc;
@@ -349,29 +375,6 @@ public class SonarSampler extends Sampler {
         mBluetoothGatt = null;
     }
 
-    /**
-     * Update the last recorded sample
-     */
-    private void onSampleReceived(Sample sample) {
-        if (mLoggingDisabled || mService == null)
-            return;
-
-        if (mMustLogNextSample
-                // Log if battery level has changed
-                || sample.battery != mLastLoggedSample.battery
-                // Log if temperature has changed enough
-                || Math.abs(sample.temperature - mLastLoggedSample.temperature) >= MIN_DELTA_TEMPERATURE
-                // Log if depth has changed enough, and it's not dry
-                || !sample.isDry && (Math.abs(sample.depth - mLastLoggedSample.depth) >= mMinDeltaDepth)) {
-            mMustLogNextSample = false;
-            mLastLoggedSample = sample;
-
-            sample.location = mCurrentLocation;
-
-            mService.onSonarSample(sample);
-        }
-    }
-
     // Called when something is binding to the service
     @Override // Sampler
     void onBind() {
@@ -392,9 +395,17 @@ public class SonarSampler extends Sampler {
         return TAG;
     }
 
-    @Override // implements Sampler
+    /**
+     * Get the text string this sampler contributes to the notification. This string should
+     * incorporate the most recent sample, and the connected state of the sampler.
+     *
+     * @return a text string illustrating the current state of the sampler.
+     */
     public String getNotificationStateText(Resources r) {
-        return mLastLoggedSample == null ? r.getString(R.string.depth_unknown) : r.getString(R.string.val_depth, mLastLoggedSample.depth);
+        return (mLastLoggedSample == null
+                ? r.getString(R.string.depth_unknown) : r.getString(R.string.val_depth, mLastLoggedSample.depth)) + " "
+                + r.getString(R.string.val_latitude, mLastLoggedSample.latitude) + " "
+                + r.getString(R.string.val_longitude, mLastLoggedSample.longitude);
     }
 
     @Override // implements Sampler
@@ -474,7 +485,8 @@ public class SonarSampler extends Sampler {
      * @param range         0..6 (3, 6, 9, 18, 24, 36, auto)
      * @param minDeltaDepth min depth change, in metres
      */
-    public void configure(int sensitivity, int noise, int range, double minDeltaDepth) {
+    public void configure(int sensitivity, int noise, int range, float minDeltaDepth, float minDeltaPos) {
+        mMinDeltaPos = minDeltaPos;
         Log.d(TAG, "configure(" + sensitivity + "," + noise + "," + range + "," + minDeltaDepth + ")");
         mMinDeltaDepth = minDeltaDepth;
 

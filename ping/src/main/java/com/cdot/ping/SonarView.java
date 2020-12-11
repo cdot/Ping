@@ -55,48 +55,21 @@ public class SonarView extends View {
     private static final int BITMAP_WIDTH = 5000; // 1 sample per pixel
     private static final int BITMAP_RIGHT = BITMAP_WIDTH - 1; // 1 sample per pixel
     private static final int MAX_STRENGTH = 255;
+    private static final int MAX_FSTRENGTH = 15;
     private static final int MAX_DEPTH = 36;
     private static final int DEPTH_RANGE = BITMAP_HEIGHT - MAX_STRENGTH;
-    private int depth2bm(double d) {
-        return (int)(MAX_STRENGTH / 2 + d * DEPTH_RANGE / MAX_DEPTH);
-    }
-
-    private static final int[] RANGES = new int[] { 3, 6, 9, 18, 24, 36, 36 };
-
-    private Paint mWaterPaint;
-    private Paint mBottomPaint;
-    private Paint mPaint;
-
-    private Canvas mDrawingCanvas;
-    private Bitmap mDrawingBitmap;
-    private Rect mDrawSrcRect;
-    private Rect mDrawDestRect;
-    private Settings mSettings;
-
-    private class DecoratedSample {
-        Sample sample;
-        float depthError;
-        int maxDepth;
-    }
-
-    public void onSaveInstanceState(Bundle bundle) {
-        if (bundle == null)
-            return;
-        ByteArrayOutputStream stream = new ByteArrayOutputStream();
-        mDrawingBitmap.compress(Bitmap.CompressFormat.PNG, 100, stream);
-        bundle.putByteArray("sonarview_bitmap", stream.toByteArray());
-    }
-
-    public void onRestoreInstanceState(Bundle bundle) {
-        if (bundle == null)
-            return;
-        byte[] bits = bundle.getByteArray("sonarview_bitmap");
-        Bitmap restore = BitmapFactory.decodeByteArray(bits, 0, bits.length, null);
-        mDrawingCanvas.drawBitmap(restore, mDrawSrcRect, mDrawDestRect, null);
-    }
-
-    private ConcurrentLinkedQueue<DecoratedSample> mSampleQueue = new ConcurrentLinkedQueue<>();
-    Thread mRenderThread;
+    private static final int[] RANGES = new int[]{3, 6, 9, 18, 24, 36, 36};
+    private final Paint mWaterPaint;
+    private final Paint mBottomPaint;
+    private final Paint mDepthPaint;
+    private final Paint mFishPaint;
+    private final Canvas mDrawingCanvas;
+    private final Bitmap mDrawingBitmap;
+    private final Rect mDrawSrcRect;
+    private final Rect mDrawDestRect;
+    private final Settings mSettings;
+    private final ConcurrentLinkedQueue<DecoratedSample> mSampleQueue = new ConcurrentLinkedQueue<>();
+    private Thread mRenderThread;
 
     public SonarView(Context context, AttributeSet attrs) {
         super(context, attrs);
@@ -115,22 +88,32 @@ public class SonarView extends View {
         mDrawDestRect = new Rect(0, 0, BITMAP_WIDTH, BITMAP_HEIGHT);
 
         mWaterPaint = new Paint();
-        mWaterPaint.setStyle(Paint.Style.FILL);
+        mWaterPaint.setStyle(Paint.Style.FILL_AND_STROKE);
         Shader waterShader = new LinearGradient(0, 0, 0, BITMAP_HEIGHT, Color.CYAN, Color.BLUE, Shader.TileMode.MIRROR);
         mWaterPaint.setShader(waterShader);
 
         mBottomPaint = new Paint();
-        mBottomPaint.setStyle(Paint.Style.STROKE);
+        mBottomPaint.setStyle(Paint.Style.FILL_AND_STROKE);
         Shader bottomShader = new LinearGradient(0, 0, 0, BITMAP_HEIGHT, Color.GREEN, Color.BLACK, Shader.TileMode.MIRROR);
         mBottomPaint.setShader(bottomShader);
 
-        mPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        mPaint.setAntiAlias(true);
-        mPaint.setStrokeWidth(1);
-        mPaint.setStyle(Paint.Style.STROKE);
-        final Shader shader = new LinearGradient(0, 0, 0, 1, Color.YELLOW, Color.RED, Shader.TileMode.MIRROR);
-        final Matrix mat = new Matrix();
-        mPaint.setShader(shader);
+        mDepthPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        mDepthPaint.setAntiAlias(true);
+        mDepthPaint.setStrokeWidth(1);
+        mDepthPaint.setStyle(Paint.Style.FILL_AND_STROKE);
+        final Shader depthShader = new LinearGradient(0, 0, 0, 1, Color.YELLOW, Color.RED, Shader.TileMode.MIRROR);
+        mDepthPaint.setShader(depthShader);
+
+        mFishPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        mFishPaint.setAntiAlias(true);
+        mFishPaint.setStrokeWidth(1);
+        mFishPaint.setStyle(Paint.Style.FILL_AND_STROKE);
+        final Shader fishShader = new LinearGradient(0, 0, 0, 1, Color.LTGRAY, Color.GRAY, Shader.TileMode.MIRROR);
+        mFishPaint.setShader(fishShader);
+
+        final Matrix depthMat = new Matrix();
+        final Matrix fishMat = new Matrix();
+        final int SAMPLE_WIDTH = 10;
 
         mRenderThread = new Thread(new Runnable() {
             public void run() {
@@ -138,25 +121,52 @@ public class SonarView extends View {
                     if (mSampleQueue.size() > 0) {
                         synchronized (this) {
                             int n = mSampleQueue.size();
+
                             // Scroll the drawing bitmap to accommodate the queued samples
                             Rect srcRect = new Rect(n, 0, BITMAP_RIGHT, BITMAP_BOTTOM);
-                            Rect destRect = new Rect(0, 0, BITMAP_RIGHT - n, BITMAP_BOTTOM);
+                            Rect destRect = new Rect(0, 0, BITMAP_RIGHT - n * SAMPLE_WIDTH, BITMAP_BOTTOM);
                             mDrawingCanvas.drawBitmap(mDrawingBitmap, srcRect, destRect, null);
-                            mDrawingCanvas.drawRect(BITMAP_RIGHT - n, 0, BITMAP_RIGHT, BITMAP_BOTTOM, mWaterPaint);
 
+                            // Draw the water
+                            mDrawingCanvas.drawRect(BITMAP_RIGHT - n * SAMPLE_WIDTH, 0, BITMAP_RIGHT, BITMAP_BOTTOM, mWaterPaint);
+
+                            int left = BITMAP_RIGHT - SAMPLE_WIDTH;
+                            int right = BITMAP_RIGHT;
                             for (; n > 0; n--) {
                                 DecoratedSample ds = mSampleQueue.poll();
                                 Sample sample = ds.sample;
-                                float error = ds.depthError;
                                 int maxDepth = ds.maxDepth;
-                                float bottom = (float)(sample.depth - error) * BITMAP_HEIGHT / maxDepth;
-                                float mid = (float)sample.depth * BITMAP_HEIGHT / maxDepth;
-                                float top = (float)(sample.depth + error) * BITMAP_HEIGHT / maxDepth;
-                                mDrawingCanvas.drawLine(BITMAP_RIGHT - n, bottom, BITMAP_RIGHT - n, BITMAP_BOTTOM, mBottomPaint);
-                                mat.setScale(1, (float)(top - bottom));
-                                mat.postTranslate(0, (float)mid);
-                                shader.setLocalMatrix(mat);
-                                mDrawingCanvas.drawLine(BITMAP_RIGHT - n, bottom, BITMAP_RIGHT - n, top, mPaint);
+
+                                float depthError = ds.depthError;
+                                float depthBottom = (sample.depth - depthError) * BITMAP_HEIGHT / maxDepth;
+                                float depthMid = sample.depth * BITMAP_HEIGHT / maxDepth;
+                                float depthTop = (sample.depth + depthError) * BITMAP_HEIGHT / maxDepth;
+
+                                //mDrawingCanvas.drawLine(BITMAP_RIGHT - n, depthBottom, BITMAP_RIGHT - n, BITMAP_BOTTOM, mBottomPaint);
+                                mDrawingCanvas.drawRect(left, depthBottom, right, BITMAP_BOTTOM, mBottomPaint);
+
+                                if (sample.fishDepth > 0) {
+                                    float fishError = ds.fishError;
+                                    float fishBottom = (sample.fishDepth - fishError) * BITMAP_HEIGHT / maxDepth;
+                                    float fishMid = sample.fishDepth * BITMAP_HEIGHT / maxDepth;
+                                    float fishTop = (sample.fishDepth + fishError) * BITMAP_HEIGHT / maxDepth;
+
+                                    fishMat.setScale(1, Math.abs(fishTop - fishBottom));
+                                    fishMat.postTranslate(0, fishMid);
+                                    fishShader.setLocalMatrix(fishMat);
+
+                                    //mDrawingCanvas.drawLine(BITMAP_RIGHT - n, fishBottom, BITMAP_RIGHT - n, fishTop, mFishPaint);
+                                    mDrawingCanvas.drawRect(left, fishTop, right, fishBottom, mFishPaint);
+                                }
+
+                                depthMat.setScale(1, Math.abs(depthTop - depthBottom));
+                                depthMat.postTranslate(0, depthMid);
+                                depthShader.setLocalMatrix(depthMat);
+                                //mDrawingCanvas.drawLine(left, depthBottom, right, depthTop, mDepthPaint);
+                                mDrawingCanvas.drawRect(left, depthTop, right, depthBottom, mDepthPaint);
+
+                                right = left;
+                                left -= SAMPLE_WIDTH;
                             }
                         }
 
@@ -175,6 +185,26 @@ public class SonarView extends View {
             }
         });
         mRenderThread.start();
+    }
+
+    private int depth2bm(double d) {
+        return (int) (MAX_STRENGTH / 2 + d * DEPTH_RANGE / MAX_DEPTH);
+    }
+
+    public void onSaveInstanceState(Bundle bundle) {
+        if (bundle == null)
+            return;
+        ByteArrayOutputStream stream = new ByteArrayOutputStream();
+        mDrawingBitmap.compress(Bitmap.CompressFormat.PNG, 100, stream);
+        bundle.putByteArray("sonarview_bitmap", stream.toByteArray());
+    }
+
+    public void onRestoreInstanceState(Bundle bundle) {
+        if (bundle == null)
+            return;
+        byte[] bits = bundle.getByteArray("sonarview_bitmap");
+        Bitmap restore = BitmapFactory.decodeByteArray(bits, 0, bits.length, null);
+        mDrawingCanvas.drawBitmap(restore, mDrawSrcRect, mDrawDestRect, null);
     }
 
     @Override // View
@@ -218,6 +248,15 @@ public class SonarView extends View {
         // Convert strength in the range 0..255 to an error in metres
         float maxError = ds.maxDepth / (RANGES.length - 1);
         ds.depthError = (MAX_STRENGTH - sample.strength) * maxError / MAX_STRENGTH;
+        // Convert fishstrength in the range 0..15 to an error in metres
+        maxError /= 2;
+        ds.fishError = (MAX_FSTRENGTH - sample.fishStrength) * maxError / MAX_FSTRENGTH;
         mSampleQueue.add(ds);
+    }
+
+    private class DecoratedSample {
+        Sample sample;
+        float depthError, fishError;
+        int maxDepth;
     }
 }

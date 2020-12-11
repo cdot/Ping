@@ -48,17 +48,110 @@ import java.util.Map;
  */
 public class DiscoveryFragment extends Fragment {
     public static final String TAG = DiscoveryFragment.class.getSimpleName();
-
-    private List<BluetoothDevice> mDeviceList = new ArrayList<>();
-    private List<Map<String, Object>> mDeviceViewItems;
-
-    private DiscoveryFragmentBinding mBinding;
-
-    private BluetoothLeScanner mBLEScanner = null;
     boolean mIgnoreScanResults = false; // used during error handling
-
+    private final List<BluetoothDevice> mDeviceList = new ArrayList<>();
+    private List<Map<String, Object>> mDeviceViewItems;
+    private DiscoveryFragmentBinding mBinding;
+    private BluetoothLeScanner mBLEScanner = null;
     // Automatically connect to the first compatible device found
     private boolean mAutoConnect;
+
+    // No-arguments constructor needed when waking app from sleep
+    public DiscoveryFragment() {
+        this(false);
+    }
+
+    DiscoveryFragment(boolean autoconnect) {
+        mAutoConnect = autoconnect;
+    }
+
+    // Fragment lifecycle
+    // see https://developer.android.com/guide/fragments/lifecycle
+
+    private MainActivity getMainActivity() {
+        return ((MainActivity) getActivity());
+    }
+
+    @Override // Fragment
+    public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
+        if (savedInstanceState != null && savedInstanceState.getBoolean("autoconnect"))
+            mAutoConnect = true;
+
+        mBinding = DiscoveryFragmentBinding.inflate(inflater, container, false);
+        mBinding.discoveryHelpTV.setText(mAutoConnect ? R.string.help_scan_first : R.string.help_scan_all);
+
+        // Listener invoked when a device is selected for pairing. This is attached even
+        // if there is no bluetooth, so we can test/demo it.
+        AdapterView.OnItemClickListener clickListener = new AdapterView.OnItemClickListener() {
+            public void onItemClick(AdapterView<?> adapterView, View v, int arg2, long arg3) {
+                BluetoothDevice device = (BluetoothDevice) mDeviceViewItems.get(arg2).get("device");
+                getMainActivity().switchToConnectedFragment(device);
+            }
+        };
+
+        mBinding.devicesLV.setOnItemClickListener(clickListener);
+
+        // LE discovery. ScanFilter just doesn't work. A scan without filtering finds the device, a scan with
+        // filtering never invokes the callback.
+        BluetoothAdapter bta = BluetoothAdapter.getDefaultAdapter();
+
+        mIgnoreScanResults = false;
+        // mBLEScanner is a singleton in the adapter; once it has been found once, there's no point
+        // in re-finding it
+        mBLEScanner = bta.getBluetoothLeScanner();
+
+        // Note that scanning with filters just doesn't work, so we have to filter manually.
+        // Scanning continues ad infinitum. Can't see any obvious way to remove a device from the
+        // scan list.
+        Log.d(TAG, "Starting BLE scan");
+        mBLEScanner.startScan(new ScanBack("FIRST"));
+        updateDisplay();
+
+        return mBinding.discoveryF;
+    }
+
+    @Override // Fragment
+    public void onDestroyView() {
+        super.onDestroyView();
+        Log.d(TAG, "onDestroyView");
+        if (mBLEScanner != null) {
+            Log.d(TAG, "stopping BLE scanner");
+            mIgnoreScanResults = true;
+            mBLEScanner.stopScan(new ScanBack("DEAD"));
+            mBLEScanner.flushPendingScanResults(new ScanBack("FLUSH"));
+            mBLEScanner = null;
+        }
+    }
+
+    @Override // Fragment
+    public void onSaveInstanceState(@NonNull Bundle bundle) {
+        super.onSaveInstanceState(bundle);
+        bundle.putBoolean("autoconnect", mAutoConnect);
+    }
+
+    // Update display after lists contents changed
+    private void updateDisplay() {
+        // Fill the UI from our list of devices
+        mDeviceViewItems = new ArrayList<>();
+        for (BluetoothDevice dr : mDeviceList) {
+            Map<String, Object> map = new HashMap<>();
+            map.put("address", dr.getAddress());
+            map.put("name", dr.getName());
+            map.put("device", dr);
+            mDeviceViewItems.add(map);
+        }
+        mBinding.devicesLV.setAdapter(new SimpleAdapter(
+                getActivity(),
+                mDeviceViewItems,
+                R.layout.listview_device,
+                new String[]{
+                        "address", "name"
+                },
+                new int[]{
+                        R.id.deviceAddressTV, R.id.deviceNameTV
+                }));
+        mBinding.devicesLV.setStackFromBottom(false);
+    }
 
     private class ScanBack extends ScanCallback {
         String mId;
@@ -119,102 +212,5 @@ public class DiscoveryFragment extends Fragment {
                 }
             }
         }
-    }
-
-    private MainActivity getMainActivity() {
-        return ((MainActivity)getActivity());
-    }
-    
-    // Fragment lifecycle
-    // see https://developer.android.com/guide/fragments/lifecycle
-
-    @Override // Fragment
-    public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
-        if (savedInstanceState != null && savedInstanceState.getBoolean("autoconnect"))
-            mAutoConnect = true;
-
-        mBinding = DiscoveryFragmentBinding.inflate(inflater, container, false);
-        mBinding.discoveryHelpTV.setText(mAutoConnect ? R.string.help_scan_first : R.string.help_scan_all);
-
-        // Listener invoked when a device is selected for pairing. This is attached even
-        // if there is no bluetooth, so we can test/demo it.
-        AdapterView.OnItemClickListener clickListener = new AdapterView.OnItemClickListener() {
-            public void onItemClick(AdapterView<?> adapterView, View v, int arg2, long arg3) {
-                BluetoothDevice device = (BluetoothDevice) mDeviceViewItems.get(arg2).get("device");
-                getMainActivity().switchToConnectedFragment(device);
-            }
-        };
-
-        mBinding.devicesLV.setOnItemClickListener(clickListener);
-
-        // LE discovery. ScanFilter just doesn't work. A scan without filtering finds the device, a scan with
-        // filtering never invokes the callback.
-        BluetoothAdapter bta = BluetoothAdapter.getDefaultAdapter();
-
-        mIgnoreScanResults = false;
-        // mBLEScanner is a singleton in the adapter; once it has been found once, there's no point
-        // in re-finding it
-        mBLEScanner = bta.getBluetoothLeScanner();
-
-        // Note that scanning with filters just doesn't work, so we have to filter manually.
-        // Scanning continues ad infinitum. Can't see any obvious way to remove a device from the
-        // scan list.
-        Log.d(TAG, "Starting BLE scan");
-        mBLEScanner.startScan(new ScanBack("FIRST"));
-        updateDisplay();
-
-        return mBinding.discoveryF;
-    }
-
-    @Override // Fragment
-    public void onDestroyView() {
-        super.onDestroyView();
-        Log.d(TAG, "onDestroyView");
-        if (mBLEScanner != null) {
-            Log.d(TAG, "stopping BLE scanner");
-            mIgnoreScanResults = true;
-            mBLEScanner.stopScan(new ScanBack("DEAD"));
-            mBLEScanner.flushPendingScanResults(new ScanBack("FLUSH"));
-            mBLEScanner = null;
-        }
-    }
-
-    // No-arguments constructor needed when waking app from sleep
-    DiscoveryFragment() {
-        this(false);
-    }
-
-    DiscoveryFragment(boolean autoconnect) {
-        mAutoConnect = autoconnect;
-    }
-
-    @Override // Fragment
-    public void onSaveInstanceState(Bundle bundle) {
-        super.onSaveInstanceState(bundle);
-        bundle.putBoolean("autoconnect", mAutoConnect);
-    }
-
-    // Update display after lists contents changed
-    private void updateDisplay() {
-        // Fill the UI from our list of devices
-        mDeviceViewItems = new ArrayList<>();
-        for (BluetoothDevice dr : mDeviceList) {
-            Map<String, Object> map = new HashMap<>();
-            map.put("address", dr.getAddress());
-            map.put("name", dr.getName());
-            map.put("device", dr);
-            mDeviceViewItems.add(map);
-        }
-        mBinding.devicesLV.setAdapter(new SimpleAdapter(
-                getActivity(),
-                mDeviceViewItems,
-                R.layout.listview_device,
-                new String[]{
-                        "address", "name"
-                },
-                new int[]{
-                        R.id.deviceAddressTV, R.id.deviceNameTV
-                }));
-        mBinding.devicesLV.setStackFromBottom(false);
     }
 }

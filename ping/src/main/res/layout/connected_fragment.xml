@@ -243,19 +243,19 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
                 android:id="@+id/logCountTV"
                 style="@style/cell"
                 android:text="@string/val_logging_count"
-                app:layout_constraintEnd_toStartOf="@id/logTimeTV"
+                app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toEndOf="@id/logRateTV"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintTop_toTopOf="parent" />
 
-            <TextView
+            <!--TextView
                 android:id="@+id/logTimeTV"
                 style="@style/cell"
                 android:text="@string/val_logging_time"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toEndOf="@id/logCountTV"
                 app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintTop_toTopOf="parent" />
+                app:layout_constraintTop_toTopOf="parent" /-->
 
         </androidx.constraintlayout.widget.ConstraintLayout>
 
