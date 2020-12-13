@@ -31,10 +31,14 @@ import androidx.annotation.NonNull;
 
 import com.cdot.ping.R;
 
+import java.nio.ByteBuffer;
 import java.util.Date;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.UUID;
 
 import no.nordicsemi.android.ble.BleManager;
+import no.nordicsemi.android.ble.RequestQueue;
 import no.nordicsemi.android.ble.callback.profile.ProfileDataCallback;
 import no.nordicsemi.android.ble.data.Data;
 import no.nordicsemi.android.ble.observer.ConnectionObserver;
@@ -58,6 +62,8 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
     public static final float MINIMUM_DELTA_DEPTH_DEFAULT = 0.5f; // metres
     static final UUID SAMPLE_CHARACTERISTIC_UUID = UUID.fromString("0000fff1-0000-1000-8000-00805f9b34fb");
     static final UUID CONFIGURE_CHARACTERISTIC_UUID = UUID.fromString("0000fff2-0000-1000-8000-00805f9b34fb");
+    // Never fired by a real device, this picks up locations from PingTest
+    static final UUID LOCATION_CHARACTERISTIC_UUID = UUID.fromString("0000fff3-0000-1000-8000-00805f9b34fb");
     private static final String CLASS_NAME = SonarSampler.class.getCanonicalName();
     // Messages sent by the service
     public static final String ACTION_BT_STATE = CLASS_NAME + ".action_bt_state";
@@ -82,7 +88,7 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
     // Will be set true on startup and when logging is turned on
     protected boolean mMustLogNextSample = true;
     // Client characteristics
-    private BluetoothGattCharacteristic mSampleCharacteristic, mConfigureCharacteristic;
+    private BluetoothGattCharacteristic mSampleCharacteristic, mConfigureCharacteristic, mLocationCharacteristic;
     private float mMinDeltaDepth = MINIMUM_DELTA_DEPTH_DEFAULT;
     private Sample mLastLoggedSample = null;
     // Set true if a location packet is received from PingTest - after it is set true, no more samples
@@ -90,10 +96,16 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
     private boolean mLocationsFromPingTest = false;
     // The most recent location given to the sampler, must never be null
     private Location mCurrentLocation = new Location(TAG);
-    // The location most recently logged
+    // The location most recently written to the log
     private Location mLastLoggedLocation = mCurrentLocation;
+    // Min location change before a sample update will be fired
     private float mMinDeltaPos = 1; //m
-    private BluetoothDevice mBluetoothDevice;
+
+    // Activity timeout
+    private Timer mTimeoutTimer = null;
+    private boolean mSampleReceived = true; // has a sample bee seen since last timeout check?
+    private static final int SAMPLE_TIMEOUT = 10000; // must get another sample within this timeout, or we'll disconnect
+    private boolean mTimedOut = false;
 
     public SonarSampler(@NonNull final LoggingService service) {
         super(service);
@@ -110,7 +122,7 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
     public void log(final int priority, @NonNull final String message) {
         if (priority == Log.INFO)
             return;
-            Log.println(priority, TAG, message);
+        Log.println(priority, TAG, message);
     }
 
     /**
@@ -123,13 +135,6 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
             mCurrentLocation = loc;
     }
 
-    /**
-     * Aborts time travel. Call during 3 sec after enabling Flux Capacitor and only if you don't
-     * like 2020.
-     */
-    /*public void abort() {
-        cancelQueue();
-    }*/
     @NonNull
     @Override
     protected BleManagerGattCallback getGattCallback() {
@@ -147,10 +152,6 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
                 ? r.getString(R.string.depth_unknown) : r.getString(R.string.val_depth, mLastLoggedSample.depth)) + " "
                 + r.getString(R.string.val_latitude, mLastLoggedSample.latitude) + " "
                 + r.getString(R.string.val_longitude, mLastLoggedSample.longitude);
-    }
-
-    public BluetoothDevice getConnectedDevice() {
-        return mBluetoothDevice;
     }
 
     private void broadcastStateChange(int state, @NonNull BluetoothDevice device, int reason) {
@@ -180,25 +181,57 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
     @Override
     public void onDeviceFailedToConnect(@NonNull BluetoothDevice device, int reason) {
         Log.d(TAG, "onDeviceFailedToConnect");
+        cancelTimeout();
         broadcastStateChange(BT_STATE_CONNECT_FAILED, device, reason);
     }
 
     @Override
     public void onDeviceReady(@NonNull BluetoothDevice device) {
         Log.d(TAG, "onDeviceReady");
+        startTimeout();
         broadcastStateChange(BT_STATE_READY, device);
     }
 
     @Override
     public void onDeviceDisconnecting(@NonNull BluetoothDevice device) {
-        Log.d(TAG, "onDeviceDisconnecting");
+        Log.d(TAG, "onDeviceDisconnecting " + mTimedOut);
+        cancelTimeout();
         broadcastStateChange(BT_STATE_DISCONNECTING, device);
     }
 
     @Override
     public void onDeviceDisconnected(@NonNull BluetoothDevice device, int reason) {
-        Log.d(TAG, "onDeviceDisconnected");
-        broadcastStateChange(BT_STATE_DISCONNECTED, device);
+        Log.d(TAG, "onDeviceDisconnected " + mTimedOut);
+        cancelTimeout();
+        // ConnectionObserver.REASON_TIMEOUT really means a connect timeout. Overloading it here
+        // to also mean "device has gone quiet"
+        broadcastStateChange(BT_STATE_DISCONNECTED, device,
+                mTimedOut ? ConnectionObserver.REASON_TIMEOUT : ConnectionObserver.REASON_UNKNOWN);
+    }
+
+    // Disconnect timeout. If we don't get another sample within a timeout period, disconnect.
+    private void startTimeout() {
+        if (mTimeoutTimer == null) {
+            mTimeoutTimer = new Timer(true);
+            mTimeoutTimer.schedule(new TimerTask() {
+                @Override
+                public void run() {
+                    if (!mSampleReceived) {
+                        Log.d(TAG, "Sample collection timed out");
+                        mTimedOut = true;
+                        disconnect().enqueue();
+                    }
+                    mSampleReceived = false;
+                }
+            }, SAMPLE_TIMEOUT, SAMPLE_TIMEOUT);
+        }
+    }
+
+    private void cancelTimeout() {
+         if (mTimeoutTimer != null) {
+             mTimeoutTimer.cancel();
+             mTimeoutTimer = null;
+         }
      }
 
     /**
@@ -235,11 +268,12 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
     }
 
     // Connect to the given device
-    // TODO: what if we're already connected to another device? How do we disconnect?
     public void connectToDevice(BluetoothDevice device) {
+        mTimedOut = false;
         setConnectionObserver(this);
         connect(device)
                 .timeout(100000)
+                .useAutoConnect(true)
                 .retry(3, 100)
                 .done(dev -> {
                     Log.i(TAG, "Device connection to " + device.getName() + " done");
@@ -251,7 +285,6 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
      * BluetoothGatt callbacks object.
      */
     private class SonarGattCallback extends BleManagerGattCallback {
-        private static final String TAG = "SonarSamplerTwo/SonarGattCallback";
 
         // This method will be called when the device is connected and services are discovered.
         // You need to obtain references to the characteristics and descriptors that you will use.
@@ -287,6 +320,12 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
 
             mConfigureCharacteristic.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);
 
+            mLocationCharacteristic = service.getCharacteristic(LOCATION_CHARACTERISTIC_UUID);
+            if (mLocationCharacteristic != null && (mLocationCharacteristic.getProperties() & BluetoothGattCharacteristic.PROPERTY_NOTIFY) == 0) {
+                Log.e(TAG, "Can't get location notifications");
+                mLocationCharacteristic = null;
+            }
+
             // all required services have been found
             return true;
         }
@@ -294,9 +333,13 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
         @Override
         protected void initialize() {
             Log.d(TAG, "Connecting SampleHandler");
-            beginAtomicRequestQueue()
-                    .add(enableNotifications(mSampleCharacteristic))
-                    .done(device -> log(Log.INFO, "Notification enabled"))
+            RequestQueue q = beginAtomicRequestQueue()
+                    .add(enableNotifications(mSampleCharacteristic));
+            if (mLocationCharacteristic != null) {
+                q.add(enableNotifications(mLocationCharacteristic));
+                setNotificationCallback(mLocationCharacteristic).with(new LocationHandler());
+            }
+            q.done(device -> log(Log.INFO, "Notification enabled"))
                     .enqueue();
             setNotificationCallback(mSampleCharacteristic).with(new SampleHandler());
         }
@@ -309,8 +352,23 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
         }
     }
 
+    // Test location received from PingTest. In normal use this should never fire.
+    private class LocationHandler implements ProfileDataCallback {
+        @Override
+        public void onDataReceived(@NonNull BluetoothDevice device, @NonNull Data data) {
+            ByteBuffer byteBuffer = ByteBuffer.allocate(Double.BYTES);
+            byteBuffer.put(data.getValue(), 0, Double.BYTES);
+            byteBuffer.flip();
+            mCurrentLocation.setLatitude(byteBuffer.getDouble());
+            byteBuffer.clear();
+            byteBuffer.put(data.getValue(), Double.BYTES, Double.BYTES);
+            byteBuffer.flip();
+            mCurrentLocation.setLongitude(byteBuffer.getDouble());
+            mLocationsFromPingTest = true;
+        }
+    }
+
     private class SampleHandler implements ProfileDataCallback {
-        private static final String TAG = "SonarSamplerTwo/SampleHandler";
 
         @Override
         public void onDataReceived(@NonNull final BluetoothDevice device, @NonNull final Data data) {
@@ -390,6 +448,9 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
                 if (mService != null)
                     mService.logSample(sample);
             }
+
+            // Tell the timeout we're OK
+            mSampleReceived = true;
         }
     }
 }

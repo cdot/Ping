@@ -31,40 +31,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent">
 
-        <!--androidx.constraintlayout.widget.ConstraintLayout
-            android:id="@+id/settingsL"
-            style="@style/row"
-            app:layout_constraintBottom_toTopOf="@+id/locationInfoL"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/deviceInfoL">
-
-            <TextView
-                android:id="@+id/rangeTV"
-                style="@style/cell"
-                android:text="@string/val_range"
-                app:layout_constraintEnd_toStartOf="@+id/sensitivityTV"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toTopOf="parent" />
-
-            <TextView
-                android:id="@+id/sensitivityTV"
-                style="@style/cell"
-                android:text="@string/val_sensitivity"
-                app:layout_constraintEnd_toStartOf="@+id/noiseTV"
-                app:layout_constraintStart_toEndOf="@id/rangeTV"
-                app:layout_constraintTop_toTopOf="parent" />
-
-            <TextView
-                android:id="@+id/noiseTV"
-                style="@style/cell"
-                android:text="@string/val_noise"
-                app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintStart_toEndOf="@+id/sensitivityTV"
-                app:layout_constraintTop_toTopOf="parent" />
-
-        </androidx.constraintlayout.widget.ConstraintLayout -->
-
         <androidx.constraintlayout.widget.ConstraintLayout
             android:id="@+id/locationInfoL"
             style="@style/row"

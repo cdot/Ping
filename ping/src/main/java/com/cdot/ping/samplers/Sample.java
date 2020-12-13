@@ -67,15 +67,25 @@ public class Sample implements Parcelable {
     public byte battery; // Range 0..6
 
     public Sample() {
+        time = System.currentTimeMillis();
+        depth = 0;
+        latitude = 0;
+        longitude = 0;
+        strength = 0;
+        temperature = 0;
+        fishDepth = 0;
+        fishStrength = 0;
+        battery = 0;
     }
 
     /**
      * Construct a new sample
-     * @param t time
+     *
+     * @param t   time
      * @param lat latitude
      * @param lon longitude
-     * @param d depth
-     * @param s strength
+     * @param d   depth
+     * @param s   strength
      */
     public Sample(long t, double lat, double lon, float d, int s) {
         time = t;
@@ -85,8 +95,22 @@ public class Sample implements Parcelable {
         strength = s;
     }
 
+    // Parcels are used to send samples internally
+    protected Sample(Parcel in) {
+        time = in.readLong();
+        latitude = in.readDouble();
+        longitude = in.readDouble();
+        depth = in.readFloat();
+        fishDepth = in.readFloat();
+        strength = (short) in.readInt();
+        fishStrength = (short) in.readInt();
+        temperature = in.readFloat();
+        battery = in.readByte();
+    }
+
     /**
      * Create from a serialised data stream
+     *
      * @param dis the input stream
      */
     static Sample fromDataStream(DataInputStream dis) throws IOException {
@@ -100,7 +124,8 @@ public class Sample implements Parcelable {
 
     /**
      * Create from a serialised byte buffer
-     * @param buff buffer containing sample data
+     *
+     * @param buff   buffer containing sample data
      * @param offset start of the sample we're interested in
      */
     static Sample fromByteArray(byte[] buff, int offset) throws IOException {
@@ -110,7 +135,7 @@ public class Sample implements Parcelable {
 
     /**
      * Serialise to a byte buffer
-      */
+     */
     byte[] toByteArray() {
         ByteArrayOutputStream bs = new ByteArrayOutputStream();
         DataOutputStream dos = new DataOutputStream(bs);
@@ -129,19 +154,6 @@ public class Sample implements Parcelable {
     @Override
     public int describeContents() {
         return 0;
-    }
-
-    // Parcels are used to send samples internally
-    protected Sample(Parcel in) {
-        time = in.readLong();
-        latitude = in.readDouble();
-        longitude = in.readDouble();
-        depth = in.readFloat();
-        fishDepth = in.readFloat();
-        strength = (short) in.readInt();
-        fishStrength = (short) in.readInt();
-        temperature = in.readFloat();
-        battery = in.readByte();
     }
 
     @Override // implement Parcelable

@@ -38,7 +38,6 @@ import android.view.ViewGroup;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentTransaction;
-import androidx.preference.PreferenceManager;
 
 import com.cdot.ping.databinding.ConnectedFragmentBinding;
 import com.cdot.ping.samplers.LoggingService;
@@ -54,7 +53,7 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
     private final IntentFilter mIntentFilter;
     // Handle broadcasts from the service
     private boolean mReceiverRegistered = false;
-    private Sample mLastSample = null;
+    private Sample mLastSample = new Sample();
     // Used to calculate the incoming sample rate
     private Boolean mHaveNewSamples = false; // display update
     private final BroadcastReceiver mBroadcastReceiver = new BroadcastReceiver() {
@@ -130,11 +129,13 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
             mBinding.sonarV.sample(mLastSample);
     }
 
+    // When switching to SettingsFragment, this is NOT called!
     @Override // Activity
     public void onSaveInstanceState(@NonNull Bundle bits) {
+        Log.d(TAG, "onSaveInstanceState");
         super.onSaveInstanceState(bits);
-        if (getLoggingService() != null && getLoggingService().mSonarSampler != null && getLoggingService().mSonarSampler.getConnectedDevice() != null)
-            bits.putString("device", getLoggingService().mSonarSampler.getConnectedDevice().getAddress());
+        if (getLoggingService() != null && getLoggingService().mSonarSampler != null && getLoggingService().mSonarSampler.getBluetoothDevice() != null)
+            bits.putString("device", getLoggingService().mSonarSampler.getBluetoothDevice().getAddress());
         if (mBinding != null)
             mBinding.sonarV.onSaveInstanceState(bits);
     }
@@ -150,6 +151,7 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
 
     @Override // Fragment
     public void onCreate(Bundle savedInstanceState) {
+        Log.d(TAG, "onCreate savedInstanceState is " + savedInstanceState);
         super.onCreate(savedInstanceState);
         if (savedInstanceState != null) {
             String da = savedInstanceState.getString("device");
@@ -160,6 +162,7 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
                     getLoggingService().mSonarSampler.connectToDevice(bd);
             }
         }
+
         Settings prefs = new Settings(getMainActivity());
         // May be coming back from Settings service, make sure KeepAlive is set in service
         if (getLoggingService() != null)
@@ -170,7 +173,7 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
 
     @Override // Fragment
     public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
-        Log.d(TAG, "onCreateView");
+        Log.d(TAG, "onCreateView savedInstanceState is " + savedInstanceState);
         setHasOptionsMenu(true);
         mBinding = ConnectedFragmentBinding.inflate(inflater, container, false);
 
@@ -188,17 +191,19 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
 
     @Override // Fragment
     public void onStart() {
-        Log.d(TAG, "onStart");
+        Log.d(TAG, "onStart " + this);
         super.onStart();
         registerBroadcastReceiver();
         // Start the sample data thread. Wake it every 2 seconds for an update.
         mDisplayThread = new DisplayThread();
+        // Force a display update when returning from SettingsFragment
+        mHaveNewSamples = true;
         mDisplayThread.start();
     }
 
     @Override // Fragment
     public void onStop() {
-        Log.d(TAG, "onStop");
+        Log.d(TAG, "onStop " + this);
         if (mDisplayThread.isAlive()) {
             mDisplayThread.interrupt();
             mDisplayThread = null;
@@ -225,8 +230,7 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
             // Tell the logging service not to bail during SettingsFragment
             if (getLoggingService() != null)
                 getLoggingService().setKeepAlive(true);
-        SharedPreferences p = PreferenceManager.getDefaultSharedPreferences(getActivity());
-        Log.d(TAG, "FUCK onOptionsItemSelected "+ p.getInt(Settings.PREF_MIN_DEPTH_CHANGE, -1));
+
             FragmentTransaction tx = getParentFragmentManager().beginTransaction();
             tx.replace(R.id.fragmentContainerL, new SettingsFragment(), SettingsFragment.TAG);
             tx.addToBackStack(null);

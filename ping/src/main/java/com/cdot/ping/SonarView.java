@@ -197,6 +197,7 @@ public class SonarView extends View {
         ByteArrayOutputStream stream = new ByteArrayOutputStream();
         mDrawingBitmap.compress(Bitmap.CompressFormat.PNG, 100, stream);
         bundle.putByteArray("sonarview_bitmap", stream.toByteArray());
+        super.onSaveInstanceState();
     }
 
     public void onRestoreInstanceState(Bundle bundle) {

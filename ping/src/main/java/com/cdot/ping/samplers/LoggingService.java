@@ -94,6 +94,7 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
      */
     private static final int NOTIFICATION_1D = 0xC0FEFE;
     private static final String CHANNEL_ID = "Ping_Channel" + TAG;
+
     private final IBinder mBinder = new LoggingServiceBinder();
     /**
      * Used to check whether the bound activity has really gone away and not unbound as part of an
@@ -123,6 +124,7 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
 
         mNotificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         try {
+            // TODO: optionally support getExternalFilesDir()
             mSampleLog = new CircularSampleLog(new File(getFilesDir(), "ping.dat"));
         } catch (FileNotFoundException fnfe) {
             try {
@@ -140,7 +142,7 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
             NotificationChannel channel = // IMPORTANCE_LOW makes it silent, otherwise it screams
                     new NotificationChannel(CHANNEL_ID, name, NotificationManager.IMPORTANCE_LOW);
 
-            // TODO: This doesn't seem to do anything, AFAICT code is correct
+            // TODO: This is supposed to change the sound played by the notification. Doesn't seem to do anything, AFAICT code is correct
             Uri soundUri = Uri.parse(ContentResolver.SCHEME_ANDROID_RESOURCE + "://" + getApplicationContext().getPackageName() + "/" + R.raw.ping);
             AudioAttributes.Builder ab = new AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_NOTIFICATION)
@@ -369,6 +371,7 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
         double samplingRate = 1000.0 / (now - mLastSampleTime);
         mAverageSamplingRate = ((mAverageSamplingRate * mTotalSampleCount) + samplingRate) / (mTotalSampleCount + 1);
         mTotalSampleCount++;
+
         mLastSampleTime = now;
 
         if (mSampleLog != null) {

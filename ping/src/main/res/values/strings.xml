@@ -2,28 +2,27 @@
     <string name="app_name">Ping</string>
 
     <string-array name="bt_reason">
-        <item>The reason for disconnection is not known</item> <!-- -1 -->
-        <item>The disconnection was initiated by the user</item> <!-- 0 -->
-        <item>The local device initiated disconnection</item> <!-- 1 -->
-        <item>The remote device initiated graceful disconnection</item> <!-- 2 -->
-        <item>Link lost</item> <!-- 3 -->
-        <item>The device does not have the required services</item> <!-- 4 -->
+        <item>: Ping disconnected</item> <!-- 0 -->
+        <item>: The local device disconnected</item> <!-- 1 -->
+        <item>: The remote device disconnected</item> <!-- 2 -->
+        <item>: Link lost</item> <!-- 3 -->
+        <item>: The device does not have the required services</item> <!-- 4 -->
         <item>5</item>
         <item>6</item>
         <item>7</item>
         <item>8</item>
         <item>9</item>
-        <item>The connection timed out</item><!-- 10 -->
+        <item>: Connection timed out</item><!-- 10 -->
     </string-array>
 
     <!-- Order must match BT_STATE values -->
     <string-array name="bt_status">
-        <item>Disconnected</item>
+        <item>Disconnected%1$s</item>
         <item>Connecting</item>
         <item>Connected</item>
         <item>Ready</item>
-        <item>Disconnecting</item>
-        <item>Connect failed: %1$s</item>
+        <item>Disconnecting%1$s</item>
+        <item>Connect failed%1$s</item>
     </string-array>
 
     <string name="cancel">Cancel</string>
@@ -83,7 +82,6 @@
     <string name="pref_noise">Noise</string>
     <string name="pref_pos_delta">Minimum position change</string>
     <string name="pref_range">Range</string>
-    <string name="pref_sample_file">Sample File</string>
     <string name="pref_sensitivity">Sensitivity</string>
 
     <!-- See Ping.RANGE_* -->
@@ -106,19 +104,8 @@
         <item>6</item>
     </string-array>
     <!-- reasons why bluetooth state changed -->
-    <string name="reason_cleaning_up">: cleaning up</string>
-    <string name="reason_connection_lost">" - connection lost"</string>
-    <string name="reason_uuid_ccc">: device does not offer descriptor CLIENT_CHARACTERISTIC_CONFIGURATION</string>
-    <string name="reason_uuid_custom">: device does not offer service CUSTOM</string>
-    <string name="reason_uuid_custom_sample">: device does not offer characteristic CUSTOM_SAMPLE</string>
-    <string name="reason_gatt_connect_failed">: GATT connect failed</string>
-    <string name="reason_gatt_disconnected">: GATT disconnected</string>
-    <string name="reason_new_gatt"> using existing GATT</string>
     <string name="reason_no_device">: no device, is bluetooth supported?</string>
-    <string name="reason_osd_failed">: service discovery failed</string>
-    <string name="reason_none"> OK</string>
 
-    <string name="sample_file_unset">Sample file location must be set to enable recording</string>
     <string name="service_description">Background service for Ping</string>
     <string name="start_recording">Start recording</string>
 
@@ -128,16 +115,11 @@
     <string name="val_fish_strength">Fish Strength: %1$d</string>
     <string name="val_latitude">Latitude: %1$.5g</string>
     <string name="val_longitude">Longitude: %1$.5g</string>
-    <string name="val_noise">Noise filter: %1$s</string>
-    <string name="val_range">Range %1$s</string>
     <string name="val_logging_count">Samples: %1$d</string>
     <string name="val_logging_rate">Rate: %1$.2gHz</string>
-    <string name="val_logging_time">Time: %1$s</string>
-    <string name="val_sensitivity">Sensitivity: %1$d</string>
     <string name="val_strength">Strength: %1$d</string>
     <string name="val_temperature">Temperature: %1$.2g°C</string>
     <string name="default_device_name">Unspecified Bluetooth Device</string>
-    <string name="could_not_start_logging">Could not start logging</string>
     <string name="write_gpx_failed">Could not write GPX file</string>
     <string name="write_gpx_OK">GPX data written</string>
 </resources>

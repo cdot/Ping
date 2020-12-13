@@ -127,7 +127,8 @@ public class MainActivity extends AppCompatActivity {
         Resources r = getResources();
         String dev = (device == null) ? r.getString(R.string.default_device_name) : device.getName();
         mBinding.deviceNameTV.setText(dev);
-        String sta = String.format(r.getStringArray(R.array.bt_status)[state], r.getStringArray(R.array.bt_reason)[reason + 1]);
+        String rationale = reason < 0 ? "" : r.getStringArray(R.array.bt_reason)[reason];
+        String sta = String.format(r.getStringArray(R.array.bt_status)[state], rationale);
         mBinding.connectionStatusTV.setText(sta);
         Log.d(TAG, "Bluetooth state: " + sta + " " + dev);
     }
@@ -321,8 +322,8 @@ public class MainActivity extends AppCompatActivity {
         }
 
         // We know the logging service is bound, and it may already be sampling. If so,
-        if (mLoggingService.mSonarSampler != null && mLoggingService.mSonarSampler.getConnectedDevice() != null) {
-            Log.d(TAG, "Already connected to " + mLoggingService.mSonarSampler.getConnectedDevice().getName());
+        if (mLoggingService.mSonarSampler != null && mLoggingService.mSonarSampler.getBluetoothDevice() != null) {
+            Log.d(TAG, "Already connected to " + mLoggingService.mSonarSampler.getBluetoothDevice().getName());
             switchToConnectedFragment();
             return;
         }
