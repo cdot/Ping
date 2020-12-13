@@ -45,8 +45,6 @@ import com.cdot.ping.samplers.LoggingService;
 import com.cdot.ping.samplers.Sample;
 import com.cdot.ping.samplers.SonarSampler;
 
-import no.nordicsemi.android.ble.observer.ConnectionObserver;
-
 /**
  * Fragment that handles user interaction when a device is connected.
  */
@@ -65,10 +63,6 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
             String action = intent.getAction();
             if (SonarSampler.ACTION_BT_STATE.equals(action)) {
                 int state = intent.getIntExtra(SonarSampler.EXTRA_STATE, SonarSampler.BT_STATE_DISCONNECTED);
-                BluetoothDevice device = intent.getParcelableExtra(SonarSampler.EXTRA_DEVICE);
-                int reason = intent.getIntExtra(SonarSampler.EXTRA_REASON, ConnectionObserver.REASON_UNKNOWN);
-                updateSonarStateDisplay(state, reason, device);
-
                 if (state == SonarSampler.BT_STATE_READY)
                     getMainActivity().settingsChanged();
 
@@ -116,13 +110,6 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
             getActivity().unregisterReceiver(mBroadcastReceiver);
             mReceiverRegistered = false;
         }
-    }
-
-    private void updateSonarStateDisplay(int state, int reason, BluetoothDevice device) {
-        Resources r = getResources();
-        String text = String.format(r.getStringArray(R.array.bt_status)[state], device.getName(), r.getStringArray(R.array.bt_reason)[reason + 1]);
-        Log.d(TAG, text);
-        mBinding.connectionStatusTV.setText(text);
     }
 
     // Handle incoming sample from the sonar service
@@ -186,16 +173,6 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
         Log.d(TAG, "onCreateView");
         setHasOptionsMenu(true);
         mBinding = ConnectedFragmentBinding.inflate(inflater, container, false);
-
-        LoggingService svc = getLoggingService();
-        if (svc == null || svc.mSonarSampler != null && svc.mSonarSampler.getConnectedDevice() == null) {
-            //mBinding.deviceAddressTV.setText("-");
-            mBinding.deviceNameTV.setText("-");
-        } else {
-            //String daddr = getLoggingService().getConnectedDevice().getAddress();
-            //mBinding.deviceAddressTV.setText(daddr);
-            mBinding.deviceNameTV.setText(svc.mSonarSampler.getConnectedDevice().getName());
-        }
 
         mBinding.recordFAB.setOnClickListener(new View.OnClickListener() {
             @Override

@@ -25,6 +25,7 @@ import android.util.Log;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -70,13 +71,14 @@ public class Sample implements Parcelable {
 
     /**
      * Construct a new sample
+     * @param t time
      * @param lat latitude
      * @param lon longitude
      * @param d depth
      * @param s strength
      */
-    public Sample(double lat, double lon, float d, int s) {
-        time = System.currentTimeMillis();
+    public Sample(long t, double lat, double lon, float d, int s) {
+        time = t;
         depth = d;
         latitude = lat;
         longitude = lon;
@@ -85,17 +87,31 @@ public class Sample implements Parcelable {
 
     /**
      * Create from a serialised data stream
+     * @param dis the input stream
      */
-    Sample(DataInputStream dis) throws IOException {
-        time = dis.readLong();
-        latitude = dis.readDouble();
-        longitude = dis.readDouble();
-        depth = dis.readFloat();
-        strength = dis.readUnsignedByte();
+    static Sample fromDataStream(DataInputStream dis) throws IOException {
+        long time = dis.readLong();
+        double latitude = dis.readDouble();
+        double longitude = dis.readDouble();
+        float depth = dis.readFloat();
+        int strength = dis.readUnsignedByte();
+        return new Sample(time, latitude, longitude, depth, strength);
     }
 
-    // Serialise
-    byte[] getBytes() {
+    /**
+     * Create from a serialised byte buffer
+     * @param buff buffer containing sample data
+     * @param offset start of the sample we're interested in
+     */
+    static Sample fromByteArray(byte[] buff, int offset) throws IOException {
+        DataInputStream dis = new DataInputStream(new ByteArrayInputStream(buff, offset, BYTES));
+        return Sample.fromDataStream(dis);
+    }
+
+    /**
+     * Serialise to a byte buffer
+      */
+    byte[] toByteArray() {
         ByteArrayOutputStream bs = new ByteArrayOutputStream();
         DataOutputStream dos = new DataOutputStream(bs);
         try {

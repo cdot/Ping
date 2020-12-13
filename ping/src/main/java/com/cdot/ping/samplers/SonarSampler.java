@@ -58,7 +58,7 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
     public static final float MINIMUM_DELTA_DEPTH_DEFAULT = 0.5f; // metres
     static final UUID SAMPLE_CHARACTERISTIC_UUID = UUID.fromString("0000fff1-0000-1000-8000-00805f9b34fb");
     static final UUID CONFIGURE_CHARACTERISTIC_UUID = UUID.fromString("0000fff2-0000-1000-8000-00805f9b34fb");
-    private static final String CLASS_NAME = OldSonarSampler.class.getCanonicalName();
+    private static final String CLASS_NAME = SonarSampler.class.getCanonicalName();
     // Messages sent by the service
     public static final String ACTION_BT_STATE = CLASS_NAME + ".action_bt_state";
     // Message extras

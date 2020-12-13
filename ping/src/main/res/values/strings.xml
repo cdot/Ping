@@ -18,12 +18,12 @@
 
     <!-- Order must match BT_STATE values -->
     <string-array name="bt_status">
-        <item>Disconnected from %1$s</item>
-        <item>Connecting to %1$s</item>
-        <item>Connected to %1$s</item>
-        <item>%1$s is ready</item>
-        <item>Disconnecting from %1$s</item>
-        <item>Connect %1$s failed: %2$s</item>
+        <item>Disconnected</item>
+        <item>Connecting</item>
+        <item>Connected</item>
+        <item>Ready</item>
+        <item>Disconnecting</item>
+        <item>Connect failed: %1$s</item>
     </string-array>
 
     <string name="cancel">Cancel</string>

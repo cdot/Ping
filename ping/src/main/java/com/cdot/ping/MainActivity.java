@@ -21,12 +21,15 @@ package com.cdot.ping;
 import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
+import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
+import android.content.res.Resources;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.IBinder;
@@ -50,6 +53,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
+import no.nordicsemi.android.ble.observer.ConnectionObserver;
+
 /**
  * The main activity in the app.
  */
@@ -63,7 +68,8 @@ public class MainActivity extends AppCompatActivity {
     // A reference to the service used to get location updates. Used by Fragments.
     LoggingService mLoggingService = null;
     private Settings mPrefs;
-    private String mPickingFileFor;
+    MainActivityBinding mBinding; // view binding
+
     // Cache of current settings, so we can detect when they change. Initial values will be
     // replaced as soon as settingsChanged is called (which it will be when the service starts)
     private int sensitivity = Settings.SENSITIVITY_MIN;
@@ -104,6 +110,28 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
+    BroadcastReceiver mBroadcastReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            String action = intent.getAction();
+            if (SonarSampler.ACTION_BT_STATE.equals(action)) {
+                int state = intent.getIntExtra(SonarSampler.EXTRA_STATE, SonarSampler.BT_STATE_DISCONNECTED);
+                BluetoothDevice device = intent.getParcelableExtra(SonarSampler.EXTRA_DEVICE);
+                int reason = intent.getIntExtra(SonarSampler.EXTRA_REASON, ConnectionObserver.REASON_UNKNOWN);
+                updateSonarStateDisplay(state, reason, device);
+            }
+        }
+    };
+
+    private void updateSonarStateDisplay(int state, int reason, BluetoothDevice device) {
+        Resources r = getResources();
+        String dev = (device == null) ? r.getString(R.string.default_device_name) : device.getName();
+        mBinding.deviceNameTV.setText(dev);
+        String sta = String.format(r.getStringArray(R.array.bt_status)[state], r.getStringArray(R.array.bt_reason)[reason + 1]);
+        mBinding.connectionStatusTV.setText(sta);
+        Log.d(TAG, "Bluetooth state: " + sta + " " + dev);
+    }
+
     // Lifecycle management
 
     @Override // Activity
@@ -142,8 +170,8 @@ public class MainActivity extends AppCompatActivity {
           @see https://android.jlelse.eu/handling-orientation-changes-in-android-7072958c442a */
         //setRequestedOrientation (ActivityInfo.SCREEN_ORIENTATION_LOCKED);
 
-        MainActivityBinding binding = MainActivityBinding.inflate(getLayoutInflater());
-        setContentView(binding.fragmentContainerL);
+        mBinding = MainActivityBinding.inflate(getLayoutInflater());
+        setContentView(mBinding.mainActivityL);
 
         getPermissions();
     }
@@ -153,6 +181,9 @@ public class MainActivity extends AppCompatActivity {
     protected void onStart() {
         super.onStart();
 
+        // Not connected to anything yet
+        updateSonarStateDisplay(SonarSampler.BT_STATE_DISCONNECTED, ConnectionObserver.REASON_UNKNOWN, null);
+
         Log.d(TAG, "onStart binding LoggingService");
 
         // Bind to the service. If the service is in foreground mode, this signals to the service
@@ -161,9 +192,9 @@ public class MainActivity extends AppCompatActivity {
         bindService(new Intent(getApplicationContext(), LoggingService.class), mLoggingServiceConnection, Context.BIND_AUTO_CREATE);
 
         mPrefs = new Settings(this);
-        /*USELESS IntentFilter inf = new IntentFilter();
+        IntentFilter inf = new IntentFilter();
         inf.addAction(SonarSampler.ACTION_BT_STATE);
-        registerReceiver(mBroadcastReceiver, inf);*/
+        registerReceiver(mBroadcastReceiver, inf);
     }
 
     // Handling permissions
@@ -180,7 +211,7 @@ public class MainActivity extends AppCompatActivity {
             unbindService(mLoggingServiceConnection);
             mLoggingServiceBound = false;
         }
-        /*USELESS unregisterReceiver(mBroadcastReceiver);*/
+        unregisterReceiver(mBroadcastReceiver);
 
         super.onStop();
     }

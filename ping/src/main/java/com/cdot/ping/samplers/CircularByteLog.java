@@ -71,6 +71,7 @@ public class CircularByteLog {
         mRAF.writeInt(mUsed);
     }
 
+    // A seek beyond the end will go to the end
     private void go_to(int offset) throws IOException {
         mRAF.seek(METABYTES + offset);
     }
@@ -85,6 +86,8 @@ public class CircularByteLog {
     }
 
     private void _write(byte[] buf, int pos, int len) throws IOException {
+        if (len <= 0 || pos < 0 || buf == null || pos > buf.length - len)
+            throw new IllegalArgumentException("Bad args");
         if (buf.length > mCapacity)
             throw new BufferOverflowException();
 
@@ -117,6 +120,8 @@ public class CircularByteLog {
     }
 
     private void _read(byte[] buf, int pos, int len) throws IOException {
+        if (len <= 0 || pos < 0 || buf == null || pos > buf.length - len)
+            throw new IllegalArgumentException("Bad args");
         if (len > mUsed)
             throw new BufferUnderflowException();
 
@@ -178,6 +183,8 @@ public class CircularByteLog {
      * @throws IOException if there's a problem reading/writing the buffer file
      */
     public synchronized void setCapacityBytes(int newCapacity) throws IOException {
+        if (newCapacity <= 0)
+            throw new IllegalArgumentException("Cannot set 0 capacity");
         int writePos = getWritePos();
         if (mReadPos <= writePos && writePos < newCapacity) {
             mCapacity = newCapacity;
@@ -272,6 +279,8 @@ public class CircularByteLog {
         byte[] buf = new byte[mUsed];
 
         int left = Math.min(mUsed, mCapacity - mReadPos);
+        if (left == 0)
+            return buf;
         go_to(mReadPos);
         mRAF.read(buf, 0, left);
         if (left < mUsed) {

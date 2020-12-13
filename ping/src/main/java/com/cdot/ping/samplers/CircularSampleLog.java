@@ -66,7 +66,7 @@ public class CircularSampleLog extends CircularByteLog {
      * @throws IOException if there's a problem with the log file
      */
     public void writeSample(Sample sample) throws IOException {
-        writeBytes(sample.getBytes());
+        writeBytes(sample.toByteArray());
     }
 
     /**
@@ -80,7 +80,7 @@ public class CircularSampleLog extends CircularByteLog {
         DataInputStream dis = new DataInputStream(new ByteArrayInputStream(buff));
         Sample[] samples = new Sample[len];
         for (int i = 0; i < len; i++)
-            samples[i] = new Sample(dis);
+            samples[i] = Sample.fromDataStream(dis);
         return samples;
     }
 
@@ -91,9 +91,7 @@ public class CircularSampleLog extends CircularByteLog {
      * @throws IOException if there's a problem with the log file
      */
     public Sample readSample() throws IOException {
-        byte[] buff = readBytes(Sample.BYTES);
-        DataInputStream dis = new DataInputStream(new ByteArrayInputStream(buff));
-        return new Sample(dis);
+        return Sample.fromByteArray(readBytes(Sample.BYTES), 0);
     }
 
     /**
@@ -117,7 +115,7 @@ public class CircularSampleLog extends CircularByteLog {
         DataInputStream dis = new DataInputStream(new ByteArrayInputStream(bytes));
         Sample[] snap = new Sample[nSamples];
         for (int i = 0; i < nSamples; i++)
-            snap[i] = new Sample(dis);
+            snap[i] = Sample.fromDataStream(dis);
         return snap;
     }
 }
