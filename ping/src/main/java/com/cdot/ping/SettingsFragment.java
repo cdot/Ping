@@ -97,7 +97,8 @@ public class SettingsFragment extends PreferenceFragmentCompat {
         seekBar.setMin(Settings.SENSITIVITY_MIN);
         seekBar.setMax(Settings.SENSITIVITY_MAX);
         seekBar.setValue(i);
-        seekBar.setShowSeekBarValue(true);
+        seekBar.setShowSeekBarValue(false);
+        seekBar.setUpdatesContinuously(true);
         summarise(seekBar, i);
 
         i = prefs.getInt(Settings.PREF_NOISE);
@@ -121,17 +122,19 @@ public class SettingsFragment extends PreferenceFragmentCompat {
         seekBar.setMin(Settings.MIN_DEPTH_CHANGE_MIN);
         seekBar.setMax(Settings.MIN_DEPTH_CHANGE_MAX);
         seekBar.setValue(i);
-        seekBar.setShowSeekBarValue(true);
+        seekBar.setShowSeekBarValue(false);
+        seekBar.setUpdatesContinuously(true);
         summarise(seekBar, i);
 
-        i =  prefs.getInt(Settings.PREF_MIN_POS_CHANGE);
+        i = prefs.getInt(Settings.PREF_MIN_POS_CHANGE);
         seekBar = findPreference(Settings.PREF_MIN_POS_CHANGE);
         assert seekBar != null;
         seekBar.setOnPreferenceChangeListener(sul);
         seekBar.setMin(Settings.MIN_POS_CHANGE_MIN);
         seekBar.setMax(Settings.MIN_POS_CHANGE_MAX);
         seekBar.setValue(i);
-        seekBar.setShowSeekBarValue(true);
+        seekBar.setShowSeekBarValue(false);
+        seekBar.setUpdatesContinuously(true);
         summarise(seekBar, i);
 
         i = prefs.getInt(Settings.PREF_MAX_SAMPLES);
@@ -141,7 +144,19 @@ public class SettingsFragment extends PreferenceFragmentCompat {
         seekBar.setMin(Settings.MAX_SAMPLES_MIN);
         seekBar.setMax(Settings.MAX_SAMPLES_MAX);
         seekBar.setValue(i);
-        seekBar.setShowSeekBarValue(true);
+        seekBar.setShowSeekBarValue(false);
+        seekBar.setUpdatesContinuously(true);
+        summarise(seekBar, i);
+
+        i = prefs.getInt(Settings.PREF_SAMPLER_TIMEOUT);
+        seekBar = findPreference(Settings.PREF_SAMPLER_TIMEOUT);
+        assert seekBar != null;
+        seekBar.setOnPreferenceChangeListener(sul);
+        seekBar.setMin(Settings.SAMPLER_TIMEOUT_MIN);
+        seekBar.setMax(Settings.SAMPLER_TIMEOUT_MAX);
+        seekBar.setValue(i);
+        seekBar.setShowSeekBarValue(false);
+        seekBar.setUpdatesContinuously(true);
         summarise(seekBar, i);
     }
 
@@ -167,13 +182,27 @@ public class SettingsFragment extends PreferenceFragmentCompat {
             case Settings.PREF_MIN_POS_CHANGE:
                 return Double.toString((int) val / 1000.0); // convert mm to metres
             case Settings.PREF_MAX_SAMPLES:
-                int size = (int)val;
+                int size = (int) val;
                 float bytes = size * Sample.BYTES;
                 if (bytes < Settings.MEGABYTE)
                     return String.format("%d (%.02fKb)", size, bytes / Settings.KILOBYTE);
                 if (bytes < Settings.GIGABYTE)
                     return String.format("%d (%.02fMb)", size, bytes / Settings.MEGABYTE);
                 return String.format("%d (%.02fGb)", size, bytes / Settings.GIGABYTE);
+            case Settings.PREF_SAMPLER_TIMEOUT:
+                int timeout = (int) val;
+                int h = timeout / (1000 * 60 * 60);
+                timeout %= 1000 * 60 * 60;
+                int m = timeout / (1000 * 60);
+                timeout %= 1000 * 60;
+                float s = timeout / 1000f;
+                if (h == 0)
+                    if (m == 0)
+                        return String.format("%.02fs", s);
+                    else
+                        return String.format("%d:%02.02f", m, s);
+                else
+                    return String.format("%d:%02d:%.02f", h, m, s);
             default:
                 return val.toString();
         }

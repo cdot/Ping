@@ -78,6 +78,7 @@ public class MainActivity extends AppCompatActivity {
     private int minDeltaD = Settings.MIN_DEPTH_CHANGE_MAX;
     private float minDeltaPos = Settings.MIN_POS_CHANGE_MAX;
     private int maxSamples = Settings.MAX_SAMPLES_MIN;
+    private int samplerTimeout = Settings.SAMPLER_TIMEOUT_MIN;
 
     // Connections to services
     private String sampleFile = null;
@@ -400,6 +401,7 @@ public class MainActivity extends AppCompatActivity {
         int new_maxSamples = mPrefs.getInt(Settings.PREF_MAX_SAMPLES);
         int new_minDeltaD = mPrefs.getInt(Settings.PREF_MIN_DEPTH_CHANGE); // mm
         int new_minDeltaPos = mPrefs.getInt(Settings.PREF_MIN_POS_CHANGE); // mm
+        int new_samplerTimeout = mPrefs.getInt(Settings.PREF_SAMPLER_TIMEOUT);
         //String new_gpxFile = mPrefs.getString(Settings.PREF_GPX_FILE);
 
         if (changes.length > 0) {
@@ -422,6 +424,9 @@ public class MainActivity extends AppCompatActivity {
                 case Settings.PREF_MAX_SAMPLES:
                     new_maxSamples = (int) changes[1];
                     break;
+                case Settings.PREF_SAMPLER_TIMEOUT:
+                    new_samplerTimeout = (int) changes[1];
+                    break;
             }
         }
 
@@ -435,8 +440,12 @@ public class MainActivity extends AppCompatActivity {
                     || new_noise != noise
                     || new_range != range
                     || new_minDeltaD != minDeltaD
-                    || new_minDeltaPos != minDeltaPos) {
-                mLoggingService.mSonarSampler.configure(new_sensitivity, new_noise, new_range, new_minDeltaD / 1000f, new_minDeltaPos / 1000f);
+                    || new_minDeltaPos != minDeltaPos
+                    || new_samplerTimeout != samplerTimeout) {
+                mLoggingService.mSonarSampler.configure(
+                        new_sensitivity, new_noise, new_range,
+                        new_minDeltaD / 1000f, new_minDeltaPos / 1000f,
+                        new_samplerTimeout);
             }
             if (new_maxSamples != maxSamples)
                 mLoggingService.setMaxSamples(new_maxSamples);
@@ -448,6 +457,7 @@ public class MainActivity extends AppCompatActivity {
         minDeltaD = new_minDeltaD;
         minDeltaPos = new_minDeltaPos;
         maxSamples = new_maxSamples;
+        samplerTimeout = new_samplerTimeout;
     }
 
     public void writeGPX() {

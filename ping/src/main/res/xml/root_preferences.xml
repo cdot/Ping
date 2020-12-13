@@ -19,6 +19,12 @@ Note that if the code ever sets a negative min the same problem will arise.
         android:summary="@string/help_autoconnect"
         android:title="@string/pref_autoconnect" />
 
+    <SeekBarPreference android:key="samplerTimeout"
+        android:summary="@string/help_samplerTimeout"
+        android:min="-2147483648"
+        android:max="2147483647"
+        android:title="@string/pref_sampler_timeout" />
+
     <SeekBarPreference android:key="sensitivity"
         android:summary="@string/help_sensitivity"
         android:max="2147483647"

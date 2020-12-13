@@ -44,6 +44,8 @@ import com.cdot.ping.samplers.LoggingService;
 import com.cdot.ping.samplers.Sample;
 import com.cdot.ping.samplers.SonarSampler;
 
+import no.nordicsemi.android.ble.observer.ConnectionObserver;
+
 /**
  * Fragment that handles user interaction when a device is connected.
  */
@@ -60,13 +62,19 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
 
         public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();
-            if (SonarSampler.ACTION_BT_STATE.equals(action)) {
+            if (LoggingService.ACTION_SAMPLE.equals(action)) {
+                onSonarSample((Sample) intent.getParcelableExtra(LoggingService.EXTRA_SAMPLE_DATA));
+            } else if (SonarSampler.ACTION_BT_STATE.equals(action)) {
                 int state = intent.getIntExtra(SonarSampler.EXTRA_STATE, SonarSampler.BT_STATE_DISCONNECTED);
+                int reason = intent.getIntExtra(SonarSampler.EXTRA_REASON, -1);
                 if (state == SonarSampler.BT_STATE_READY)
                     getMainActivity().settingsChanged();
-
-            } else if (LoggingService.ACTION_SAMPLE.equals(action)) {
-                onSonarSample((Sample) intent.getParcelableExtra(LoggingService.EXTRA_SAMPLE_DATA));
+                else if (state == SonarSampler.BT_STATE_CONNECT_FAILED
+                        || state == SonarSampler.BT_STATE_DISCONNECTED && reason == ConnectionObserver.REASON_LINK_LOSS) {
+                    // Try to find a device; autoconnect true so will connect to the first compatible it finds
+                    FragmentTransaction tx = getParentFragmentManager().beginTransaction();
+                    tx.replace(R.id.fragmentContainerL, new DiscoveryFragment(true), TAG).commit();
+                }
             }
         }
     };

@@ -77,6 +77,10 @@ public class Settings {
     public static final int MAX_SAMPLES_MIN = 500 * 1024 / Sample.BYTES; // 500Kb file
     public static final int MAX_SAMPLES_MAX = 1024 * 1024 * 1024 / Sample.BYTES; // 1Gb file
 
+    public static final String PREF_SAMPLER_TIMEOUT = "samplerTimeout";
+    public static final int SAMPLER_TIMEOUT_MIN = 0; // 0 means "never"
+    public static final int SAMPLER_TIMEOUT_MAX = 10 * 60 * 1000; // 10 minutes in ms
+
     public static final String PREF_DEVICE = "device";
     public static final String PREF_AUTOCONNECT = "autoconnect";
 
@@ -89,6 +93,7 @@ public class Settings {
             put(PREF_MIN_DEPTH_CHANGE, 250); // mm
             put(PREF_MIN_POS_CHANGE, 500); // mm
             put(PREF_MAX_SAMPLES, 10 * MEGABYTE / Sample.BYTES); // 10Mb
+            put(PREF_SAMPLER_TIMEOUT, 0); // never
         }
     };
 

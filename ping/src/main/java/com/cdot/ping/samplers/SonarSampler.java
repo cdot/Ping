@@ -103,8 +103,8 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
 
     // Activity timeout
     private Timer mTimeoutTimer = null;
-    private boolean mSampleReceived = true; // has a sample bee seen since last timeout check?
-    private static final int SAMPLE_TIMEOUT = 10000; // must get another sample within this timeout, or we'll disconnect
+    private boolean mSampleReceived = true; // has a sample been seen since last timeout check?
+    private int mSampleTimeout = 0; // must get another sample within this timeout, or we'll disconnect
     private boolean mTimedOut = false;
 
     public SonarSampler(@NonNull final LoggingService service) {
@@ -211,49 +211,57 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
 
     // Disconnect timeout. If we don't get another sample within a timeout period, disconnect.
     private void startTimeout() {
-        if (mTimeoutTimer == null) {
-            mTimeoutTimer = new Timer(true);
-            mTimeoutTimer.schedule(new TimerTask() {
-                @Override
-                public void run() {
-                    if (!mSampleReceived) {
-                        Log.d(TAG, "Sample collection timed out");
-                        mTimedOut = true;
-                        disconnect().enqueue();
-                    }
-                    mSampleReceived = false;
+        if (mSampleTimeout <= 0)
+            return; // no timeout
+        if (mTimeoutTimer != null)
+            throw new UnsupportedOperationException("Cannot start timer when one is already running");
+        mTimeoutTimer = new Timer(true);
+        mTimeoutTimer.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                if (!mSampleReceived) {
+                    Log.d(TAG, "Sample collection timed out");
+                    mTimedOut = true;
+                    disconnect().enqueue();
                 }
-            }, SAMPLE_TIMEOUT, SAMPLE_TIMEOUT);
-        }
+                mSampleReceived = false;
+            }
+        }, mSampleTimeout, mSampleTimeout);
     }
 
     private void cancelTimeout() {
-         if (mTimeoutTimer != null) {
-             mTimeoutTimer.cancel();
-             mTimeoutTimer = null;
-         }
-     }
+        if (mTimeoutTimer == null)
+            return;
+        mTimeoutTimer.cancel();
+        mTimeoutTimer = null;
+    }
 
     /**
-     * Configuration reverse-engineered by sniffing packets sent by the official FishFinder software
+     * Configuration
      *
      * @param sensitivity   1..10
      * @param noise         filtering 0..4 (off, low, med, high)
      * @param range         0..6 (3, 6, 9, 18, 24, 36, auto)
      * @param minDeltaDepth min depth change, in metres
+     * @param minDeltaPos   min location change, in metres
+     * @param sampleTimeout timeout waiting for a sample before we abandon the connection and try a different device. 0 means never.
      */
-    public void configure(int sensitivity, int noise, int range, float minDeltaDepth, float minDeltaPos) {
+    public void configure(int sensitivity, int noise, int range, float minDeltaDepth, float minDeltaPos, int sampleTimeout) {
         Log.d(TAG, "configure(" + sensitivity + "," + noise + "," + range + "," + minDeltaDepth + ")");
         mMinDeltaDepth = minDeltaDepth;
         mMinDeltaPos = minDeltaPos;
 
+        cancelTimeout();
+        mSampleTimeout = sampleTimeout;
+
+        // reverse-engineered by sniffing packets sent by the official FishFinder software
         byte[] data = new byte[]{
                 // http://ww1.microchip.com/downloads/en/DeviceDoc/50002466B.pdf
-                ID0, ID1,
-                0, 0, COMMAND_CONFIGURE, // SF?
-                3, // size
-                (byte) sensitivity, (byte) noise, (byte) range,
-                0, 0, 0 // why the extra zeros?
+                ID0, ID1, // 0, 1
+                0, 0, COMMAND_CONFIGURE, // 2, 3, 4
+                3, // 5 size
+                (byte) sensitivity, (byte) noise, (byte) range, // 6, 7, 8
+                0, 0, 0 // 9 checksum, 10, 11 might do more, not experimented.
         };
         // Compute checksum
         int sum = 0;
@@ -265,6 +273,8 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
         writeCharacteristic(mConfigureCharacteristic, data)
                 .done(device -> Log.d(TAG, "Configuration sent to " + device.getName()))
                 .enqueue();
+
+        startTimeout();
     }
 
     // Connect to the given device
