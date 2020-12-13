@@ -199,7 +199,7 @@ public class DiscoveryFragment extends Fragment {
             Log.d(TAG, "onScanResult " + device.getAddress() + " " + device.getName() + " pairing state " + device.getBondState());
             // DIY filtering, because the system code doesn't work (see above)
             List<ParcelUuid> uuids = result.getScanRecord().getServiceUuids();
-            if (uuids != null && uuids.contains(new ParcelUuid(SonarSampler.BTS_CUSTOM))) {
+            if (uuids != null && uuids.contains(new ParcelUuid(SonarSampler.SERVICE_UUID))) {
                 if (mAutoConnect) {
                     // First device that offers the service we want. Fingers crossed!
                     getMainActivity().switchToConnectedFragment(device);

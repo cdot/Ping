@@ -42,7 +42,6 @@ import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentTransaction;
 
 import com.cdot.ping.databinding.MainActivityBinding;
-import com.cdot.ping.samplers.LocationSampler;
 import com.cdot.ping.samplers.LoggingService;
 import com.cdot.ping.samplers.SonarSampler;
 
@@ -90,10 +89,6 @@ public class MainActivity extends AppCompatActivity {
             mLoggingServiceBound = true;
             startService(new Intent(MainActivity.this, LoggingService.class));
 
-            if (mLoggingService.getSampler(SonarSampler.TAG) == null)
-                mLoggingService.addSampler(new SonarSampler());
-            if (mLoggingService.getSampler(LocationSampler.TAG) == null)
-                mLoggingService.addSampler(new LocationSampler());
             // Setting the sample file means a change in the activity, so when it comes back the
             // service is re-bound. If we started in SettingsFragment, we need to get back there.
             Fragment frag = getSupportFragmentManager().findFragmentByTag(SettingsFragment.TAG);
@@ -109,22 +104,13 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
-    /*USELESS handled in ConnectedFragment
-    private final BroadcastReceiver mBroadcastReceiver = new BroadcastReceiver() {
-        public void onReceive(Context context, Intent intent) {
-            String action = intent.getAction();
-            if (SonarSampler.ACTION_BT_STATE.equals(action)) {
-                mSonarSamplerState = intent.getIntExtra(SonarSampler.EXTRA_STATE, R.string.reason_ok);
-            }
-        }
-    };*/
-
     // Lifecycle management
 
-//    @Override // Activity
-//    protected void onSaveInstanceState(Bundle bits) {
-//        super.onSaveInstanceState(bits);
-//    }
+    @Override // Activity
+    protected void onSaveInstanceState(Bundle bits) {
+        Log.d(TAG, "onSaveInstanceState()");
+        super.onSaveInstanceState(bits);
+    }
 
     // equals() when either string could be null
     private static boolean sameString(String a, String b) {
@@ -165,8 +151,9 @@ public class MainActivity extends AppCompatActivity {
     // See https://developer.android.com/guide/components/activities/activity-lifecycle
     @Override // Activity
     protected void onStart() {
-        Log.d(TAG, "onStart");
         super.onStart();
+
+        Log.d(TAG, "onStart binding LoggingService");
 
         // Bind to the service. If the service is in foreground mode, this signals to the service
         // that since this activity is in the foreground, the service can exit foreground mode.
@@ -298,13 +285,13 @@ public class MainActivity extends AppCompatActivity {
     // Start looking for a sonar device. Called once permissions have been established.
     private void connectSonarDevice() {
         if (!mLoggingServiceBound) {
-            Log.e(TAG, "findASonarDevice but the logging service isn't bound yet");
+            Log.e(TAG, "connectSonarDevice() but the logging service isn't bound yet");
             return;
         }
 
         // We know the logging service is bound, and it may already be sampling. If so,
-        if (mLoggingService.getConnectedDevice() != null) {
-            Log.d(TAG, "Already connected to " + mLoggingService.getConnectedDevice().getName());
+        if (mLoggingService.mSonarSampler != null && mLoggingService.mSonarSampler.getConnectedDevice() != null) {
+            Log.d(TAG, "Already connected to " + mLoggingService.mSonarSampler.getConnectedDevice().getName());
             switchToConnectedFragment();
             return;
         }
@@ -324,7 +311,7 @@ public class MainActivity extends AppCompatActivity {
                     Parcelable[] uuids = device.getUuids();
                     if (uuids != null) {
                         for (Parcelable p : uuids) {
-                            if (SonarSampler.BTS_CUSTOM.toString().equals(p.toString())) {
+                            if (SonarSampler.SERVICE_UUID.toString().equals(p.toString())) {
                                 Log.i(TAG, "opening paired device " + device.getName());
                                 switchToConnectedFragment(device);
                                 return;
@@ -364,7 +351,7 @@ public class MainActivity extends AppCompatActivity {
      * @param device device to connect to
      */
     void switchToConnectedFragment(BluetoothDevice device) {
-        mLoggingService.connectToDevice(device);
+        mLoggingService.mSonarSampler.connectToDevice(device);
         switchToConnectedFragment();
     }
 
@@ -403,9 +390,6 @@ public class MainActivity extends AppCompatActivity {
                 case Settings.PREF_MAX_SAMPLES:
                     new_maxSamples = (int) changes[1];
                     break;
-                //case Settings.PREF_GPX_FILE:
-                //    new_gpxFile = (String) changes[1];
-                //    break;
             }
         }
 
@@ -420,8 +404,7 @@ public class MainActivity extends AppCompatActivity {
                     || new_range != range
                     || new_minDeltaD != minDeltaD
                     || new_minDeltaPos != minDeltaPos) {
-                SonarSampler sam = (SonarSampler) mLoggingService.getSampler(SonarSampler.TAG);
-                sam.configure(new_sensitivity, new_noise, new_range, new_minDeltaD / 1000f, new_minDeltaPos / 1000f);
+                mLoggingService.mSonarSampler.configure(new_sensitivity, new_noise, new_range, new_minDeltaD / 1000f, new_minDeltaPos / 1000f);
             }
             if (new_maxSamples != maxSamples)
                 mLoggingService.setMaxSamples(new_maxSamples);
@@ -431,7 +414,6 @@ public class MainActivity extends AppCompatActivity {
         noise = new_noise;
         range = new_range;
         minDeltaD = new_minDeltaD;
-        //sampleFile = new_gpxFile;
         minDeltaPos = new_minDeltaPos;
         maxSamples = new_maxSamples;
     }

@@ -1,11 +1,29 @@
 <resources>
     <string name="app_name">Ping</string>
 
-    <!-- Status, address, reason -->
+    <string-array name="bt_reason">
+        <item>The reason for disconnection is not known</item> <!-- -1 -->
+        <item>The disconnection was initiated by the user</item> <!-- 0 -->
+        <item>The local device initiated disconnection</item> <!-- 1 -->
+        <item>The remote device initiated graceful disconnection</item> <!-- 2 -->
+        <item>Link lost</item> <!-- 3 -->
+        <item>The device does not have the required services</item> <!-- 4 -->
+        <item>5</item>
+        <item>6</item>
+        <item>7</item>
+        <item>8</item>
+        <item>9</item>
+        <item>The connection timed out</item><!-- 10 -->
+    </string-array>
+
+    <!-- Order must match BT_STATE values -->
     <string-array name="bt_status">
-        <item>Disconnected from %1$s: %2$s</item>
-        <item>Connecting to %1$s: %2$s</item>
-        <item>Connected</item>
+        <item>Disconnected from %1$s</item>
+        <item>Connecting to %1$s</item>
+        <item>Connected to %1$s</item>
+        <item>%1$s is ready</item>
+        <item>Disconnecting from %1$s</item>
+        <item>Connect %1$s failed: %2$s</item>
     </string-array>
 
     <string name="cancel">Cancel</string>
@@ -98,7 +116,7 @@
     <string name="reason_new_gatt"> using existing GATT</string>
     <string name="reason_no_device">: no device, is bluetooth supported?</string>
     <string name="reason_osd_failed">: service discovery failed</string>
-    <string name="reason_ok"> OK</string>
+    <string name="reason_none"> OK</string>
 
     <string name="sample_file_unset">Sample file location must be set to enable recording</string>
     <string name="service_description">Background service for Ping</string>

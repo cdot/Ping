@@ -35,6 +35,10 @@ import java.util.HashMap;
 public class Settings {
     private static final String TAG = Settings.class.getSimpleName();
 
+    public static final int KILOBYTE = 1024;
+    public static final int MEGABYTE = KILOBYTE * KILOBYTE;
+    public static final int GIGABYTE = MEGABYTE * KILOBYTE;
+
     // Minimum depth change (metres) before a new depth sample is recorded
     public static final String PREF_MIN_DEPTH_CHANGE = "minimumDepthChange";
 
@@ -70,11 +74,12 @@ public class Settings {
     public static final int NOISE_HIGH = 3;
 
     public static final String PREF_MAX_SAMPLES = "maxSamples";
-    public static final int MAX_SAMPLES_MIN = 1000;
-    public static final int MAX_SAMPLES_MAX = 0x10000000;
+    public static final int MAX_SAMPLES_MIN = 500 * 1024 / Sample.BYTES; // 500Kb file
+    public static final int MAX_SAMPLES_MAX = 1024 * 1024 * 1024 / Sample.BYTES; // 1Gb file
 
     public static final String PREF_DEVICE = "device";
     public static final String PREF_AUTOCONNECT = "autoconnect";
+
     // Default values for integer preferences
     private static final HashMap<String, Integer> intDefaults = new HashMap<String, Integer>() {
         {
@@ -83,7 +88,7 @@ public class Settings {
             put(PREF_NOISE, NOISE_OFF);
             put(PREF_MIN_DEPTH_CHANGE, 250); // mm
             put(PREF_MIN_POS_CHANGE, 500); // mm
-            put(PREF_MAX_SAMPLES, 0x2000000 / Sample.BYTES); // 2M
+            put(PREF_MAX_SAMPLES, 10 * MEGABYTE / Sample.BYTES); // 10Mb
         }
     };
 
@@ -99,6 +104,16 @@ public class Settings {
 
     Settings(Context cxt) {
         mPrefs = PreferenceManager.getDefaultSharedPreferences(cxt);
+        /*DEBUG
+        mPrefs.registerOnSharedPreferenceChangeListener(new SharedPreferences.OnSharedPreferenceChangeListener() {
+
+            @Override
+            public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String s) {
+                Settings prefs = new Settings(cxt);
+                Log.d(TAG, "CHANGE" + s);
+                }
+            }
+        });*/
     }
 
     /**

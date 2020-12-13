@@ -1,48 +1,57 @@
+<!--
+SeekBar
+If the xml doesn't set max and min for a SeekBar, it defaults to 100. If we
+have an existing shared preferences value outside the range 0..100, it will be clipped
+and the new value persisted when the layout is inflated. This will then override any subsequent
+setMax int the code. So we have to make sure that SeekBars have an android:max larger than the
+maximum we are ever likely to set in code - maxint (2147483647) is a reasonable choice.
+Note that if the code ever sets a negative min the same problem will arise.
+-->
+
 <androidx.preference.PreferenceScreen
     xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <Preference
-        android:key="device"
+    <Preference android:key="device"
         android:summary="@string/help_change_device"
         android:title="@string/device" />
 
-    <CheckBoxPreference
-        android:key="autoconnect"
+    <CheckBoxPreference android:key="autoconnect"
         android:summary="@string/help_autoconnect"
         android:title="@string/pref_autoconnect" />
 
-    <SeekBarPreference
-        android:key="sensitivity"
+    <SeekBarPreference android:key="sensitivity"
         android:summary="@string/help_sensitivity"
+        android:max="2147483647"
         android:title="@string/pref_sensitivity" />
 
-    <com.cdot.ping.android.IntListPreference
+    <com.cdot.ping.android.IntListPreference android:key="noise"
         android:entries="@array/noise_options"
         android:entryValues="@array/noise_values"
-        android:key="noise"
         android:summary="@string/help_noise"
         android:title="@string/pref_noise" />
 
-    <com.cdot.ping.android.IntListPreference
+    <com.cdot.ping.android.IntListPreference android:key="range"
         android:entries="@array/range_options"
         android:entryValues="@array/range_values"
-        android:key="range"
         android:summary="@string/help_range"
         android:title="@string/pref_range" />
 
-    <SeekBarPreference
-        android:key="minimumDepthChange"
+    <SeekBarPreference android:key="minimumDepthChange"
         android:summary="@string/help_minimumDepthChange"
+        android:min="-2147483648"
+        android:max="2147483647"
         android:title="@string/pref_depth_delta" />
 
-    <SeekBarPreference
-        android:key="minimumPositionChange"
+    <SeekBarPreference android:key="minimumPositionChange"
         android:summary="@string/help_minimumPositionChange"
+        android:min="-2147483648"
+        android:max="2147483647"
         android:title="@string/pref_pos_delta" />
 
-    <SeekBarPreference
-        android:key="maxSamples"
+    <SeekBarPreference android:key="maxSamples"
         android:summary="@string/help_maxSamples"
+        android:min="-2147483648"
+        android:max="2147483647"
         android:title="@string/pref_max_samples" />
 
 </androidx.preference.PreferenceScreen>

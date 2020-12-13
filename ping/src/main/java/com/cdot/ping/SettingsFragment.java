@@ -38,20 +38,43 @@ public class SettingsFragment extends PreferenceFragmentCompat {
     // String used to separate the preference current value from the description in the summary
     private static final String VALUE_SEPARATOR = "\n";
 
+    // Called from onCreate
     @Override // PreferenceFragmentCompat
     public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
-        setPreferencesFromResource(R.xml.root_preferences, rootKey);
+        Settings prefs = new Settings(getActivity());
+        // If the preference xml doesn't set max and min for a SeekBar, it defaults to 100. If we
+        // have an existing value for the preference outside the range 0..100, it will be clipped
+        // and the new value persisted. This will then override the setValue below. So we have
+        // to make sure that SeekBar preferences have an android:max larger than the maximum we
+        // set below.
+        setPreferencesFromResource(R.xml.root_preferences, null);
 
         // Interface to SharedPreferences
-        Settings mPrefs = new Settings(getActivity());
         Preference vanilla;
         CheckBoxPreference checkbox;
         SeekBarPreference seekBar;
         IntListPreference intList;
 
+        // All value changes should come through here. Preference value changes are all handled
+        // in the MainActivity when the preference screen is navigated away from.
+        // implement Preference.OnPreferenceChangeListener
+        Preference.OnPreferenceChangeListener sul = (pref, newVal) -> {
+            if (pref.getKey().equals(Settings.PREF_NOISE) || pref.getKey().equals(Settings.PREF_RANGE))
+                newVal = Integer.valueOf((String) newVal);
+
+            summarise(pref, newVal);
+
+            // We've been handed a new val, but it isn't in the preferences yet.
+            // Tell the MainActivity to update
+            ((MainActivity) getActivity()).settingsChanged(pref.getKey(), newVal);
+
+            // Update the slider
+            return true;
+        };
+
         vanilla = findPreference(Settings.PREF_DEVICE);
         assert vanilla != null;
-        summarise(vanilla, mPrefs.getString(Settings.PREF_DEVICE));
+        summarise(vanilla, prefs.getString(Settings.PREF_DEVICE));
         vanilla.setOnPreferenceClickListener(new Preference.OnPreferenceClickListener() {
             @Override
             public boolean onPreferenceClick(Preference preference) {
@@ -65,74 +88,65 @@ public class SettingsFragment extends PreferenceFragmentCompat {
 
         checkbox = findPreference(Settings.PREF_AUTOCONNECT);
         assert checkbox != null;
-        checkbox.setChecked(mPrefs.getBoolean(Settings.PREF_AUTOCONNECT));
+        checkbox.setChecked(prefs.getBoolean(Settings.PREF_AUTOCONNECT));
 
+        int i = prefs.getInt(Settings.PREF_SENSITIVITY);
         seekBar = findPreference(Settings.PREF_SENSITIVITY);
         assert seekBar != null;
-        seekBar.setOnPreferenceChangeListener(new SummaryUpdateListener());
-        summarise(seekBar, mPrefs.getInt(Settings.PREF_SENSITIVITY));
+        seekBar.setOnPreferenceChangeListener(sul);
         seekBar.setMin(Settings.SENSITIVITY_MIN);
         seekBar.setMax(Settings.SENSITIVITY_MAX);
-        seekBar.setValue(mPrefs.getInt(Settings.PREF_SENSITIVITY));
+        seekBar.setValue(i);
+        seekBar.setShowSeekBarValue(true);
+        summarise(seekBar, i);
 
+        i = prefs.getInt(Settings.PREF_NOISE);
         intList = findPreference(Settings.PREF_NOISE);
         assert intList != null;
-        intList.setOnPreferenceChangeListener(new SummaryUpdateListener());
-        summarise(intList, mPrefs.getInt(Settings.PREF_NOISE));
-        intList.setValue(Integer.toString(mPrefs.getInt(Settings.PREF_NOISE)));
+        intList.setOnPreferenceChangeListener(sul);
+        intList.setValue(Integer.toString(i));
+        summarise(intList, i);
 
+        i = prefs.getInt(Settings.PREF_RANGE);
         intList = findPreference(Settings.PREF_RANGE);
         assert intList != null;
-        intList.setOnPreferenceChangeListener(new SummaryUpdateListener());
-        summarise(intList, mPrefs.getInt(Settings.PREF_RANGE));
-        intList.setValue(Integer.toString(mPrefs.getInt(Settings.PREF_RANGE)));
+        intList.setOnPreferenceChangeListener(sul);
+        intList.setValue(Integer.toString(i));
+        summarise(intList, i);
 
+        i = prefs.getInt(Settings.PREF_MIN_DEPTH_CHANGE);
         seekBar = findPreference(Settings.PREF_MIN_DEPTH_CHANGE);
         assert seekBar != null;
-        seekBar.setOnPreferenceChangeListener(new SummaryUpdateListener());
+        seekBar.setOnPreferenceChangeListener(sul);
         seekBar.setMin(Settings.MIN_DEPTH_CHANGE_MIN);
         seekBar.setMax(Settings.MIN_DEPTH_CHANGE_MAX);
-        summarise(seekBar, mPrefs.getInt(Settings.PREF_MIN_DEPTH_CHANGE));
-        seekBar.setValue(mPrefs.getInt(Settings.PREF_MIN_DEPTH_CHANGE));
+        seekBar.setValue(i);
+        seekBar.setShowSeekBarValue(true);
+        summarise(seekBar, i);
 
+        i =  prefs.getInt(Settings.PREF_MIN_POS_CHANGE);
         seekBar = findPreference(Settings.PREF_MIN_POS_CHANGE);
         assert seekBar != null;
-        seekBar.setOnPreferenceChangeListener(new SummaryUpdateListener());
+        seekBar.setOnPreferenceChangeListener(sul);
         seekBar.setMin(Settings.MIN_POS_CHANGE_MIN);
         seekBar.setMax(Settings.MIN_POS_CHANGE_MAX);
-        summarise(seekBar, mPrefs.getInt(Settings.PREF_MIN_POS_CHANGE));
-        seekBar.setValue(mPrefs.getInt(Settings.PREF_MIN_POS_CHANGE));
+        seekBar.setValue(i);
+        seekBar.setShowSeekBarValue(true);
+        summarise(seekBar, i);
 
+        i = prefs.getInt(Settings.PREF_MAX_SAMPLES);
         seekBar = findPreference(Settings.PREF_MAX_SAMPLES);
         assert seekBar != null;
-        seekBar.setOnPreferenceChangeListener(new SummaryUpdateListener());
+        seekBar.setOnPreferenceChangeListener(sul);
         seekBar.setMin(Settings.MAX_SAMPLES_MIN);
         seekBar.setMax(Settings.MAX_SAMPLES_MAX);
-        summarise(seekBar, mPrefs.getInt(Settings.PREF_MAX_SAMPLES));
-        seekBar.setValue(mPrefs.getInt(Settings.PREF_MAX_SAMPLES));
-
-        // Special handling for the sample file preferences, to bring up a dialog that will
-        // test-create the file.
-
-        /*vanilla = findPreference(Settings.PREF_GPX_FILE);
-        assert vanilla != null;
-        vanilla.setOnPreferenceChangeListener(new SummaryUpdateListener());
-        summarise(vanilla, mPrefs.getString(Settings.PREF_GPX_FILE));
-        vanilla.setOnPreferenceClickListener(new Preference.OnPreferenceClickListener() {
-            @Override
-            public boolean onPreferenceClick(Preference p) {
-                ((MainActivity) getActivity()).getFile(Settings.PREF_GPX_FILE, R.string.pref_sample_file);
-                return true;
-            }
-        });*/
+        seekBar.setValue(i);
+        seekBar.setShowSeekBarValue(true);
+        summarise(seekBar, i);
     }
 
     // Fragment lifecycle
     // see https://developer.android.com/guide/fragments/lifecycle
-
-    private static final float KILOBYTE = 1024.0f;
-    private static final float MEGABYTE = KILOBYTE * KILOBYTE;
-    private static final float GIGABYTE = MEGABYTE * KILOBYTE;
 
     /**
      * Format the text value of a preference for presentation in the summary
@@ -154,12 +168,12 @@ public class SettingsFragment extends PreferenceFragmentCompat {
                 return Double.toString((int) val / 1000.0); // convert mm to metres
             case Settings.PREF_MAX_SAMPLES:
                 int size = (int)val;
-                int bytes = size * Sample.BYTES;
-                if (size < MEGABYTE)
-                    return String.format("%d (%.02fKb)", size, bytes / KILOBYTE);
-                if (size < GIGABYTE)
-                    return String.format("%d (%.02fMb)", size, bytes / MEGABYTE);
-                return String.format("%d (%.02fGb)", size, bytes / GIGABYTE);
+                float bytes = size * Sample.BYTES;
+                if (bytes < Settings.MEGABYTE)
+                    return String.format("%d (%.02fKb)", size, bytes / Settings.KILOBYTE);
+                if (bytes < Settings.GIGABYTE)
+                    return String.format("%d (%.02fMb)", size, bytes / Settings.MEGABYTE);
+                return String.format("%d (%.02fGb)", size, bytes / Settings.GIGABYTE);
             default:
                 return val.toString();
         }
@@ -171,22 +185,5 @@ public class SettingsFragment extends PreferenceFragmentCompat {
         int end = s.indexOf(VALUE_SEPARATOR);
         if (end >= 0) s = s.substring(end + VALUE_SEPARATOR.length());
         pref.setSummary(formatPreference(pref.getKey(), val) + VALUE_SEPARATOR + s);
-    }
-
-    // All value changes should come through here. Preference value changes are all handled
-    // in the MainActivity when the preference screen is navigated away from.
-    private class SummaryUpdateListener implements Preference.OnPreferenceChangeListener {
-        @Override // implement Preference.OnPreferenceChangeListener
-        public boolean onPreferenceChange(Preference pref, Object newVal) {
-            if (pref.getKey().equals(Settings.PREF_NOISE) || pref.getKey().equals(Settings.PREF_RANGE))
-                newVal = Integer.valueOf((String) newVal);
-
-            summarise(pref, newVal);
-
-            // We've been handed a new val, but it isn't in the preferences yet.
-            // Tell the MainActivity to update
-            ((MainActivity) getActivity()).settingsChanged(pref.getKey(), newVal);
-            return true;
-        }
     }
 }

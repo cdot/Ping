@@ -18,6 +18,7 @@
  */
 package com.cdot.ping.samplers;
 
+import android.content.Context;
 import android.location.Location;
 import android.os.Looper;
 import android.util.Log;
@@ -44,8 +45,15 @@ import com.google.android.gms.tasks.Task;
  * Note that this Sampler doesn't log it's own samples, instead it is used to watermark samples
  * coming from the SonarSampler with the location.
  */
-public class LocationSampler extends Sampler {
+public class LocationSampler {
     public static final String TAG = LocationSampler.class.getSimpleName();
+
+    /**
+     * Implement this interface to listen to location samples
+     */
+    public interface SampleListener {
+        void onLocationSample(Location loc);
+    }
 
     /**
      * The desired interval for location updates. Inexact. Updates may be more or less frequent.
@@ -65,17 +73,18 @@ public class LocationSampler extends Sampler {
     // Callback for changes in location coming from location services
     private LocationCallback mLocationCallback;
 
-    @Override // Sampler
-    void onAttach(LoggingService svc) {
-        super.onAttach(svc);
+    private SampleListener mListener;
 
-        mFusedLocationClient = LocationServices.getFusedLocationProviderClient(mService);
+    public LocationSampler(Context cxt, SampleListener service) {
+        mListener = service;
+
+        mFusedLocationClient = LocationServices.getFusedLocationProviderClient(cxt);
 
         mLocationCallback = new LocationCallback() {
             @Override
             public void onLocationResult(LocationResult locationResult) {
                 super.onLocationResult(locationResult);
-                onLocationSample(locationResult.getLastLocation());
+                mListener.onLocationSample(locationResult.getLastLocation());
             }
         };
 
@@ -94,7 +103,7 @@ public class LocationSampler extends Sampler {
                         @Override
                         public void onComplete(@NonNull Task<Location> task) {
                             if (task.isSuccessful() && task.getResult() != null) {
-                                onLocationSample(task.getResult());
+                                mListener.onLocationSample(task.getResult());
                             } else {
                                 Log.w(TAG, "Failed to get location");
                             }
@@ -105,12 +114,6 @@ public class LocationSampler extends Sampler {
         }
     }
 
-    @Override // Sampler
-    public String getTag() {
-        return TAG;
-    }
-
-    @Override // Sampler
     public void stopSampling() {
         Log.d(TAG, "stopped sampling");
         try {
@@ -118,17 +121,5 @@ public class LocationSampler extends Sampler {
         } catch (SecurityException unlikely) {
             Log.e(TAG, "Lost location permission. Could not remove updates. " + unlikely);
         }
-    }
-
-    /*
-     * Accuracy is the radius of 68% confidence. If you draw a circle centered at this
-     * location's latitude and longitude, and with a radius equal to the locationAccuracy (metres), then
-     * there is a 68% probability that the true location is inside the circle.
-     */
-    private void onLocationSample(Location loc) {
-        if (mService == null)
-            return; // Service has been destroyed
-
-        mService.onLocationSample(loc);
     }
 }

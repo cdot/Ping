@@ -38,11 +38,14 @@ import android.view.ViewGroup;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentTransaction;
+import androidx.preference.PreferenceManager;
 
 import com.cdot.ping.databinding.ConnectedFragmentBinding;
 import com.cdot.ping.samplers.LoggingService;
 import com.cdot.ping.samplers.Sample;
 import com.cdot.ping.samplers.SonarSampler;
+
+import no.nordicsemi.android.ble.observer.ConnectionObserver;
 
 /**
  * Fragment that handles user interaction when a device is connected.
@@ -62,11 +65,11 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
             String action = intent.getAction();
             if (SonarSampler.ACTION_BT_STATE.equals(action)) {
                 int state = intent.getIntExtra(SonarSampler.EXTRA_STATE, SonarSampler.BT_STATE_DISCONNECTED);
-                String daddr = intent.getStringExtra(SonarSampler.EXTRA_DEVICE_ADDRESS);
-                int reason = intent.getIntExtra(SonarSampler.EXTRA_REASON, R.string.reason_ok);
-                updateSonarStateDisplay(state, reason, daddr);
+                BluetoothDevice device = intent.getParcelableExtra(SonarSampler.EXTRA_DEVICE);
+                int reason = intent.getIntExtra(SonarSampler.EXTRA_REASON, ConnectionObserver.REASON_UNKNOWN);
+                updateSonarStateDisplay(state, reason, device);
 
-                if (state == SonarSampler.BT_STATE_CONNECTED)
+                if (state == SonarSampler.BT_STATE_READY)
                     getMainActivity().settingsChanged();
 
             } else if (LoggingService.ACTION_SAMPLE.equals(action)) {
@@ -78,7 +81,7 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
 
     public ConnectedFragment() {
         mIntentFilter = new IntentFilter();
-        mIntentFilter.addAction(SonarSampler.ACTION_BT_STATE);
+        //mIntentFilter.addAction(SonarSamplerTwo.ACTION_BT_STATE);
         mIntentFilter.addAction(LoggingService.ACTION_SAMPLE);
     }
 
@@ -115,19 +118,9 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
         }
     }
 
-    private void updatePreferencesDisplay() {
+    private void updateSonarStateDisplay(int state, int reason, BluetoothDevice device) {
         Resources r = getResources();
-        /*int i = mPrefs.getInt(Settings.PREF_SENSITIVITY);
-        mBinding.sensitivityTV.setText(r.getString(R.string.val_sensitivity, i));
-        i = mPrefs.getInt(Settings.PREF_NOISE);
-        mBinding.noiseTV.setText(r.getString(R.string.val_noise, r.getStringArray(R.array.noise_options)[i]));
-        i = mPrefs.getInt(Settings.PREF_RANGE);
-        mBinding.rangeTV.setText(r.getString(R.string.val_range, r.getStringArray(R.array.range_options)[i]));*/
-    }
-
-    private void updateSonarStateDisplay(int state, int reason, String daddr) {
-        Resources r = getResources();
-        String text = String.format(r.getStringArray(R.array.bt_status)[state], daddr, r.getString(reason));
+        String text = String.format(r.getStringArray(R.array.bt_status)[state], device.getName(), r.getStringArray(R.array.bt_reason)[reason + 1]);
         Log.d(TAG, text);
         mBinding.connectionStatusTV.setText(text);
     }
@@ -153,8 +146,8 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
     @Override // Activity
     public void onSaveInstanceState(@NonNull Bundle bits) {
         super.onSaveInstanceState(bits);
-        if (getLoggingService() != null && getLoggingService().getConnectedDevice() != null)
-            bits.putString("device", getLoggingService().getConnectedDevice().getAddress());
+        if (getLoggingService() != null && getLoggingService().mSonarSampler != null && getLoggingService().mSonarSampler.getConnectedDevice() != null)
+            bits.putString("device", getLoggingService().mSonarSampler.getConnectedDevice().getAddress());
         if (mBinding != null)
             mBinding.sonarV.onSaveInstanceState(bits);
     }
@@ -177,10 +170,10 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
                 BluetoothAdapter bta = BluetoothAdapter.getDefaultAdapter();
                 BluetoothDevice bd = bta.getRemoteDevice(da);
                 if (bd != null && getLoggingService() != null)
-                    getLoggingService().connectToDevice(bd);
+                    getLoggingService().mSonarSampler.connectToDevice(bd);
             }
         }
-        Settings prefs = new Settings(getActivity());
+        Settings prefs = new Settings(getMainActivity());
         // May be coming back from Settings service, make sure KeepAlive is set in service
         if (getLoggingService() != null)
             getLoggingService().setKeepAlive(false);
@@ -193,16 +186,15 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
         Log.d(TAG, "onCreateView");
         setHasOptionsMenu(true);
         mBinding = ConnectedFragmentBinding.inflate(inflater, container, false);
-        updatePreferencesDisplay();
 
         LoggingService svc = getLoggingService();
-        if (svc == null || svc.getConnectedDevice() == null) {
+        if (svc == null || svc.mSonarSampler != null && svc.mSonarSampler.getConnectedDevice() == null) {
             //mBinding.deviceAddressTV.setText("-");
             mBinding.deviceNameTV.setText("-");
         } else {
             //String daddr = getLoggingService().getConnectedDevice().getAddress();
             //mBinding.deviceAddressTV.setText(daddr);
-            mBinding.deviceNameTV.setText(svc.getConnectedDevice().getName());
+            mBinding.deviceNameTV.setText(svc.mSonarSampler.getConnectedDevice().getName());
         }
 
         mBinding.recordFAB.setOnClickListener(new View.OnClickListener() {
@@ -256,6 +248,8 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
             // Tell the logging service not to bail during SettingsFragment
             if (getLoggingService() != null)
                 getLoggingService().setKeepAlive(true);
+        SharedPreferences p = PreferenceManager.getDefaultSharedPreferences(getActivity());
+        Log.d(TAG, "FUCK onOptionsItemSelected "+ p.getInt(Settings.PREF_MIN_DEPTH_CHANGE, -1));
             FragmentTransaction tx = getParentFragmentManager().beginTransaction();
             tx.replace(R.id.fragmentContainerL, new SettingsFragment(), SettingsFragment.TAG);
             tx.addToBackStack(null);

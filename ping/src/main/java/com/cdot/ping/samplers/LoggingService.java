@@ -24,7 +24,6 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
-import android.bluetooth.BluetoothDevice;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
@@ -53,8 +52,6 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.text.DateFormat;
 import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -77,7 +74,7 @@ import javax.xml.transform.stream.StreamResult;
  * <p>
  * Substantially based on https://github.com/android/location-samples
  */
-public class LoggingService extends Service {
+public class LoggingService extends Service implements LocationSampler.SampleListener {
     public static final String TAG = LoggingService.class.getSimpleName();
 
     protected static final String CLASS_NAME = LoggingService.class.getCanonicalName();
@@ -105,8 +102,10 @@ public class LoggingService extends Service {
      */
     protected boolean mJustAConfigurationChange = false;
     protected NotificationManager mNotificationManager;
-    // Set of samplers that are providing sample updates to this logger
-    Map<String, Sampler> mSamplers = new HashMap<>();
+
+    public SonarSampler mSonarSampler;
+    public LocationSampler mLocationSampler;
+
     // Set to true to keep this service running even when all clients are unbound
     // and logging is disabled.
     private boolean mKeepAlive = false;
@@ -115,13 +114,12 @@ public class LoggingService extends Service {
     private long mLastSampleTime = System.currentTimeMillis();
     private CircularSampleLog mSampleLog;
 
-    public Sampler getSampler(String id) {
-        return mSamplers.get(id);
-    }
-
     @Override // Service
     public void onCreate() {
         Log.d(TAG, "onCreate");
+
+        mSonarSampler = new SonarSampler(this);
+        mLocationSampler = new LocationSampler(this, this);
 
         mNotificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         try {
@@ -156,17 +154,6 @@ public class LoggingService extends Service {
         }
     }
 
-    /**
-     * This is how users of the service add samplers to it. Doesn't check if the sampler is already
-     * there!
-     *
-     * @param s sampler to add
-     */
-    public void addSampler(Sampler s) {
-        mSamplers.put(s.getTag(), s);
-        s.onAttach(this);
-    }
-
     public double getAverageSamplingRate() {
         return mAverageSamplingRate;
     }
@@ -187,8 +174,8 @@ public class LoggingService extends Service {
         // We got here because the user decided to kill the service from the notification.
         if (startedFromNotification) {
             Log.d(TAG, "stopped from notification");
-            for (Sampler s : mSamplers.values())
-                s.stopSampling();
+            mSonarSampler.disconnect();
+            mLocationSampler.stopSampling();
             stopSelf();
         } else
             Log.d(TAG, "started");
@@ -211,8 +198,8 @@ public class LoggingService extends Service {
         Log.d(TAG, "onBind() conf " + mJustAConfigurationChange + " fg " + isRunningInForeground());
         stopForeground(true);
         mJustAConfigurationChange = false;
-        for (Sampler s : mSamplers.values())
-            s.onBind();
+        //mSonarSampler.onBind();
+        //mLocationSampler.onBind();
         return mBinder;
     }
 
@@ -239,8 +226,8 @@ public class LoggingService extends Service {
         } else {
             // Service no longer required
             Log.d(TAG, "All unbound");
-            for (Sampler s : mSamplers.values())
-                s.stopSampling();
+            mSonarSampler.disconnect();
+            mLocationSampler.stopSampling();
             stopSelf();
         }
 
@@ -250,31 +237,8 @@ public class LoggingService extends Service {
     @Override // Service
     public void onDestroy() {
         Log.d(TAG, "onDestroy");
-        for (Sampler s : mSamplers.values()) {
-            s.stopSampling();
-            s.onDestroy();
-        }
-    }
-
-    /**
-     * Invite samplers to connect to the given bluetooth device
-     */
-    public void connectToDevice(BluetoothDevice btd) {
-        for (Sampler s : mSamplers.values())
-            s.connectToDevice(btd);
-    }
-
-    /**
-     * Get the first connected device found from a sampler
-     *
-     * @return a device
-     */
-    public BluetoothDevice getConnectedDevice() {
-        for (Sampler s : mSamplers.values()) {
-            BluetoothDevice dev = s.getConnectedDevice();
-            if (dev != null) return dev;
-        }
-        return null;
+        mSonarSampler.close();
+        mLocationSampler.stopSampling();
     }
 
     /**
@@ -295,8 +259,7 @@ public class LoggingService extends Service {
                 new Intent(this, MainActivity.class), 0);
 
         StringBuilder text = new StringBuilder();
-        for (Sampler s : mSamplers.values())
-            text.append(s.getNotificationStateText(getResources())).append("\n");
+        text.append(mSonarSampler.getNotificationStateText(getResources())).append("\n");
 
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
                 // Actions are typically displayed by the system as a button adjacent to the notification content.
@@ -383,9 +346,10 @@ public class LoggingService extends Service {
         return false;
     }
 
-    // Called from a Sampler when a new location has been identified
-    void onLocationSample(Location loc) {
-        ((SonarSampler) getSampler(SonarSampler.TAG)).setLocation(loc);
+    // Called from LocationSampler when a new location has been identified
+    @Override // LocationSampler.SamplerListener
+    public void onLocationSample(Location loc) {
+        mSonarSampler.setLocation(loc);
     }
 
     public void setMaxSamples(int ms) {
