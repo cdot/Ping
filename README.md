@@ -3,7 +3,7 @@
 This work is in support of a project to build a bathygraphic map of a quarry used by SCUBA divers
 from our dive club. Previously surveying has been done using a GPS tracker attached to a buoy,
 while a diver below notes depths below the buoy on a slate. This is a slow and error-prone process,
-and I wanted a better approach.
+and I wanted a better solution.
 
 There are a number of sonar fish-finder devices on the market that appeared to offer a solution;
 they are primarily designed for the angling community and have limited access to depth data. A
@@ -52,3 +52,8 @@ indicate the horizontal extent for that signal. Finally a battery strength and t
 The application is split into a UI and two services. The services are largely independent from the UI
 and can bring themselves into the foreground even if the UI detaches (is killed) but logging is still
 active. One of the services is responsible for GPS location, and the other for talking to the sonar device.
+
+## User Guide
+The app will automatically scan for bluetooth devices that offer the service required. You can
+shortcut this process by pairing your device with the sonar. Once you start logging using the "record"
+button, the background services will continue logging until you turn logging off.
