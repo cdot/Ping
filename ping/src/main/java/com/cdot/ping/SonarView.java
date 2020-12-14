@@ -56,8 +56,6 @@ public class SonarView extends View {
     private static final int BITMAP_RIGHT = BITMAP_WIDTH - 1; // 1 sample per pixel
     private static final int MAX_STRENGTH = 255;
     private static final int MAX_FSTRENGTH = 15;
-    private static final int MAX_DEPTH = 36;
-    private static final int DEPTH_RANGE = BITMAP_HEIGHT - MAX_STRENGTH;
     private static final int[] RANGES = new int[]{3, 6, 9, 18, 24, 36, 36};
     private final Paint mWaterPaint;
     private final Paint mBottomPaint;
@@ -170,11 +168,7 @@ public class SonarView extends View {
                             }
                         }
 
-                        post(new Runnable() {
-                            public void run() {
-                                invalidate();
-                            }
-                        });
+                        post(() -> invalidate());
                     } else {
                         try {
                             Thread.sleep(250);
@@ -185,10 +179,6 @@ public class SonarView extends View {
             }
         });
         mRenderThread.start();
-    }
-
-    private int depth2bm(double d) {
-        return (int) (MAX_STRENGTH / 2 + d * DEPTH_RANGE / MAX_DEPTH);
     }
 
     public void onSaveInstanceState(Bundle bundle) {
@@ -247,7 +237,7 @@ public class SonarView extends View {
         // Remember the range limit
         ds.maxDepth = RANGES[mSettings.getInt(Settings.PREF_RANGE)];
         // Convert strength in the range 0..255 to an error in metres
-        float maxError = ds.maxDepth / (RANGES.length - 1);
+        float maxError = ds.maxDepth / (RANGES.length - 1.0f);
         ds.depthError = (MAX_STRENGTH - sample.strength) * maxError / MAX_STRENGTH;
         // Convert fishstrength in the range 0..15 to an error in metres
         maxError /= 2;
@@ -255,7 +245,7 @@ public class SonarView extends View {
         mSampleQueue.add(ds);
     }
 
-    private class DecoratedSample {
+    private static class DecoratedSample {
         Sample sample;
         float depthError, fishError;
         int maxDepth;

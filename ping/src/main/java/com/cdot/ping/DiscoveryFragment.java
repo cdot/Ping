@@ -82,11 +82,9 @@ public class DiscoveryFragment extends Fragment {
 
         // Listener invoked when a device is selected for pairing. This is attached even
         // if there is no bluetooth, so we can test/demo it.
-        AdapterView.OnItemClickListener clickListener = new AdapterView.OnItemClickListener() {
-            public void onItemClick(AdapterView<?> adapterView, View v, int arg2, long arg3) {
-                BluetoothDevice device = (BluetoothDevice) mDeviceViewItems.get(arg2).get("device");
-                getMainActivity().switchToConnectedFragment(device);
-            }
+        AdapterView.OnItemClickListener clickListener = (adapterView, v, arg2, arg3) -> {
+            BluetoothDevice device = (BluetoothDevice) mDeviceViewItems.get(arg2).get("device");
+            getMainActivity().switchToConnectedFragment(device);
         };
 
         mBinding.devicesLV.setOnItemClickListener(clickListener);

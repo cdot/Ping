@@ -18,7 +18,7 @@ import androidx.preference.R;
 /**
  * Would have strongly preferred to subclass SeekBarPreference, but the key method I want to
  * override - updateLabelValue - is package-private :-(
- * So this is a cut-down version of the androidx core code.
+ * So this is a cut-down version of the code from androidx.
  */
 public class SliderPreference extends Preference {
 

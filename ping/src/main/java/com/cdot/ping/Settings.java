@@ -33,27 +33,21 @@ import java.util.HashMap;
  * for all preferences.
  */
 public class Settings {
-    private static final String TAG = Settings.class.getSimpleName();
-
     public static final int KILOBYTE = 1024;
     public static final int MEGABYTE = KILOBYTE * KILOBYTE;
     public static final int GIGABYTE = MEGABYTE * KILOBYTE;
-
     // Minimum depth change (metres) before a new depth sample is recorded
     public static final String PREF_MIN_DEPTH_CHANGE = "minimumDepthChange";
-
     // Sampling preferences
     public static final int MIN_DEPTH_CHANGE_MIN = 100; // mm
     public static final int MIN_DEPTH_CHANGE_MAX = 3000; // mm
     public static final String PREF_MIN_POS_CHANGE = "minimumPositionChange";
     public static final int MIN_POS_CHANGE_MIN = 100; // mm
     public static final int MIN_POS_CHANGE_MAX = 3000; // mm
-
     // Intensity of the sonar pulse. When the water is shallow, or there is noise in the water
     // such as engine noise, select a lower sensitivity
     // percent/10 i.e. 0..10
     public static final String PREF_SENSITIVITY = "sensitivity";
-
     // Configuration preferences reverse-engineered by sniffing packets sent to sonar device
     public static final int SENSITIVITY_MIN = 1;
     public static final int SENSITIVITY_MAX = 10;
@@ -72,18 +66,15 @@ public class Settings {
     public static final int NOISE_LOW = 1;
     public static final int NOISE_MEDIUM = 2;
     public static final int NOISE_HIGH = 3;
-
     public static final String PREF_MAX_SAMPLES = "maxSamples";
     public static final int MAX_SAMPLES_MIN = 500 * 1024 / Sample.BYTES; // 500Kb file
     public static final int MAX_SAMPLES_MAX = 1024 * 1024 * 1024 / Sample.BYTES; // 1Gb file
-
     public static final String PREF_SAMPLER_TIMEOUT = "samplerTimeout";
     public static final int SAMPLER_TIMEOUT_MIN = 0; // 0 means "never"
     public static final int SAMPLER_TIMEOUT_MAX = 10 * 60 * 1000; // 10 minutes in ms
-
     public static final String PREF_DEVICE = "device";
     public static final String PREF_AUTOCONNECT = "autoconnect";
-
+    private static final String TAG = Settings.class.getSimpleName();
     // Default values for integer preferences
     private static final HashMap<String, Integer> intDefaults = new HashMap<String, Integer>() {
         {
@@ -107,7 +98,7 @@ public class Settings {
     // Handle to shared preferences
     private final SharedPreferences mPrefs;
 
-    Settings(Context cxt) {
+    public Settings(Context cxt) {
         mPrefs = PreferenceManager.getDefaultSharedPreferences(cxt);
         /*DEBUG
         mPrefs.registerOnSharedPreferenceChangeListener(new SharedPreferences.OnSharedPreferenceChangeListener() {
@@ -127,7 +118,7 @@ public class Settings {
      * @param pref key
      * @return value of preference
      */
-    int getInt(String pref) {
+    public int getInt(String pref) {
         try {
             return mPrefs.getInt(pref, intDefaults.get(pref));
         } catch (ClassCastException cce) {
@@ -136,7 +127,13 @@ public class Settings {
         }
     }
 
-    boolean getBoolean(String pref) {
+    /**
+     * Get the current value of a preference.
+     *
+     * @param pref key to fetch
+     * @return pref value or default
+     */
+    public boolean getBoolean(String pref) {
         try {
             return mPrefs.getBoolean(pref, booleanDefaults.get(pref));
         } catch (ClassCastException cce) {
@@ -151,7 +148,7 @@ public class Settings {
      * @param pref key to fetch
      * @return pref value or null default
      */
-    String getString(String pref) {
+    public String getString(String pref) {
         return mPrefs.getString(pref, null);
     }
 
@@ -162,7 +159,7 @@ public class Settings {
      * @param def  default value
      * @return pref value or null default
      */
-    String getString(String pref, String def) {
+    public String getString(String pref, String def) {
         return mPrefs.getString(pref, def);
     }
 
@@ -172,7 +169,7 @@ public class Settings {
      * @param key   pref key
      * @param value new value
      */
-    void put(String key, boolean value) {
+    public void put(String key, boolean value) {
         SharedPreferences.Editor edit = mPrefs.edit();
         edit.putBoolean(key, value);
         edit.apply();
@@ -184,7 +181,7 @@ public class Settings {
      * @param key   pref key
      * @param value new value
      */
-    void put(String key, int value) {
+    public void put(String key, int value) {
         SharedPreferences.Editor edit = mPrefs.edit();
         edit.putInt(key, value);
         edit.apply();
@@ -196,14 +193,14 @@ public class Settings {
      * @param key   pref key
      * @param value new value
      */
-    void put(String key, String value) {
+    public void put(String key, String value) {
         SharedPreferences.Editor edit = mPrefs.edit();
         edit.putString(key, value);
         edit.apply();
     }
 
     // Stub
-    void registerOnSharedPreferenceChangeListener(SharedPreferences.OnSharedPreferenceChangeListener ear) {
+    public void registerOnSharedPreferenceChangeListener(SharedPreferences.OnSharedPreferenceChangeListener ear) {
         mPrefs.registerOnSharedPreferenceChangeListener(ear);
     }
 }

@@ -24,7 +24,6 @@ import android.bluetooth.BluetoothDevice;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
@@ -102,9 +101,6 @@ public class MainActivity extends AppCompatActivity {
             mLoggingServiceBound = true;
             startService(new Intent(MainActivity.this, LoggingService.class));
 
-            // Setting the sample file means a change in the activity, so when it comes back the
-            // service is re-bound. If we started in SettingsFragment, we need to get back there.
-            // TODO: surely this is in the wrong place!
             Fragment frag = getSupportFragmentManager().findFragmentByTag(SettingsFragment.TAG);
             if (frag == null || !frag.isVisible())
                 connectSonarDevice();
@@ -215,11 +211,7 @@ public class MainActivity extends AppCompatActivity {
                 // Give rationale
                 new AlertDialog.Builder(this).setMessage(message)
                         .setPositiveButton(getResources().getString(R.string.OK),
-                                new DialogInterface.OnClickListener() {
-                                    public void onClick(DialogInterface dialog, int which) {
-                                        getPermissions();
-                                    }
-                                })
+                                (dialog, which) -> getPermissions())
                         .setNegativeButton(getResources().getString(R.string.cancel), null).create().show();
                 return;
             }
@@ -362,7 +354,6 @@ public class MainActivity extends AppCompatActivity {
     @Override // Activity
     public void onBackPressed() {
         // The only place we can be coming back from is the Settings screen
-        // TODO: should we do this on onStart?
         Log.d(TAG, "onBackPressed");
         configureSampler();
         super.onBackPressed();

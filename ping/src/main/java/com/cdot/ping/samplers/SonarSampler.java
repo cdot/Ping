@@ -85,7 +85,7 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
 
     private static final float MIN_DELTA_TEMPERATURE = 1.0f; // degrees C
     // The logging service we're sampling for
-    protected LoggingService mService = null;
+    protected LoggingService mService;
     // Will be set true on startup and when logging is turned on
     protected boolean mMustLogNextSample = true;
     // Client characteristics
@@ -273,7 +273,6 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
         }
         data[9] = (byte) (sum & 255);
 
-        // TODO: send a confirmation packet when the configuration has been written successfully
         writeCharacteristic(mConfigureCharacteristic, data)
                 .done(device -> Log.d(TAG, "Configuration sent to " + device.getName()))
                 .enqueue();
@@ -289,9 +288,7 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
                 .timeout(100000)
                 .useAutoConnect(true)
                 .retry(3, 100)
-                .done(dev -> {
-                    Log.i(TAG, "Device connection to " + device.getName() + " done");
-                })
+                .done(dev -> Log.i(TAG, "Device connection to " + device.getName() + " done"))
                 .enqueue();
     }
 

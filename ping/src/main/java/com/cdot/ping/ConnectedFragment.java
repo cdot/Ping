@@ -86,16 +86,6 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
         mIntentFilter.addAction(LoggingService.ACTION_SAMPLE);
     }
 
-    private static String formatDeltaTime(long t) {
-        long ms = (t % 1000); // milliseconds
-        t = (t - ms) / 1000; // make seconds
-        long s = t % 60; // seconds
-        t = (t - s) / 60; // make minutes
-        long m = t % 60; // minutes
-        t = (t - m) / 60; // make hours
-        return String.format("%02d:%02d:%02d.%d", t, m, s, ms / 100);
-    }
-
     private MainActivity getMainActivity() {
         return ((MainActivity) getActivity());
     }
@@ -185,12 +175,7 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
         setHasOptionsMenu(true);
         mBinding = ConnectedFragmentBinding.inflate(inflater, container, false);
 
-        mBinding.recordFAB.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                getMainActivity().writeGPX();
-            }
-        });
+        mBinding.recordFAB.setOnClickListener(view -> getMainActivity().writeGPX());
 
         mBinding.sonarV.onRestoreInstanceState(savedInstanceState);
 
@@ -249,41 +234,39 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
 
     private class DisplayThread extends Thread {
         DisplayThread() {
-            super(new Runnable() {
-                public void run() {
-                    while (!interrupted()) {
-                        if (mHaveNewSamples) {
+            super(() -> {
+                while (!interrupted()) {
+                    if (mHaveNewSamples) {
 
-                            Resources r = getResources();
-                            mBinding.batteryTV.setText(r.getString(R.string.val_battery, mLastSample.battery));
-                            mBinding.depthTV.setText(r.getString(R.string.val_depth, mLastSample.depth));
-                            mBinding.tempTV.setText(r.getString(R.string.val_temperature, mLastSample.temperature));
-                            mBinding.fishDepthTV.setText(r.getString(R.string.val_fish_depth, mLastSample.fishDepth));
-                            mBinding.fishStrengthTV.setText(r.getString(R.string.val_fish_strength, mLastSample.fishStrength));
-                            mBinding.strengthTV.setText(r.getString(R.string.val_strength, mLastSample.strength));
+                        Resources r = getResources();
+                        mBinding.batteryTV.setText(r.getString(R.string.val_battery, mLastSample.battery));
+                        mBinding.depthTV.setText(r.getString(R.string.val_depth, mLastSample.depth));
+                        mBinding.tempTV.setText(r.getString(R.string.val_temperature, mLastSample.temperature));
+                        mBinding.fishDepthTV.setText(r.getString(R.string.val_fish_depth, mLastSample.fishDepth));
+                        mBinding.fishStrengthTV.setText(r.getString(R.string.val_fish_strength, mLastSample.fishStrength));
+                        mBinding.strengthTV.setText(r.getString(R.string.val_strength, mLastSample.strength));
 
-                            mBinding.latitudeTV.setText(r.getString(R.string.val_latitude, mLastSample.latitude));
-                            mBinding.longitudeTV.setText(r.getString(R.string.val_longitude, mLastSample.longitude));
+                        mBinding.latitudeTV.setText(r.getString(R.string.val_latitude, mLastSample.latitude));
+                        mBinding.longitudeTV.setText(r.getString(R.string.val_longitude, mLastSample.longitude));
 
-                            LoggingService svc = getLoggingService();
-                            if (svc != null) {
-                                //mBinding.logTimeTV.setText(r.getString(R.string.val_logging_time, formatDeltaTime(svc.getLoggingTime())));
-                                mBinding.logRateTV.setText(r.getString(R.string.val_sample_rate, svc.getAverageSamplingRate()));
-                                mBinding.logCountTV.setText(r.getString(R.string.val_sample_count, svc.getSamplesLogged()));
-                                mBinding.cacheUsedTV.setText(r.getString(R.string.val_cache_usage, svc.getCacheUsage()));
-                            } else {
-                                //mBinding.logTimeTV.setText("?");
-                                mBinding.logRateTV.setText("?");
-                                mBinding.logCountTV.setText("?");
-                            }
-
-                            mHaveNewSamples = false;
+                        LoggingService svc = getLoggingService();
+                        if (svc != null) {
+                            //mBinding.logTimeTV.setText(r.getString(R.string.val_logging_time, formatDeltaTime(svc.getLoggingTime())));
+                            mBinding.logRateTV.setText(r.getString(R.string.val_sample_rate, svc.getAverageSamplingRate()));
+                            mBinding.logCountTV.setText(r.getString(R.string.val_sample_count, svc.getSamplesLogged()));
+                            mBinding.cacheUsedTV.setText(r.getString(R.string.val_cache_usage, svc.getCacheUsage()));
+                        } else {
+                            //mBinding.logTimeTV.setText("?");
+                            mBinding.logRateTV.setText("?");
+                            mBinding.logCountTV.setText("?");
                         }
+
+                        mHaveNewSamples = false;
                     }
-                    try {
-                        Thread.sleep(500);
-                    } catch (InterruptedException ignore) {
-                    }
+                }
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException ignore) {
                 }
             });
         }

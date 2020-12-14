@@ -18,6 +18,7 @@
  */
 package com.cdot.ping;
 
+import android.annotation.SuppressLint;
 import android.os.Bundle;
 
 import androidx.fragment.app.FragmentTransaction;
@@ -40,6 +41,7 @@ public class SettingsFragment extends PreferenceFragmentCompat {
     }
 
     // Called from onCreate
+    @SuppressLint("DefaultLocale")
     @Override // PreferenceFragmentCompat
     public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
         Settings prefs = new Settings(getActivity());

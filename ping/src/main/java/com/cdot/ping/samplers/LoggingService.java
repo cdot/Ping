@@ -363,7 +363,6 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
      * @param uri the uri to create the GPX document at
      */
     public void writeGPX(Uri uri) throws IOException {
-        Sample[] samples = mCache.snapshotSamples();
         Document gpxDocument = GPX.openDocument(getContentResolver(), uri);
 
         // Create new trkseg element for this trace
@@ -411,6 +410,6 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
      * @return a percentage
      */
     public float getCacheUsage() {
-        return 100 * mCache.getUsedSamples() / mCache.getCapacitySamples();
+        return 100.0f * mCache.getUsedSamples() / mCache.getCapacitySamples();
     }
 }
