@@ -28,6 +28,9 @@ import androidx.preference.ListPreference;
  * ListPreference insists on.
  */
 public class IntListPreference extends ListPreference {
+    private LabelRewriter mLabelRewriter = null;
+    // String used to separate the preference current value from the description in the summary
+    private static final String VALUE_SEPARATOR = "\n";
 
     public IntListPreference(Context context, AttributeSet attrs, int defStyleAttr, int defStyleRes) {
         super(context, attrs, defStyleAttr, defStyleRes);
@@ -70,5 +73,25 @@ public class IntListPreference extends ListPreference {
         }
 
         return Integer.toString(intValue);
+    }
+
+    @Override
+    public void setValue(String value) {
+        super.setValue(value);
+        if (mLabelRewriter != null) {
+            String s = getTitle().toString();
+
+            int end = s.indexOf(VALUE_SEPARATOR);
+            if (end >= 0) s = s.substring(0, end);
+            setTitle(s + VALUE_SEPARATOR + "(" + mLabelRewriter.rewrite(Integer.parseInt(value)) + ")");
+        }
+    }
+
+    public void setValue(int v) {
+        setValue(Integer.toString(v));
+    }
+
+    public void setLabelRewriter(LabelRewriter lw) {
+        mLabelRewriter = lw;
     }
 }

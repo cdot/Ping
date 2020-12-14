@@ -190,14 +190,17 @@ public class CircularByteLog {
             mCapacity = newCapacity;
             return;
         }
-        if (mUsed > newCapacity)
+        if (mUsed > newCapacity) {
             // Shrinking, discard
             _skip(mUsed - newCapacity);
+        }
         byte[] buf = new byte[mUsed];
         _read(buf, 0, mUsed);
         mReadPos = 0;
         mCapacity = newCapacity;
         writeBytes(buf);
+        if (mUsed == mCapacity)
+            mRAF.setLength(mCapacity); // truncate
     }
 
     /**

@@ -33,14 +33,14 @@
     <string name="help_autoconnect">Automatically connect to the first compatible device found. Otherwise wait for you to select a device.</string>
     <string name="help_bt_address">FF:FF:FF:FF:FF:FF</string>
     <string name="help_change_device">Connect to a different device</string>
-    <string name="help_maxSamples">Maximum number of samples to save before overwriting older samples. The number in brackets is the amount of memory required.</string>
+    <string name="help_maxSamples">Maximum number of samples to save before overwriting older samples. The number after = is the amount of memory required.</string>
     <string name="help_minimumDepthChange">The minimum depth difference that must be seen before a sample will be recorded, in metres</string>
     <string name="help_minimumPositionChange">The minimum horizontal distance that must be moved before a sample will be recorded, in metres</string>
     <string name="help_no_bluetooth">No bluetooth support on this device</string>
     <string name="help_noise">Use higher settings for turbid water or where there are suspended solids</string>
     <string name="help_range">Set as close to the estimated depth as possible for best detection results</string>
     <string name="help_sampleFile">Click to change the file to store samples in</string>
-    <string name="help_samplerTimeout">The amount of time to wait for another sample after a sample has been received. 0 means wait forever. If this timeout is exceeded, device discovery will restart</string>
+    <string name="help_samplerTimeout">How long to wait for another sample after a sample has been received. 0 means wait forever. If this timeout is exceeded, device discovery will restart</string>
     <string name="help_scan_all">Scanning for a compatible device&#x2026; touch a device to connect to it</string>
     <string name="help_scan_first">Scanning for a compatible device&#x2026;</string>
     <string name="help_sensitivity">Intensity of the sonar pulse. When the water is shallow, or there is noise in the water such as engine noise, select a lower sensitivity</string>
@@ -79,10 +79,11 @@
     </string-array>
     <string name="pref_autoconnect">Auto Connect</string>
     <string name="pref_depth_delta">Minimum depth change</string>
-    <string name="pref_max_samples">Maximum samples</string>
+    <string name="pref_max_samples">Sample cache size</string>
     <string name="pref_noise">Noise</string>
     <string name="pref_pos_delta">Minimum position change</string>
     <string name="pref_range">Range</string>
+    <string name="pref_sampler_timeout">Sonar timeout</string>
     <string name="pref_sensitivity">Sensitivity</string>
 
     <!-- See Ping.RANGE_* -->
@@ -111,17 +112,17 @@
     <string name="start_recording">Start recording</string>
 
     <string name="val_battery">Battery: %1$d</string>
-    <string name="val_depth">Depth: %1$.2gm</string>
+    <string name="val_cache_usage">Used %1$.1f%%</string>
+    <string name="val_depth">Depth %1$.2gm</string>
     <string name="val_fish_depth">Fish Depth: %1$.2gm</string>
     <string name="val_fish_strength">Fish Strength: %1$d</string>
     <string name="val_latitude">Latitude: %1$.5g</string>
     <string name="val_longitude">Longitude: %1$.5g</string>
-    <string name="val_logging_count">Samples: %1$d</string>
-    <string name="val_logging_rate">Rate: %1$.2gHz</string>
+    <string name="val_sample_count">Count: %1$d</string>
+    <string name="val_sample_rate">Rate: %1$.2gHz</string>
     <string name="val_strength">Strength: %1$d</string>
     <string name="val_temperature">Temperature: %1$.2g°C</string>
     <string name="default_device_name">Unspecified Bluetooth Device</string>
     <string name="write_gpx_failed">Could not write GPX file</string>
     <string name="write_gpx_OK">GPX data written</string>
-    <string name="pref_sampler_timeout">Sonar sample timeout</string>
 </resources>

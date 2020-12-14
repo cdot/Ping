@@ -65,25 +65,31 @@ public class MainActivity extends AppCompatActivity {
     private final static int REQUEST_ENABLE_BLUETOOTH = 1;
     private static final int REQUEST_PERMISSIONS = 2;
     private static final int REQUEST_CHOOSE_FILE = 3;
-    // A reference to the service used to get location updates. Used by Fragments.
-    LoggingService mLoggingService = null;
-    private Settings mPrefs;
+
     MainActivityBinding mBinding; // view binding
+    BroadcastReceiver mBroadcastReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            String action = intent.getAction();
+            if (SonarSampler.ACTION_BT_STATE.equals(action)) {
+                int state = intent.getIntExtra(SonarSampler.EXTRA_STATE, SonarSampler.BT_STATE_DISCONNECTED);
+                Log.d(TAG, "Received bluetooth state change " + state);
+                if (state == SonarSampler.BT_STATE_READY)
+                    configureSampler();
+                BluetoothDevice device = intent.getParcelableExtra(SonarSampler.EXTRA_DEVICE);
+                int reason = intent.getIntExtra(SonarSampler.EXTRA_REASON, ConnectionObserver.REASON_UNKNOWN);
+                updateSonarStateDisplay(state, reason, device);
+            }
+        }
+    };
+    private Settings mPrefs; // access to shared preferences
 
-    // Cache of current settings, so we can detect when they change. Initial values will be
-    // replaced as soon as settingsChanged is called (which it will be when the service starts)
-    private int sensitivity = Settings.SENSITIVITY_MIN;
-    private int noise = Settings.NOISE_OFF;
-    private int range = Settings.RANGE_AUTO;
-    private int minDeltaD = Settings.MIN_DEPTH_CHANGE_MAX;
-    private float minDeltaPos = Settings.MIN_POS_CHANGE_MAX;
-    private int maxSamples = Settings.MAX_SAMPLES_MIN;
-    private int samplerTimeout = Settings.SAMPLER_TIMEOUT_MIN;
-
-    // Connections to services
-    private String sampleFile = null;
+    // Service used to log samples
+    private LoggingService mLoggingService = null;
     // Tracks the bound state of the service. Only meaningful if mLoggingService != null
     private boolean mLoggingServiceBound = false;
+    // true when configuration must be re-sent to the logging service
+    private boolean mMustConfigureSampler = true;
 
     // Monitors the state of the connection to the location service.
     private final ServiceConnection mLoggingServiceConnection = new ServiceConnection() {
@@ -98,6 +104,7 @@ public class MainActivity extends AppCompatActivity {
 
             // Setting the sample file means a change in the activity, so when it comes back the
             // service is re-bound. If we started in SettingsFragment, we need to get back there.
+            // TODO: surely this is in the wrong place!
             Fragment frag = getSupportFragmentManager().findFragmentByTag(SettingsFragment.TAG);
             if (frag == null || !frag.isVisible())
                 connectSonarDevice();
@@ -111,18 +118,7 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
-    BroadcastReceiver mBroadcastReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            String action = intent.getAction();
-            if (SonarSampler.ACTION_BT_STATE.equals(action)) {
-                int state = intent.getIntExtra(SonarSampler.EXTRA_STATE, SonarSampler.BT_STATE_DISCONNECTED);
-                BluetoothDevice device = intent.getParcelableExtra(SonarSampler.EXTRA_DEVICE);
-                int reason = intent.getIntExtra(SonarSampler.EXTRA_REASON, ConnectionObserver.REASON_UNKNOWN);
-                updateSonarStateDisplay(state, reason, device);
-            }
-        }
-    };
+    // Lifecycle management
 
     private void updateSonarStateDisplay(int state, int reason, BluetoothDevice device) {
         Resources r = getResources();
@@ -132,31 +128,6 @@ public class MainActivity extends AppCompatActivity {
         String sta = String.format(r.getStringArray(R.array.bt_status)[state], rationale);
         mBinding.connectionStatusTV.setText(sta);
         Log.d(TAG, "Bluetooth state: " + sta + " " + dev);
-    }
-
-    // Lifecycle management
-
-    @Override // Activity
-    protected void onSaveInstanceState(Bundle bits) {
-        Log.d(TAG, "onSaveInstanceState()");
-        super.onSaveInstanceState(bits);
-    }
-
-    // equals() when either string could be null
-    private static boolean sameString(String a, String b) {
-        if (a == b) return true;
-        return a != null && a.equals(b);
-    }
-
-    @Override // Activity
-    protected void onRestoreInstanceState(@NonNull Bundle bits) {
-        sensitivity = mPrefs.getInt(Settings.PREF_SENSITIVITY);
-        noise = mPrefs.getInt(Settings.PREF_NOISE);
-        range = mPrefs.getInt(Settings.PREF_RANGE);
-        minDeltaD = mPrefs.getInt(Settings.PREF_MIN_DEPTH_CHANGE);
-        minDeltaPos = mPrefs.getInt(Settings.PREF_MIN_POS_CHANGE);
-        maxSamples = mPrefs.getInt(Settings.PREF_MAX_SAMPLES);
-        super.onRestoreInstanceState(bits);
     }
 
     // See https://developer.android.com/guide/components/activities/activity-lifecycle
@@ -388,76 +359,39 @@ public class MainActivity extends AppCompatActivity {
         switchToConnectedFragment();
     }
 
+    @Override // Activity
+    public void onBackPressed() {
+        // The only place we can be coming back from is the Settings screen
+        // TODO: should we do this on onStart?
+        Log.d(TAG, "onBackPressed");
+        configureSampler();
+        super.onBackPressed();
+    }
+
     /**
      * Reconfigure the device according to the current options
      *
-     * @param changes optional
+     * @param key    the key for the changed preference
+     * @param newVal new value of the preference, as persisted in shared preferences
      */
-    void settingsChanged(Object... changes) {
-        Log.d(TAG, "settingsChanged");
-        int new_sensitivity = mPrefs.getInt(Settings.PREF_SENSITIVITY);
-        int new_noise = mPrefs.getInt(Settings.PREF_NOISE);
-        int new_range = mPrefs.getInt(Settings.PREF_RANGE);
-        int new_maxSamples = mPrefs.getInt(Settings.PREF_MAX_SAMPLES);
-        int new_minDeltaD = mPrefs.getInt(Settings.PREF_MIN_DEPTH_CHANGE); // mm
-        int new_minDeltaPos = mPrefs.getInt(Settings.PREF_MIN_POS_CHANGE); // mm
-        int new_samplerTimeout = mPrefs.getInt(Settings.PREF_SAMPLER_TIMEOUT);
-        //String new_gpxFile = mPrefs.getString(Settings.PREF_GPX_FILE);
+    synchronized void onSettingChanged(String key, Object newVal) {
+        Log.d(TAG, "onSettingChanged " + key + "=" + newVal);
+        mMustConfigureSampler = true;
+    }
 
-        if (changes.length > 0) {
-            switch ((String) changes[0]) {
-                case Settings.PREF_SENSITIVITY:
-                    new_sensitivity = (int) changes[1];
-                    break;
-                case Settings.PREF_NOISE:
-                    new_noise = (int) changes[1];
-                    break;
-                case Settings.PREF_RANGE:
-                    new_range = (int) changes[1];
-                    break;
-                case Settings.PREF_MIN_DEPTH_CHANGE:
-                    new_minDeltaD = (int) changes[1];
-                    break;
-                case Settings.PREF_MIN_POS_CHANGE:
-                    new_minDeltaPos = (int) changes[1];
-                    break;
-                case Settings.PREF_MAX_SAMPLES:
-                    new_maxSamples = (int) changes[1];
-                    break;
-                case Settings.PREF_SAMPLER_TIMEOUT:
-                    new_samplerTimeout = (int) changes[1];
-                    break;
-            }
+    // Send configuration information to the logging service (and hence to the sonar device)
+    synchronized void configureSampler() {
+        if (mMustConfigureSampler && mLoggingService != null) {
+            mLoggingService.configure(
+                    mPrefs.getInt(Settings.PREF_SENSITIVITY),
+                    mPrefs.getInt(Settings.PREF_NOISE),
+                    mPrefs.getInt(Settings.PREF_RANGE),
+                    mPrefs.getInt(Settings.PREF_MIN_DEPTH_CHANGE) / 1000f,
+                    mPrefs.getInt(Settings.PREF_MIN_POS_CHANGE) / 1000f,
+                    mPrefs.getInt(Settings.PREF_SAMPLER_TIMEOUT),
+                    mPrefs.getInt(Settings.PREF_MAX_SAMPLES));
+            mMustConfigureSampler = false;
         }
-
-        if (mLoggingService != null) {
-            /*if (!sameString(new_gpxFile, sampleFile) && mLoggingService.isLogging()) {
-                mLoggingService.stopLogging();
-                mLoggingService.startLogging(new_gpxFile);
-            }*/
-
-            if (new_sensitivity != sensitivity
-                    || new_noise != noise
-                    || new_range != range
-                    || new_minDeltaD != minDeltaD
-                    || new_minDeltaPos != minDeltaPos
-                    || new_samplerTimeout != samplerTimeout) {
-                mLoggingService.mSonarSampler.configure(
-                        new_sensitivity, new_noise, new_range,
-                        new_minDeltaD / 1000f, new_minDeltaPos / 1000f,
-                        new_samplerTimeout);
-            }
-            if (new_maxSamples != maxSamples)
-                mLoggingService.setMaxSamples(new_maxSamples);
-        }
-
-        sensitivity = new_sensitivity;
-        noise = new_noise;
-        range = new_range;
-        minDeltaD = new_minDeltaD;
-        minDeltaPos = new_minDeltaPos;
-        maxSamples = new_maxSamples;
-        samplerTimeout = new_samplerTimeout;
     }
 
     public void writeGPX() {
@@ -466,7 +400,10 @@ public class MainActivity extends AppCompatActivity {
         intent.setType("application/gpx+xml");
         intent.putExtra(Intent.EXTRA_TITLE, getResources().getString(R.string.help_sampleFile));
 
+        // Tell the logging service to keep running even though all clients have apparently unbound
+        // during the switch to the file chooser activity
         mLoggingService.setKeepAlive(true);
+
         startActivityForResult(intent, REQUEST_CHOOSE_FILE);
     }
 }

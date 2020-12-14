@@ -68,7 +68,7 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
                 int state = intent.getIntExtra(SonarSampler.EXTRA_STATE, SonarSampler.BT_STATE_DISCONNECTED);
                 int reason = intent.getIntExtra(SonarSampler.EXTRA_REASON, -1);
                 if (state == SonarSampler.BT_STATE_READY)
-                    getMainActivity().settingsChanged();
+                    getMainActivity().configureSampler();
                 else if (state == SonarSampler.BT_STATE_CONNECT_FAILED
                         || state == SonarSampler.BT_STATE_DISCONNECTED && reason == ConnectionObserver.REASON_LINK_LOSS) {
                     // Try to find a device; autoconnect true so will connect to the first compatible it finds
@@ -268,8 +268,9 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
                             LoggingService svc = getLoggingService();
                             if (svc != null) {
                                 //mBinding.logTimeTV.setText(r.getString(R.string.val_logging_time, formatDeltaTime(svc.getLoggingTime())));
-                                mBinding.logRateTV.setText(r.getString(R.string.val_logging_rate, svc.getAverageSamplingRate()));
-                                mBinding.logCountTV.setText(r.getString(R.string.val_logging_count, svc.getSampleCount()));
+                                mBinding.logRateTV.setText(r.getString(R.string.val_sample_rate, svc.getAverageSamplingRate()));
+                                mBinding.logCountTV.setText(r.getString(R.string.val_sample_count, svc.getSamplesLogged()));
+                                mBinding.cacheUsedTV.setText(r.getString(R.string.val_cache_usage, svc.getCacheUsage()));
                             } else {
                                 //mBinding.logTimeTV.setText("?");
                                 mBinding.logRateTV.setText("?");

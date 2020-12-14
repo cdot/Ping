@@ -44,10 +44,10 @@ public class Settings {
 
     // Sampling preferences
     public static final int MIN_DEPTH_CHANGE_MIN = 100; // mm
-    public static final int MIN_DEPTH_CHANGE_MAX = 5000; // mm
+    public static final int MIN_DEPTH_CHANGE_MAX = 3000; // mm
     public static final String PREF_MIN_POS_CHANGE = "minimumPositionChange";
     public static final int MIN_POS_CHANGE_MIN = 100; // mm
-    public static final int MIN_POS_CHANGE_MAX = 10000; // mm
+    public static final int MIN_POS_CHANGE_MAX = 3000; // mm
 
     // Intensity of the sonar pulse. When the water is shallow, or there is noise in the water
     // such as engine noise, select a lower sensitivity

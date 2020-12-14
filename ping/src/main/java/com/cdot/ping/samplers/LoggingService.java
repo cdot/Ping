@@ -44,19 +44,16 @@ import com.cdot.ping.R;
 
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
-import org.xml.sax.InputSource;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.text.DateFormat;
 import java.util.Date;
 
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.transform.OutputKeys;
 import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
@@ -75,7 +72,7 @@ import javax.xml.transform.stream.StreamResult;
  * Substantially based on https://github.com/android/location-samples
  */
 public class LoggingService extends Service implements LocationSampler.SampleListener {
-    public static final String TAG = LoggingService.class.getSimpleName();
+    private static final String TAG = LoggingService.class.getSimpleName();
 
     protected static final String CLASS_NAME = LoggingService.class.getCanonicalName();
 
@@ -86,6 +83,10 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
     // Extra to tell us if we arrived in onStartCommand from the Notification
     protected static final String EXTRA_STARTED_FROM_NOTIFICATION =
             CLASS_NAME + ".started_from_notification";
+
+    // Name of sample cache file. Always stored in getExternalFilesDir()
+    public static String CACHEFILE_NAME = "ping.log";
+
     /**
      * The identifier for the notification displayed for the foreground service.
      * "If a notification with the same id has already been posted by your application and has
@@ -95,7 +96,23 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
     private static final int NOTIFICATION_1D = 0xC0FEFE;
     private static final String CHANNEL_ID = "Ping_Channel" + TAG;
 
+    /**
+     * Service binder type
+     */
+    public class LoggingServiceBinder extends Binder {
+        public LoggingService getService() {
+            return LoggingService.this;
+        }
+    }
+
     private final IBinder mBinder = new LoggingServiceBinder();
+
+    /**
+     * Public to allow access to device control methods
+     */
+    public SonarSampler mSonarSampler;
+    private LocationSampler mLocationSampler;
+
     /**
      * Used to check whether the bound activity has really gone away and not unbound as part of an
      * orientation change. We create a foreground service notification only if the former takes
@@ -103,17 +120,13 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
      */
     protected boolean mJustAConfigurationChange = false;
     protected NotificationManager mNotificationManager;
-
-    public SonarSampler mSonarSampler;
-    public LocationSampler mLocationSampler;
-
     // Set to true to keep this service running even when all clients are unbound
     // and logging is disabled.
     private boolean mKeepAlive = false;
     private double mAverageSamplingRate = 0; // rolling average sampling rate
-    private long mTotalSampleCount = 0;
+    private long mTotalSamplesLogged = 0;
     private long mLastSampleTime = System.currentTimeMillis();
-    private CircularSampleLog mSampleLog;
+    private CircularSampleLog mCache;
 
     @Override // Service
     public void onCreate() {
@@ -124,11 +137,10 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
 
         mNotificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         try {
-            // TODO: optionally support getExternalFilesDir()
-            mSampleLog = new CircularSampleLog(new File(getFilesDir(), "ping.dat"));
+            mCache = new CircularSampleLog(new File(getExternalFilesDir(null), CACHEFILE_NAME));
         } catch (FileNotFoundException fnfe) {
             try {
-                mSampleLog = new CircularSampleLog(new File(getFilesDir(), "ping.dat"), 1024);
+                mCache = new CircularSampleLog(new File(getExternalFilesDir(null), CACHEFILE_NAME), 1024);
             } catch (IOException ioe) {
                 Log.e(TAG, "Problem creating log file " + ioe);
             }
@@ -156,19 +168,15 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
         }
     }
 
-    public double getAverageSamplingRate() {
-        return mAverageSamplingRate;
-    }
-
-    public long getSampleCount() {
-        return mTotalSampleCount;
-    }
-
+    /**
+     * Set to true to stop the service from suiciding when the last client unbinds
+     * @param on true to stop 切腹
+     */
     public void setKeepAlive(boolean on) {
         mKeepAlive = on;
     }
 
-    @Override
+    @Override // Service
     public int onStartCommand(Intent intent, int flags, int startId) {
         Log.d(TAG, "onStartCommand");
         boolean startedFromNotification = intent.getBooleanExtra(EXTRA_STARTED_FROM_NOTIFICATION, false);
@@ -185,14 +193,14 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
         return START_NOT_STICKY;
     }
 
-    @Override
+    @Override // Service
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
         Log.d(TAG, "onConfigurationChanged()");
         mJustAConfigurationChange = true;
     }
 
-    @Override
+    @Override // Service
     public IBinder onBind(Intent intent) {
         // Called when a client (MainActivity in case of this sample) comes to the foreground
         // and binds with this service. The service should cease to be a foreground service
@@ -205,7 +213,7 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
         return mBinder;
     }
 
-    @Override
+    @Override // Service
     public void onRebind(Intent intent) {
         // Called when a client (MainActivity in case of this sample) returns to the foreground
         // and binds once again with this service. The service should cease to be a foreground
@@ -216,7 +224,7 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
         super.onRebind(intent);
     }
 
-    @Override
+    @Override // Service
     public boolean onUnbind(Intent intent) {
         Log.d(TAG, "onUnbind()");
 
@@ -243,9 +251,7 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
         mLocationSampler.stopSampling();
     }
 
-    /**
-     * Returns the {@link NotificationCompat} displayed in the notification drawers.
-     */
+    // Returns the {@link NotificationCompat} displayed in the notification drawers.
     private Notification getNotification() {
         Intent intent = new Intent(this, this.getClass());
 
@@ -282,64 +288,9 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
         return builder.build();
     }
 
-    // Write XML to mLogUri
-    public void writeGPX(Uri uri) throws IOException {
-        Sample[] samples = mSampleLog.snapshotSamples();
-        AssetFileDescriptor afd;
-        Document gpxDocument;
-        DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
-        dbf.setNamespaceAware(true);
-        dbf.setValidating(false);
-        try {
-            DocumentBuilder db = dbf.newDocumentBuilder();
-            Element gpxTrk;
-            try {
-                afd = getContentResolver().openAssetFileDescriptor(uri, "r");
-                InputSource source = new InputSource(new FileInputStream(afd.getFileDescriptor()));
-                Log.d(TAG, "Parsing existing content");
-                gpxDocument = db.parse(source);
-                gpxTrk = (Element) gpxDocument.getElementsByTagNameNS(GPX.NS_GPX, "trk").item(0);
-                afd.close();
-                Log.d(TAG, "...existing content retained");
-            } catch (Exception ouch) {
-                Log.e(TAG, ouch.toString());
-                Log.d(TAG, "Creating new document");
-                gpxDocument = db.newDocument();
-                gpxDocument.setDocumentURI(uri.toString());
-                gpxDocument.setXmlVersion("1.1");
-                gpxDocument.setXmlStandalone(true);
-                Element gpxGpx = gpxDocument.createElementNS(GPX.NS_GPX, "gpx");
-                gpxGpx.setAttribute("version", "1.1");
-                gpxGpx.setAttribute("creator", getApplicationContext().getResources().getString(R.string.app_name));
-                gpxDocument.appendChild(gpxGpx);
-                gpxTrk = gpxDocument.createElementNS(GPX.NS_GPX, "trk");
-                gpxGpx.appendChild(gpxTrk);
-            }
-            // Create new trkseg element for this trace
-            Element gpxTrkseg = gpxDocument.createElementNS(GPX.NS_GPX, "trkseg");
-            gpxTrk.appendChild(gpxTrkseg);
 
-            Sample[] snap = mSampleLog.snapshotSamples();
-            for (Sample s : snap)
-                gpxTrkseg.appendChild(s.toGPX(gpxDocument));
-            Transformer transformer = TransformerFactory.newInstance().newTransformer();
-            transformer.setOutputProperty(OutputKeys.INDENT, "yes");
-
-            DOMSource source = new DOMSource(gpxDocument);
-            afd = getContentResolver().openAssetFileDescriptor(uri, "w");
-            StreamResult result = new StreamResult(afd.createOutputStream());
-            transformer.transform(source, result);
-            afd.close();
-            Log.d(TAG, "GPX written");
-        } catch (Exception e) {
-            Log.e(TAG, "writeGPX " + e);
-        }
-    }
-
-    /**
-     * Returns true if this is currently a foreground service.
-     */
-    public boolean isRunningInForeground() {
+    // Returns true if this is currently a foreground service.
+    private boolean isRunningInForeground() {
         ActivityManager manager = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
         for (ActivityManager.RunningServiceInfo service : manager.getRunningServices(Integer.MAX_VALUE)) {
             if (getClass().getName().equals(service.service.getClassName()) && service.foreground)
@@ -348,20 +299,10 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
         return false;
     }
 
-    // Called from LocationSampler when a new location has been identified
+    // Called from LocationSampler when a new location has been identified - really package-private
     @Override // LocationSampler.SamplerListener
     public void onLocationSample(Location loc) {
         mSonarSampler.setLocation(loc);
-    }
-
-    public void setMaxSamples(int ms) {
-        if (mSampleLog == null)
-            return;
-        try {
-            mSampleLog.setCapacitySamples(ms);
-        } catch (IOException ioe) {
-            Log.e(TAG, "Problem changing log size " + ioe);
-        }
     }
 
     // Called from SonarSampler
@@ -369,14 +310,14 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
         // "real" device has a sample rate around 12Hz
         long now = System.currentTimeMillis();
         double samplingRate = 1000.0 / (now - mLastSampleTime);
-        mAverageSamplingRate = ((mAverageSamplingRate * mTotalSampleCount) + samplingRate) / (mTotalSampleCount + 1);
-        mTotalSampleCount++;
+        mAverageSamplingRate = ((mAverageSamplingRate * mTotalSamplesLogged) + samplingRate) / (mTotalSamplesLogged + 1);
+        mTotalSamplesLogged++;
 
         mLastSampleTime = now;
 
-        if (mSampleLog != null) {
+        if (mCache != null) {
             try {
-                mSampleLog.writeSample(sample);
+                mCache.writeSample(sample);
             } catch (IOException ioe) {
                 Log.e(TAG, "logSample " + ioe);
             }
@@ -394,9 +335,82 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
         }
     }
 
-    public class LoggingServiceBinder extends Binder {
-        public LoggingService getService() {
-            return LoggingService.this;
+    /**
+     * Configuration. The first three parameters are sent to the sonar device.
+     *
+     * @param sensitivity   1..10
+     * @param noise         filtering 0..4 (off, low, med, high)
+     * @param range         0..6 (3, 6, 9, 18, 24, 36, auto)
+     * @param minDeltaDepth min depth change, in metres
+     * @param minDeltaPos   min location change, in metres
+     * @param sampleTimeout timeout waiting for a sample before we abandon the connection and try a different device. 0 means never.
+     * @param maxSamples    number of samples that must be accomodated in the sample buffer
+     */
+    public void configure(int sensitivity, int noise, int range, float minDeltaDepth, float minDeltaPos, int sampleTimeout, int maxSamples) {
+        mSonarSampler.configure(sensitivity, noise, range, minDeltaDepth, minDeltaPos, sampleTimeout);
+        if (mCache == null)
+            return;
+        try {
+            mCache.setCapacitySamples(maxSamples);
+        } catch (IOException ioe) {
+            Log.e(TAG, "Problem changing log size " + ioe);
         }
+    }
+
+    /**
+     * Write GPX XML for all cached samples to the given Uri. All samples are written, whether they
+     * has already been written or not.
+     * @param uri the uri to create the GPX document at
+     */
+    public void writeGPX(Uri uri) throws IOException {
+        Sample[] samples = mCache.snapshotSamples();
+        Document gpxDocument = GPX.openDocument(getContentResolver(), uri);
+
+        // Create new trkseg element for this trace
+        Element gpxTrk = (Element) gpxDocument.getElementsByTagNameNS(GPX.NS_GPX, "trk").item(0);
+        Element gpxTrkseg = gpxDocument.createElementNS(GPX.NS_GPX, "trkseg");
+        gpxTrk.appendChild(gpxTrkseg);
+
+        Sample[] snap = mCache.snapshotSamples();
+        for (Sample s : snap)
+            gpxTrkseg.appendChild(s.toGPX(gpxDocument));
+
+        try {
+            Transformer transformer = TransformerFactory.newInstance().newTransformer();
+            transformer.setOutputProperty(OutputKeys.INDENT, "yes");
+
+            DOMSource source = new DOMSource(gpxDocument);
+            AssetFileDescriptor afd = getContentResolver().openAssetFileDescriptor(uri, "w");
+            StreamResult result = new StreamResult(afd.createOutputStream());
+            transformer.transform(source, result);
+            afd.close();
+            Log.d(TAG, "GPX written");
+        } catch (TransformerException tce) {
+            Log.e(TAG, "writeGPX failed " + tce);
+        }
+    }
+
+    /**
+     * Get the current average sampling rate, in Hz
+     * @return the sample rate
+     */
+    public double getAverageSamplingRate() {
+        return mAverageSamplingRate;
+    }
+
+    /**
+     * Get the total number of samples logged in all time
+     * @return samples seen
+     */
+    public long getSamplesLogged() {
+        return mTotalSamplesLogged;
+    }
+
+    /**
+     * Get cache usage as a percentage of the available capacity
+     * @return a percentage
+     */
+    public float getCacheUsage() {
+        return 100 * mCache.getUsedSamples() / mCache.getCapacitySamples();
     }
 }

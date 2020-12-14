@@ -24,9 +24,9 @@ import androidx.fragment.app.FragmentTransaction;
 import androidx.preference.CheckBoxPreference;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
-import androidx.preference.SeekBarPreference;
 
 import com.cdot.ping.android.IntListPreference;
+import com.cdot.ping.android.SliderPreference;
 import com.cdot.ping.samplers.Sample;
 
 /**
@@ -35,8 +35,9 @@ import com.cdot.ping.samplers.Sample;
 public class SettingsFragment extends PreferenceFragmentCompat {
     public static final String TAG = SettingsFragment.class.getSimpleName();
 
-    // String used to separate the preference current value from the description in the summary
-    private static final String VALUE_SEPARATOR = "\n";
+    private MainActivity getMainActivity() {
+        return ((MainActivity) getActivity());
+    }
 
     // Called from onCreate
     @Override // PreferenceFragmentCompat
@@ -52,7 +53,7 @@ public class SettingsFragment extends PreferenceFragmentCompat {
         // Interface to SharedPreferences
         Preference vanilla;
         CheckBoxPreference checkbox;
-        SeekBarPreference seekBar;
+        SliderPreference slider;
         IntListPreference intList;
 
         // All value changes should come through here. Preference value changes are all handled
@@ -61,158 +62,98 @@ public class SettingsFragment extends PreferenceFragmentCompat {
         Preference.OnPreferenceChangeListener sul = (pref, newVal) -> {
             if (pref.getKey().equals(Settings.PREF_NOISE) || pref.getKey().equals(Settings.PREF_RANGE))
                 newVal = Integer.valueOf((String) newVal);
-
-            summarise(pref, newVal);
-
-            // We've been handed a new val, but it isn't in the preferences yet.
-            // Tell the MainActivity to update
-            ((MainActivity) getActivity()).settingsChanged(pref.getKey(), newVal);
-
-            // Update the slider
+            getMainActivity().onSettingChanged(pref.getKey(), newVal);
             return true;
         };
 
         vanilla = findPreference(Settings.PREF_DEVICE);
         assert vanilla != null;
-        summarise(vanilla, prefs.getString(Settings.PREF_DEVICE));
-        vanilla.setOnPreferenceClickListener(new Preference.OnPreferenceClickListener() {
-            @Override
-            public boolean onPreferenceClick(Preference preference) {
-                FragmentTransaction tx = getParentFragmentManager().beginTransaction();
-                tx.replace(R.id.fragmentContainerL, new DiscoveryFragment(false), DiscoveryFragment.TAG);
-                tx.addToBackStack(null);
-                tx.commit();
-                return false;
-            }
+        vanilla.setTitle(getString(R.string.device) + " (" + prefs.getString(Settings.PREF_DEVICE) + ")");
+        vanilla.setOnPreferenceClickListener(preference -> {
+            FragmentTransaction tx = getParentFragmentManager().beginTransaction();
+            tx.replace(R.id.fragmentContainerL, new DiscoveryFragment(false), DiscoveryFragment.TAG);
+            tx.addToBackStack(null);
+            tx.commit();
+            return false;
         });
 
         checkbox = findPreference(Settings.PREF_AUTOCONNECT);
         assert checkbox != null;
         checkbox.setChecked(prefs.getBoolean(Settings.PREF_AUTOCONNECT));
 
-        int i = prefs.getInt(Settings.PREF_SENSITIVITY);
-        seekBar = findPreference(Settings.PREF_SENSITIVITY);
-        assert seekBar != null;
-        seekBar.setOnPreferenceChangeListener(sul);
-        seekBar.setMin(Settings.SENSITIVITY_MIN);
-        seekBar.setMax(Settings.SENSITIVITY_MAX);
-        seekBar.setValue(i);
-        seekBar.setShowSeekBarValue(false);
-        seekBar.setUpdatesContinuously(true);
-        summarise(seekBar, i);
+        slider = findPreference(Settings.PREF_SENSITIVITY);
+        assert slider != null;
+        slider.setOnPreferenceChangeListener(sul);
+        slider.initialise(Settings.SENSITIVITY_MIN, Settings.SENSITIVITY_MAX, prefs.getInt(Settings.PREF_SENSITIVITY));
 
-        i = prefs.getInt(Settings.PREF_NOISE);
         intList = findPreference(Settings.PREF_NOISE);
         assert intList != null;
         intList.setOnPreferenceChangeListener(sul);
-        intList.setValue(Integer.toString(i));
-        summarise(intList, i);
+        intList.setLabelRewriter(value -> getResources().getStringArray(R.array.noise_options)[value]);
+        intList.setValue(prefs.getInt(Settings.PREF_NOISE));
 
-        i = prefs.getInt(Settings.PREF_RANGE);
         intList = findPreference(Settings.PREF_RANGE);
         assert intList != null;
         intList.setOnPreferenceChangeListener(sul);
-        intList.setValue(Integer.toString(i));
-        summarise(intList, i);
+        intList.setLabelRewriter(value -> getResources().getStringArray(R.array.range_options)[value]);
+        intList.setValue(prefs.getInt(Settings.PREF_RANGE));
 
-        i = prefs.getInt(Settings.PREF_MIN_DEPTH_CHANGE);
-        seekBar = findPreference(Settings.PREF_MIN_DEPTH_CHANGE);
-        assert seekBar != null;
-        seekBar.setOnPreferenceChangeListener(sul);
-        seekBar.setMin(Settings.MIN_DEPTH_CHANGE_MIN);
-        seekBar.setMax(Settings.MIN_DEPTH_CHANGE_MAX);
-        seekBar.setValue(i);
-        seekBar.setShowSeekBarValue(false);
-        seekBar.setUpdatesContinuously(true);
-        summarise(seekBar, i);
+        slider = findPreference(Settings.PREF_MIN_DEPTH_CHANGE);
+        assert slider != null;
+        slider.setOnPreferenceChangeListener(sul);
+        slider.setLabelRewriter(value -> {
+            return value / 1000.0 + "m"; // convert mm to metres
+        });
+        slider.initialise(Settings.MIN_DEPTH_CHANGE_MIN, Settings.MIN_DEPTH_CHANGE_MAX, prefs.getInt(Settings.PREF_MIN_DEPTH_CHANGE));
 
-        i = prefs.getInt(Settings.PREF_MIN_POS_CHANGE);
-        seekBar = findPreference(Settings.PREF_MIN_POS_CHANGE);
-        assert seekBar != null;
-        seekBar.setOnPreferenceChangeListener(sul);
-        seekBar.setMin(Settings.MIN_POS_CHANGE_MIN);
-        seekBar.setMax(Settings.MIN_POS_CHANGE_MAX);
-        seekBar.setValue(i);
-        seekBar.setShowSeekBarValue(false);
-        seekBar.setUpdatesContinuously(true);
-        summarise(seekBar, i);
+        slider = findPreference(Settings.PREF_MIN_POS_CHANGE);
+        assert slider != null;
+        slider.setOnPreferenceChangeListener(sul);
+        slider.setLabelRewriter(value -> {
+            return value / 1000.0 + "m"; // convert mm to metres
+        });
+        slider.initialise(Settings.MIN_POS_CHANGE_MIN, Settings.MIN_POS_CHANGE_MAX, prefs.getInt(Settings.PREF_MIN_POS_CHANGE));
 
-        i = prefs.getInt(Settings.PREF_MAX_SAMPLES);
-        seekBar = findPreference(Settings.PREF_MAX_SAMPLES);
-        assert seekBar != null;
-        seekBar.setOnPreferenceChangeListener(sul);
-        seekBar.setMin(Settings.MAX_SAMPLES_MIN);
-        seekBar.setMax(Settings.MAX_SAMPLES_MAX);
-        seekBar.setValue(i);
-        seekBar.setShowSeekBarValue(false);
-        seekBar.setUpdatesContinuously(true);
-        summarise(seekBar, i);
+        slider = findPreference(Settings.PREF_MAX_SAMPLES);
+        assert slider != null;
+        slider.setOnPreferenceChangeListener(sul);
+        slider.setLabelRewriter(value -> {
+            float bytes = value * Sample.BYTES;
+            String sams, sbytes;
+            if (value < 1000)
+                sams = Integer.toString(value);
+            else if (value < 1000000)
+                sams = String.format("%.02gk", value / 1000.0);
+            else if (value < 1000000000)
+                sams = String.format("%.02gM", value / 1000000.0);
+            else
+                sams = String.format("%.02gG", value / 1000000000.0);
+            if (bytes < Settings.MEGABYTE)
+                sbytes = String.format("%.02fKB", bytes / Settings.KILOBYTE);
+            else if (bytes < Settings.GIGABYTE)
+                sbytes = String.format("%.02fMB", bytes / Settings.MEGABYTE);
+            else
+                sbytes =String.format("%.02fGB", bytes / Settings.GIGABYTE);
+            return sams + "=" + sbytes;
+        });
+        slider.initialise(Settings.MAX_SAMPLES_MIN, Settings.MAX_SAMPLES_MAX, prefs.getInt(Settings.PREF_MAX_SAMPLES));
 
-        i = prefs.getInt(Settings.PREF_SAMPLER_TIMEOUT);
-        seekBar = findPreference(Settings.PREF_SAMPLER_TIMEOUT);
-        assert seekBar != null;
-        seekBar.setOnPreferenceChangeListener(sul);
-        seekBar.setMin(Settings.SAMPLER_TIMEOUT_MIN);
-        seekBar.setMax(Settings.SAMPLER_TIMEOUT_MAX);
-        seekBar.setValue(i);
-        seekBar.setShowSeekBarValue(false);
-        seekBar.setUpdatesContinuously(true);
-        summarise(seekBar, i);
-    }
-
-    // Fragment lifecycle
-    // see https://developer.android.com/guide/fragments/lifecycle
-
-    /**
-     * Format the text value of a preference for presentation in the summary
-     *
-     * @param key preference name
-     * @param val value of the preference
-     * @return string representation of the value of the preference
-     */
-    private String formatPreference(String key, Object val) {
-        if (val == null)
-            return "null";
-        switch (key) {
-            case Settings.PREF_NOISE:
-                return getResources().getStringArray(R.array.noise_options)[(int) val];
-            case Settings.PREF_RANGE:
-                return getResources().getStringArray(R.array.range_options)[(int) val];
-            case Settings.PREF_MIN_DEPTH_CHANGE:
-            case Settings.PREF_MIN_POS_CHANGE:
-                return Double.toString((int) val / 1000.0); // convert mm to metres
-            case Settings.PREF_MAX_SAMPLES:
-                int size = (int) val;
-                float bytes = size * Sample.BYTES;
-                if (bytes < Settings.MEGABYTE)
-                    return String.format("%d (%.02fKb)", size, bytes / Settings.KILOBYTE);
-                if (bytes < Settings.GIGABYTE)
-                    return String.format("%d (%.02fMb)", size, bytes / Settings.MEGABYTE);
-                return String.format("%d (%.02fGb)", size, bytes / Settings.GIGABYTE);
-            case Settings.PREF_SAMPLER_TIMEOUT:
-                int timeout = (int) val;
-                int h = timeout / (1000 * 60 * 60);
-                timeout %= 1000 * 60 * 60;
-                int m = timeout / (1000 * 60);
-                timeout %= 1000 * 60;
-                float s = timeout / 1000f;
-                if (h == 0)
-                    if (m == 0)
-                        return String.format("%.02fs", s);
-                    else
-                        return String.format("%d:%02.02f", m, s);
-                else
-                    return String.format("%d:%02d:%.02f", h, m, s);
-            default:
-                return val.toString();
-        }
-    }
-
-    private void summarise(Preference pref, Object val) {
-        String s = pref.getSummary().toString();
-
-        int end = s.indexOf(VALUE_SEPARATOR);
-        if (end >= 0) s = s.substring(end + VALUE_SEPARATOR.length());
-        pref.setSummary(formatPreference(pref.getKey(), val) + VALUE_SEPARATOR + s);
+        slider = findPreference(Settings.PREF_SAMPLER_TIMEOUT);
+        assert slider != null;
+        slider.setOnPreferenceChangeListener(sul);
+        slider.setLabelRewriter(timeout -> {
+            int h = timeout / (1000 * 60 * 60);
+            timeout %= 1000 * 60 * 60;
+            int m = timeout / (1000 * 60);
+            timeout %= 1000 * 60;
+            float s = timeout / 1000f;
+            if (h > 0)
+                return String.format("%dh%02dm%.02fs", h, m, s);
+            else if (m > 0)
+                return String.format("%dm%02.02fs", m, s);
+            else
+                return String.format("%.02fs", s);
+        });
+        slider.initialise(Settings.SAMPLER_TIMEOUT_MIN, Settings.SAMPLER_TIMEOUT_MAX, prefs.getInt(Settings.PREF_SAMPLER_TIMEOUT));
     }
 }

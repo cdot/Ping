@@ -19,15 +19,12 @@ Note that if the code ever sets a negative min the same problem will arise.
         android:summary="@string/help_autoconnect"
         android:title="@string/pref_autoconnect" />
 
-    <SeekBarPreference android:key="samplerTimeout"
+    <com.cdot.ping.android.SliderPreference android:key="samplerTimeout"
         android:summary="@string/help_samplerTimeout"
-        android:min="-2147483648"
-        android:max="2147483647"
         android:title="@string/pref_sampler_timeout" />
 
-    <SeekBarPreference android:key="sensitivity"
+    <com.cdot.ping.android.SliderPreference android:key="sensitivity"
         android:summary="@string/help_sensitivity"
-        android:max="2147483647"
         android:title="@string/pref_sensitivity" />
 
     <com.cdot.ping.android.IntListPreference android:key="noise"
@@ -42,22 +39,16 @@ Note that if the code ever sets a negative min the same problem will arise.
         android:summary="@string/help_range"
         android:title="@string/pref_range" />
 
-    <SeekBarPreference android:key="minimumDepthChange"
+    <com.cdot.ping.android.SliderPreference android:key="minimumDepthChange"
         android:summary="@string/help_minimumDepthChange"
-        android:min="-2147483648"
-        android:max="2147483647"
         android:title="@string/pref_depth_delta" />
 
-    <SeekBarPreference android:key="minimumPositionChange"
+    <com.cdot.ping.android.SliderPreference android:key="minimumPositionChange"
         android:summary="@string/help_minimumPositionChange"
-        android:min="-2147483648"
-        android:max="2147483647"
         android:title="@string/pref_pos_delta" />
 
-    <SeekBarPreference android:key="maxSamples"
+    <com.cdot.ping.android.SliderPreference android:key="maxSamples"
         android:summary="@string/help_maxSamples"
-        android:min="-2147483648"
-        android:max="2147483647"
         android:title="@string/pref_max_samples" />
 
 </androidx.preference.PreferenceScreen>

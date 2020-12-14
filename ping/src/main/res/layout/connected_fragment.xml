@@ -158,7 +158,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
             <TextView
                 android:id="@+id/logRateTV"
                 style="@style/cell"
-                android:text="@string/val_logging_rate"
+                android:text="@string/val_sample_rate"
                 app:layout_constraintEnd_toStartOf="@id/logCountTV"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintBottom_toBottomOf="parent"
@@ -167,20 +167,20 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
             <TextView
                 android:id="@+id/logCountTV"
                 style="@style/cell"
-                android:text="@string/val_logging_count"
-                app:layout_constraintEnd_toEndOf="parent"
+                android:text="@string/val_sample_count"
+                app:layout_constraintEnd_toStartOf="@id/cacheUsedTV"
                 app:layout_constraintStart_toEndOf="@id/logRateTV"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintTop_toTopOf="parent" />
 
-            <!--TextView
-                android:id="@+id/logTimeTV"
+            <TextView
+                android:id="@+id/cacheUsedTV"
                 style="@style/cell"
-                android:text="@string/val_logging_time"
+                android:text="@string/val_cache_usage"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toEndOf="@id/logCountTV"
                 app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintTop_toTopOf="parent" /-->
+                app:layout_constraintTop_toTopOf="parent" />
 
         </androidx.constraintlayout.widget.ConstraintLayout>
 

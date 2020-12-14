@@ -49,7 +49,8 @@ import no.nordicsemi.android.ble.observer.ConnectionObserver;
 public class SonarSampler extends BleManager implements ConnectionObserver {
     public static final String TAG = SonarSampler.class.getSimpleName();
 
-    // Bluetooth state, set by the ConnectionObserver callbacks
+    // Bluetooth state, set by the ConnectionObserver callbacks. These values are used to
+    // index a resource array.
     public static final int BT_STATE_DISCONNECTED = 0;
     public static final int BT_STATE_CONNECTING = 1;
     public static final int BT_STATE_CONNECTED = 2;
@@ -72,11 +73,11 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
     public static final String EXTRA_STATE = CLASS_NAME + ".state";
     public static final String EXTRA_REASON = CLASS_NAME + ".reason";
 
-    // ID bytes sent / received in every packet received from the sonar unit
+    // ID bytes in every packet sent TO or received FROM the sonar unit
     private static final byte ID0 = (byte) 'S'; // guessing "S for Sonar"
     private static final byte ID1 = (byte) 'F'; // maybe "F for FishFinder"
 
-    // Commands sent to the device
+    // Commands sent TO the sonar unit
     private static final byte COMMAND_CONFIGURE = 1;
 
     // feet to metres. Bloody Americans, wake up and join the 20th Century!
@@ -118,7 +119,8 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
         return ((float) r + (float) f / 100.0f);
     }
 
-    @Override
+    // Handle log messages coming from BLEManager
+    @Override // BLEManager
     public void log(final int priority, @NonNull final String message) {
         if (priority == Log.INFO)
             return;
@@ -136,7 +138,7 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
     }
 
     @NonNull
-    @Override
+    @Override // BLEManager
     protected BleManagerGattCallback getGattCallback() {
         return new SonarGattCallback();
     }
@@ -166,40 +168,40 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
         broadcastStateChange(state, device, ConnectionObserver.REASON_UNKNOWN);
     }
 
-    @Override
+    @Override // ConnectionObserver
     public void onDeviceConnecting(@NonNull BluetoothDevice device) {
         Log.d(TAG, "onDeviceConnecting");
         broadcastStateChange(BT_STATE_CONNECTING, device);
     }
 
-    @Override
+    @Override // ConnectionObserver
     public void onDeviceConnected(@NonNull BluetoothDevice device) {
         Log.d(TAG, "onDeviceConnected");
         broadcastStateChange(BT_STATE_CONNECTED, device);
     }
 
-    @Override
+    @Override // ConnectionObserver
     public void onDeviceFailedToConnect(@NonNull BluetoothDevice device, int reason) {
         Log.d(TAG, "onDeviceFailedToConnect");
         cancelTimeout();
         broadcastStateChange(BT_STATE_CONNECT_FAILED, device, reason);
     }
 
-    @Override
+    @Override // ConnectionObserver
     public void onDeviceReady(@NonNull BluetoothDevice device) {
         Log.d(TAG, "onDeviceReady");
         startTimeout();
         broadcastStateChange(BT_STATE_READY, device);
     }
 
-    @Override
+    @Override // ConnectionObserver
     public void onDeviceDisconnecting(@NonNull BluetoothDevice device) {
         Log.d(TAG, "onDeviceDisconnecting " + mTimedOut);
         cancelTimeout();
         broadcastStateChange(BT_STATE_DISCONNECTING, device);
     }
 
-    @Override
+    @Override // ConnectionObserver
     public void onDeviceDisconnected(@NonNull BluetoothDevice device, int reason) {
         Log.d(TAG, "onDeviceDisconnected " + mTimedOut);
         cancelTimeout();
@@ -237,7 +239,8 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
     }
 
     /**
-     * Configuration
+     * Configuration. The first three parameters are sent to the sonar device, the others configure
+     * this module.
      *
      * @param sensitivity   1..10
      * @param noise         filtering 0..4 (off, low, med, high)
@@ -246,8 +249,8 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
      * @param minDeltaPos   min location change, in metres
      * @param sampleTimeout timeout waiting for a sample before we abandon the connection and try a different device. 0 means never.
      */
-    public void configure(int sensitivity, int noise, int range, float minDeltaDepth, float minDeltaPos, int sampleTimeout) {
-        Log.d(TAG, "configure(" + sensitivity + "," + noise + "," + range + "," + minDeltaDepth + ")");
+    void configure(int sensitivity, int noise, int range, float minDeltaDepth, float minDeltaPos, int sampleTimeout) {
+        log(Log.DEBUG, "configure(" + sensitivity + "," + noise + "," + range + "," + minDeltaDepth + ")");
         mMinDeltaDepth = minDeltaDepth;
         mMinDeltaPos = minDeltaPos;
 
@@ -270,6 +273,7 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
         }
         data[9] = (byte) (sum & 255);
 
+        // TODO: send a confirmation packet when the configuration has been written successfully
         writeCharacteristic(mConfigureCharacteristic, data)
                 .done(device -> Log.d(TAG, "Configuration sent to " + device.getName()))
                 .enqueue();
@@ -277,7 +281,7 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
         startTimeout();
     }
 
-    // Connect to the given device
+    // Connect to a sonar device
     public void connectToDevice(BluetoothDevice device) {
         mTimedOut = false;
         setConnectionObserver(this);
@@ -291,15 +295,13 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
                 .enqueue();
     }
 
-    /**
-     * BluetoothGatt callbacks object.
-     */
+    // Monitoring the connection to the sonar device
     private class SonarGattCallback extends BleManagerGattCallback {
 
         // This method will be called when the device is connected and services are discovered.
         // You need to obtain references to the characteristics and descriptors that you will use.
         // Return true if all required services are found, false otherwise.
-        @Override
+        @Override // BleManagerGattCallback
         public boolean isRequiredServiceSupported(@NonNull final BluetoothGatt gatt) {
             final BluetoothGattService service = gatt.getService(SERVICE_UUID);
             if (service == null)
@@ -340,7 +342,7 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
             return true;
         }
 
-        @Override
+        @Override // BleManagerGattCallback
         protected void initialize() {
             Log.d(TAG, "Connecting SampleHandler");
             RequestQueue q = beginAtomicRequestQueue()
@@ -354,7 +356,7 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
             setNotificationCallback(mSampleCharacteristic).with(new SampleHandler());
         }
 
-        @Override
+        @Override // BleManagerGattCallback
         protected void onDeviceDisconnected() {
             Log.d(TAG, "Device disconnected");
             mSampleCharacteristic = null;
@@ -362,7 +364,7 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
         }
     }
 
-    // Test location received from PingTest. In normal use this should never fire.
+    // Handler for test location received from PingTest. With a real device this should never fire.
     private class LocationHandler implements ProfileDataCallback {
         @Override
         public void onDataReceived(@NonNull BluetoothDevice device, @NonNull Data data) {
@@ -378,9 +380,10 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
         }
     }
 
+    // Handler for sample notifications coming from the sonar device
     private class SampleHandler implements ProfileDataCallback {
 
-        @Override
+        @Override // ProfileDataCallback
         public void onDataReceived(@NonNull final BluetoothDevice device, @NonNull final Data data) {
             int sz = data.size();
             byte id0 = data.getByte(0);
