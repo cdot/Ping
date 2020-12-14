@@ -122,7 +122,7 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
     protected NotificationManager mNotificationManager;
     // Set to true to keep this service running even when all clients are unbound
     // and logging is disabled.
-    private boolean mKeepAlive = false;
+    private boolean mKeepAlive = true;
     private double mAverageSamplingRate = 0; // rolling average sampling rate
     private long mTotalSamplesLogged = 0;
     private long mLastSampleTime = System.currentTimeMillis();
@@ -173,7 +173,7 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
      * @param on true to stop 切腹
      */
     public void setKeepAlive(boolean on) {
-        mKeepAlive = on;
+        mKeepAlive = true;//on;
     }
 
     @Override // Service
@@ -207,8 +207,8 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
         // when that happens.
         Log.d(TAG, "onBind() conf " + mJustAConfigurationChange + " fg " + isRunningInForeground());
         stopForeground(true);
+        mSonarSampler.broadcastStatus();
         mJustAConfigurationChange = false;
-        //mSonarSampler.onBind();
         //mLocationSampler.onBind();
         return mBinder;
     }
@@ -220,6 +220,7 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
         // service when that happens.
         Log.d(TAG, "onRebind() conf " + mJustAConfigurationChange + " fg " + isRunningInForeground());
         stopForeground(true);
+        mSonarSampler.broadcastStatus();
         mJustAConfigurationChange = false;
         super.onRebind(intent);
     }
@@ -280,7 +281,7 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
 
                 .setOngoing(true)
                 .setPriority(Notification.PRIORITY_HIGH)
-                .setSmallIcon(R.mipmap.ic_launcher)
+                .setSmallIcon(R.drawable.ic_notification)
                 .setContentTitle(getString(R.string.notification_title, DateFormat.getDateTimeInstance().format(new Date())))
                 .setContentText(text)
                 .setWhen(System.currentTimeMillis());

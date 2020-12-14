@@ -234,39 +234,42 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
 
     private class DisplayThread extends Thread {
         DisplayThread() {
-            super(() -> {
-                while (!interrupted()) {
-                    if (mHaveNewSamples) {
+            super(new Runnable() {
+                @Override
+                public void run() {
+                    while (!interrupted()) {
+                        if (mHaveNewSamples) {
 
-                        Resources r = getResources();
-                        mBinding.batteryTV.setText(r.getString(R.string.val_battery, mLastSample.battery));
-                        mBinding.depthTV.setText(r.getString(R.string.val_depth, mLastSample.depth));
-                        mBinding.tempTV.setText(r.getString(R.string.val_temperature, mLastSample.temperature));
-                        mBinding.fishDepthTV.setText(r.getString(R.string.val_fish_depth, mLastSample.fishDepth));
-                        mBinding.fishStrengthTV.setText(r.getString(R.string.val_fish_strength, mLastSample.fishStrength));
-                        mBinding.strengthTV.setText(r.getString(R.string.val_strength, mLastSample.strength));
+                            Resources r = getResources();
+                            mBinding.batteryTV.setText(r.getString(R.string.val_battery, mLastSample.battery));
+                            mBinding.depthTV.setText(r.getString(R.string.val_depth, mLastSample.depth));
+                            mBinding.tempTV.setText(r.getString(R.string.val_temperature, mLastSample.temperature));
+                            mBinding.fishDepthTV.setText(r.getString(R.string.val_fish_depth, mLastSample.fishDepth));
+                            mBinding.fishStrengthTV.setText(r.getString(R.string.val_fish_strength, mLastSample.fishStrength));
+                            mBinding.strengthTV.setText(r.getString(R.string.val_strength, mLastSample.strength));
 
-                        mBinding.latitudeTV.setText(r.getString(R.string.val_latitude, mLastSample.latitude));
-                        mBinding.longitudeTV.setText(r.getString(R.string.val_longitude, mLastSample.longitude));
+                            mBinding.latitudeTV.setText(r.getString(R.string.val_latitude, mLastSample.latitude));
+                            mBinding.longitudeTV.setText(r.getString(R.string.val_longitude, mLastSample.longitude));
 
-                        LoggingService svc = getLoggingService();
-                        if (svc != null) {
-                            //mBinding.logTimeTV.setText(r.getString(R.string.val_logging_time, formatDeltaTime(svc.getLoggingTime())));
-                            mBinding.logRateTV.setText(r.getString(R.string.val_sample_rate, svc.getAverageSamplingRate()));
-                            mBinding.logCountTV.setText(r.getString(R.string.val_sample_count, svc.getSamplesLogged()));
-                            mBinding.cacheUsedTV.setText(r.getString(R.string.val_cache_usage, svc.getCacheUsage()));
-                        } else {
-                            //mBinding.logTimeTV.setText("?");
-                            mBinding.logRateTV.setText("?");
-                            mBinding.logCountTV.setText("?");
+                            LoggingService svc = getLoggingService();
+                            if (svc != null) {
+                                //mBinding.logTimeTV.setText(r.getString(R.string.val_logging_time, formatDeltaTime(svc.getLoggingTime())));
+                                mBinding.logRateTV.setText(r.getString(R.string.val_sample_rate, svc.getAverageSamplingRate()));
+                                mBinding.logCountTV.setText(r.getString(R.string.val_sample_count, svc.getSamplesLogged()));
+                                mBinding.cacheUsedTV.setText(r.getString(R.string.val_cache_usage, svc.getCacheUsage()));
+                            } else {
+                                //mBinding.logTimeTV.setText("?");
+                                mBinding.logRateTV.setText("?");
+                                mBinding.logCountTV.setText("?");
+                            }
+
+                            mHaveNewSamples = false;
                         }
-
-                        mHaveNewSamples = false;
                     }
-                }
-                try {
-                    Thread.sleep(500);
-                } catch (InterruptedException ignore) {
+                    try {
+                        Thread.sleep(500);
+                    } catch (InterruptedException ignore) {
+                    }
                 }
             });
         }

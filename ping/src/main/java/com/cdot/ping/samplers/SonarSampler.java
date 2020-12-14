@@ -150,10 +150,13 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
      * @return a text string illustrating the current state of the sampler.
      */
     public String getNotificationStateText(Resources r) {
-        return (mLastLoggedSample == null
-                ? r.getString(R.string.depth_unknown) : r.getString(R.string.val_depth, mLastLoggedSample.depth)) + " "
-                + r.getString(R.string.val_latitude, mLastLoggedSample.latitude) + " "
-                + r.getString(R.string.val_longitude, mLastLoggedSample.longitude);
+        if (mLastLoggedSample == null) {
+            return r.getString(R.string.depth_unknown);
+        } else {
+            return r.getString(R.string.val_depth, mLastLoggedSample.depth) + " "
+                    + r.getString(R.string.val_latitude, mLastLoggedSample.latitude) + " "
+                    + r.getString(R.string.val_longitude, mLastLoggedSample.longitude);
+        }
     }
 
     private void broadcastStateChange(int state, @NonNull BluetoothDevice device, int reason) {
@@ -161,6 +164,15 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
         intent.putExtra(EXTRA_STATE, state);
         intent.putExtra(EXTRA_DEVICE, device);
         intent.putExtra(EXTRA_REASON, reason);
+        mService.sendBroadcast(intent);
+    }
+
+    // Used to broadcast the current state when foreground service drops into the background
+    void broadcastStatus() {
+        Intent intent = new Intent(ACTION_BT_STATE);
+        intent.putExtra(EXTRA_STATE, getConnectionState());
+        intent.putExtra(EXTRA_DEVICE, getBluetoothDevice());
+        intent.putExtra(EXTRA_REASON, ConnectionObserver.REASON_UNKNOWN);
         mService.sendBroadcast(intent);
     }
 
