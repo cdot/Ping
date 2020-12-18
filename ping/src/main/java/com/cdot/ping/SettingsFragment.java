@@ -26,8 +26,8 @@ import androidx.preference.CheckBoxPreference;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
 
-import com.cdot.ping.android.IntListPreference;
-import com.cdot.ping.android.SliderPreference;
+import com.cdot.preference.IntListPreference;
+import com.cdot.preference.SliderPreference;
 import com.cdot.ping.samplers.Sample;
 
 /**

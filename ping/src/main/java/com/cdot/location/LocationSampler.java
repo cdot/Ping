@@ -16,7 +16,7 @@
  * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
-package com.cdot.ping.samplers;
+package com.cdot.location;
 
 import android.content.Context;
 import android.location.Location;
@@ -34,16 +34,10 @@ import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
 
 /**
- * Location sampling, provides location data to LoggingService.
- * <p>
- * For apps running in the background on "O" devices, location is computed only once every 10
- * minutes and delivered batched every 30 minutes. This restriction applies even to apps
- * targeting "N" or lower which are run on "O" devices. So a background service will only log
- * samples every 30 minutes, which is useless for Ping. LoggingService puts itself into
- * foreground using a Notification, so is able to keep sampling at a foreground rate.
- * <p>
- * Note that this Sampler doesn't log it's own samples, instead it is used to watermark samples
- * coming from the SonarSampler with the location.
+ * Simplified interface to Android location data. Users must have already determined that they have
+ * the necessary permissions
+ *     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+ *     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
  */
 public class LocationSampler {
     public static final String TAG = LocationSampler.class.getSimpleName();
@@ -55,18 +49,6 @@ public class LocationSampler {
         void onLocationSample(Location loc);
     }
 
-    /**
-     * The desired interval for location updates. Inexact. Updates may be more or less frequent.
-     * For Ping, every 500ms should be plenty.
-     */
-    private static final long UPDATE_INTERVAL = 500;
-
-    /**
-     * The fastest rate for active location updates. Updates will never be more frequent
-     * than this value.
-     */
-    private static final long FASTEST_UPDATE_INTERVAL = UPDATE_INTERVAL / 2;
-
     // Provides access to the Fused Location Provider API.
     private FusedLocationProviderClient mFusedLocationClient;
 
@@ -75,8 +57,8 @@ public class LocationSampler {
 
     private SampleListener mListener;
 
-    public LocationSampler(Context cxt, SampleListener service) {
-        mListener = service;
+    public LocationSampler(Context cxt, SampleListener listener, long desiredUpdateInterval) {
+        mListener = listener;
 
         mFusedLocationClient = LocationServices.getFusedLocationProviderClient(cxt);
 
@@ -90,8 +72,8 @@ public class LocationSampler {
 
         // Parameters used by {@link com.google.android.gms.location.FusedLocationProviderApi}.
         LocationRequest locationRequest = new LocationRequest();
-        locationRequest.setInterval(UPDATE_INTERVAL);
-        locationRequest.setFastestInterval(FASTEST_UPDATE_INTERVAL);
+        locationRequest.setInterval(desiredUpdateInterval);
+        locationRequest.setFastestInterval(desiredUpdateInterval);
         locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
 
         try {

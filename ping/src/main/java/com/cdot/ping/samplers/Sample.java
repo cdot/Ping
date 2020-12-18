@@ -22,6 +22,8 @@ import android.os.Parcel;
 import android.os.Parcelable;
 import android.util.Log;
 
+import com.cdot.location.GPX;
+
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 
@@ -53,6 +55,8 @@ public class Sample implements Parcelable {
             + 2 * Double.BYTES // lat, long
             + Float.BYTES // depth
             + 1; // strength
+
+    public static String NS_PING = "http://cdot.github.io/Ping/GPX"; // Ping namespace
 
     public long time;
     public double latitude;
@@ -186,7 +190,7 @@ public class Sample implements Parcelable {
         GPX_trkpt.appendChild(GPX_time);
 
         Element GPX_extensions = doc.createElementNS(GPX.NS_GPX, "extensions");
-        Element GPX_ping = doc.createElementNS(GPX.NS_PING, "ping");
+        Element GPX_ping = doc.createElementNS(NS_PING, "ping");
         if (strength > 0)
             GPX_ping.setAttribute("strength", Integer.toString(strength));
         if (fishDepth > 0)

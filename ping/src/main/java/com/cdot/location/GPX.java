@@ -16,14 +16,12 @@
  * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
-package com.cdot.ping.samplers;
+package com.cdot.location;
 
 import android.content.ContentResolver;
 import android.content.res.AssetFileDescriptor;
 import android.net.Uri;
 import android.util.Log;
-
-import com.cdot.ping.R;
 
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
@@ -36,8 +34,6 @@ import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 
-import static org.droidparts.Injector.getApplicationContext;
-
 public class GPX {
     private static final String TAG = GPX.class.getSimpleName();
 
@@ -45,11 +41,10 @@ public class GPX {
     public static final SimpleDateFormat ISO_DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
     // Namespaces
     public static final String NS_GPX = "http://www.topografix.com/GPX/1/1";
-    public static String NS_PING = "http://cdot.github.io/Ping/GPX";
     //xmlns:xsi=http://www.w3.org/2001/XMLSchema-instance
     //xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd
 
-    static Document openDocument(ContentResolver cr, Uri uri) {
+    public static Document openDocument(ContentResolver cr, Uri uri, String creator) {
         Document gpxDocument = null;
         DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
         dbf.setNamespaceAware(true);
@@ -73,7 +68,7 @@ public class GPX {
                 gpxDocument.setXmlStandalone(true);
                 Element gpxGpx = gpxDocument.createElementNS(GPX.NS_GPX, "gpx");
                 gpxGpx.setAttribute("version", "1.1");
-                gpxGpx.setAttribute("creator", getApplicationContext().getResources().getString(R.string.app_name));
+                gpxGpx.setAttribute("creator", creator);
                 gpxDocument.appendChild(gpxGpx);
                 gpxTrk = gpxDocument.createElementNS(GPX.NS_GPX, "trk");
                 gpxGpx.appendChild(gpxTrk);

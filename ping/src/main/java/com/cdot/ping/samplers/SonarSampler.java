@@ -23,13 +23,10 @@ import android.bluetooth.BluetoothGatt;
 import android.bluetooth.BluetoothGattCharacteristic;
 import android.bluetooth.BluetoothGattService;
 import android.content.Intent;
-import android.content.res.Resources;
 import android.location.Location;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
-
-import com.cdot.ping.R;
 
 import java.nio.ByteBuffer;
 import java.util.Date;
@@ -61,6 +58,10 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
     public static final UUID SERVICE_UUID = UUID.fromString("0000fff0-0000-1000-8000-00805f9b34fb");
     // Minimum depth change between recorded samples
     public static final float MINIMUM_DELTA_DEPTH_DEFAULT = 0.5f; // metres
+    private static final int MAX_BATTERY = 6;
+    private static final int MAX_FISH_STRENGTH = 15;
+    // Limits on strength, used for converting to percentages
+    private static final int MAX_STRENGTH = 255;
     static final UUID SAMPLE_CHARACTERISTIC_UUID = UUID.fromString("0000fff1-0000-1000-8000-00805f9b34fb");
     static final UUID CONFIGURE_CHARACTERISTIC_UUID = UUID.fromString("0000fff2-0000-1000-8000-00805f9b34fb");
     // Never fired by a real device, this picks up locations from PingTest
@@ -91,7 +92,7 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
     // Client characteristics
     private BluetoothGattCharacteristic mSampleCharacteristic, mConfigureCharacteristic, mLocationCharacteristic;
     private float mMinDeltaDepth = MINIMUM_DELTA_DEPTH_DEFAULT;
-    private Sample mLastLoggedSample = null;
+    Sample mLastLoggedSample = null;
     // Set true if a location packet is received from PingTest - after it is set true, no more samples
     // will be accepted from LocationService
     private boolean mLocationsFromPingTest = false;
@@ -107,6 +108,14 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
     private boolean mSampleReceived = true; // has a sample been seen since last timeout check?
     private int mSampleTimeout = 0; // must get another sample within this timeout, or we'll disconnect
     private boolean mTimedOut = false;
+
+    // Sampling statistics
+    private long mLastSampleTime;
+    private long mTotalSamplesReceived;
+    double mRawSampleRate;
+
+    int mBluetoothState = BT_STATE_DISCONNECTED;
+    int mBluetoothStateReason = REASON_UNKNOWN;
 
     public SonarSampler(@NonNull final LoggingService service) {
         super(service);
@@ -143,74 +152,60 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
         return new SonarGattCallback();
     }
 
-    /**
-     * Get the text string this sampler contributes to the notification. This string should
-     * incorporate the most recent sample, and the connected state of the sampler.
-     *
-     * @return a text string illustrating the current state of the sampler.
-     */
-    public String getNotificationStateText(Resources r) {
-        if (mLastLoggedSample == null) {
-            return r.getString(R.string.depth_unknown);
-        } else {
-            return r.getString(R.string.val_depth, mLastLoggedSample.depth) + " "
-                    + r.getString(R.string.val_latitude, mLastLoggedSample.latitude) + " "
-                    + r.getString(R.string.val_longitude, mLastLoggedSample.longitude);
-        }
+    private void broadcastStateChange(int state, int reason) {
+        mBluetoothState = state;
+        mBluetoothStateReason = reason;
+        broadcastStatus();
     }
 
-    private void broadcastStateChange(int state, @NonNull BluetoothDevice device, int reason) {
-        Intent intent = new Intent(ACTION_BT_STATE);
-        intent.putExtra(EXTRA_STATE, state);
-        intent.putExtra(EXTRA_DEVICE, device);
-        intent.putExtra(EXTRA_REASON, reason);
-        mService.sendBroadcast(intent);
-    }
-
-    // Used to broadcast the current state when foreground service drops into the background
     void broadcastStatus() {
         Intent intent = new Intent(ACTION_BT_STATE);
-        intent.putExtra(EXTRA_STATE, getConnectionState());
+        intent.putExtra(EXTRA_STATE, mBluetoothState);
         intent.putExtra(EXTRA_DEVICE, getBluetoothDevice());
-        intent.putExtra(EXTRA_REASON, ConnectionObserver.REASON_UNKNOWN);
+        intent.putExtra(EXTRA_REASON, mBluetoothStateReason);
         mService.sendBroadcast(intent);
     }
 
-    private void broadcastStateChange(int state, @NonNull BluetoothDevice device) {
-        broadcastStateChange(state, device, ConnectionObserver.REASON_UNKNOWN);
+    private void broadcastStateChange(int state) {
+        broadcastStateChange(state,  REASON_UNKNOWN);
     }
 
     @Override // ConnectionObserver
     public void onDeviceConnecting(@NonNull BluetoothDevice device) {
         Log.d(TAG, "onDeviceConnecting");
-        broadcastStateChange(BT_STATE_CONNECTING, device);
+        broadcastStateChange(BT_STATE_CONNECTING);
     }
 
     @Override // ConnectionObserver
     public void onDeviceConnected(@NonNull BluetoothDevice device) {
         Log.d(TAG, "onDeviceConnected");
-        broadcastStateChange(BT_STATE_CONNECTED, device);
+        broadcastStateChange(BT_STATE_CONNECTED);
     }
 
     @Override // ConnectionObserver
     public void onDeviceFailedToConnect(@NonNull BluetoothDevice device, int reason) {
         Log.d(TAG, "onDeviceFailedToConnect");
         cancelTimeout();
-        broadcastStateChange(BT_STATE_CONNECT_FAILED, device, reason);
+        broadcastStateChange(BT_STATE_CONNECT_FAILED, reason);
     }
 
     @Override // ConnectionObserver
     public void onDeviceReady(@NonNull BluetoothDevice device) {
         Log.d(TAG, "onDeviceReady");
         startTimeout();
-        broadcastStateChange(BT_STATE_READY, device);
+        resetSampleRate();
+        broadcastStateChange(BT_STATE_READY);
     }
 
     @Override // ConnectionObserver
     public void onDeviceDisconnecting(@NonNull BluetoothDevice device) {
+        // TODO: This is the first indication we have that something is wrong. First thing to know is if
+        // the disconnection was the result of a user action - shutting down logging, for example.
+        // If it isn't, then we want to start the process
+        // of reconnection.
         Log.d(TAG, "onDeviceDisconnecting " + mTimedOut);
         cancelTimeout();
-        broadcastStateChange(BT_STATE_DISCONNECTING, device);
+        broadcastStateChange(BT_STATE_DISCONNECTING);
     }
 
     @Override // ConnectionObserver
@@ -219,16 +214,17 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
         cancelTimeout();
         // ConnectionObserver.REASON_TIMEOUT really means a connect timeout. Overloading it here
         // to also mean "device has gone quiet"
-        broadcastStateChange(BT_STATE_DISCONNECTED, device,
+        broadcastStateChange(BT_STATE_DISCONNECTED,
                 mTimedOut ? ConnectionObserver.REASON_TIMEOUT : ConnectionObserver.REASON_UNKNOWN);
+        // TODO: initiate a reconnection attempt
     }
 
     // Disconnect timeout. If we don't get another sample within a timeout period, disconnect.
     private void startTimeout() {
-        if (mSampleTimeout <= 0)
+        if (mSampleTimeout <= 0 || mTimeoutTimer != null)
             return; // no timeout
         if (mTimeoutTimer != null)
-            throw new UnsupportedOperationException("Cannot start timer when one is already running");
+            mTimeoutTimer.cancel();
         mTimeoutTimer = new Timer(true);
         mTimeoutTimer.schedule(new TimerTask() {
             @Override
@@ -289,17 +285,25 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
                 .done(device -> Log.d(TAG, "Configuration sent to " + device.getName()))
                 .enqueue();
 
+        resetSampleRate();
         startTimeout();
+    }
+
+    private void resetSampleRate() {
+        mLastSampleTime = System.currentTimeMillis();
+        mRawSampleRate = 0;
+        mTotalSamplesReceived = 1;
     }
 
     // Connect to a sonar device
     public void connectToDevice(BluetoothDevice device) {
         mTimedOut = false;
         setConnectionObserver(this);
+        Log.d(TAG, "Initiating connect request " + device.getName());
         connect(device)
-                .timeout(100000)
+                .timeout(5000)
                 .useAutoConnect(true)
-                .retry(3, 100)
+                .retry(3, 500)
                 .done(dev -> Log.i(TAG, "Device connection to " + device.getName() + " done"))
                 .enqueue();
     }
@@ -392,14 +396,21 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
     // Handler for sample notifications coming from the sonar device
     private class SampleHandler implements ProfileDataCallback {
 
+        private String report(Data data) {
+            String mess = "Packet " + data.size();
+            for (int i = 0; i < data.size(); i++)
+                mess += (i == 0 ? "[" : ",") + ((int) data.getByte(i) & 0xFF);
+            return mess + "]";
+        }
+
         @Override // ProfileDataCallback
         public void onDataReceived(@NonNull final BluetoothDevice device, @NonNull final Data data) {
             int sz = data.size();
             byte id0 = data.getByte(0);
             byte id1 = data.getByte(1);
             if (sz != 18 || id0 != ID0 || id1 != ID1) {
-                Log.e(TAG, "Bad signature " + data.size() + " " + id0 + " " + id1);
-                onInvalidDataReceived(device, data);
+                Log.e(TAG, "Bad signature " + report(data));
+                //onInvalidDataReceived(device, data);
                 return;
             }
 
@@ -408,41 +419,42 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
                 checksum = (checksum + data.getByte(i)) & 0xFF;
             int packcs = (int) data.getByte(17) & 0xFF;
             if (packcs != checksum) {
-                // It's ok to throw in the callback, we will see the trace in the debug but otherwise
+                // It's ok to ignore this, we will see the trace in the debug but otherwise
                 // it won't stop us
-                Log.e(TAG, "Bad checksum " + packcs + " != " + checksum);
+                Log.e(TAG, "Bad checksum " + packcs + " != " + checksum + " " + report(data));
                 return;
             }
 
             Sample sample = new Sample();
 
             // data.getByte(2), data.getByte(3) unknown, always seem to be 0
-            if (data.getByte(2) != 0) Log.d(TAG, "Mysterious 2 = " + data.getByte(2));
-            if (data.getByte(3) != 0) Log.d(TAG, "Mysterious 3 = " + data.getByte(3));
+            if (data.getByte(2) != 0) Log.d(TAG, "Mysterious[2] " + report(data));
+            if (data.getByte(3) != 0) Log.d(TAG, "Mysterious[3] " + report(data));
 
-            if ((data.getByte(4) & 0xF7) != 0) Log.d(TAG, "Mysterious 4 = " + data.getByte(4));
+            if ((data.getByte(4) & 0xF7) != 0) Log.d(TAG, "Mysterious[4] " + report(data));
 
             sample.time = new Date().getTime();
             boolean isDry = (data.getByte(4) & 0x8) != 0;
 
             // data.getByte(5) unknown, seems to be always 9 (1001)
-            if (data.getByte(5) != 9) Log.d(TAG, "Mysterious 5 = " + data.getByte(5));
-
+            if (data.getByte(5) != 9) Log.d(TAG, "Mysterious[5] " + report(data));
+            // Convert fish depth to metres. We set a negative depth to flag when the device is out of water
             sample.depth = isDry ? -0.01f : ft2m * b2f(data.getByte(6), data.getByte(7));
-
-            sample.strength = (short) ((int) data.getByte(8) & 0xFF);
-
+            // Data is coming from a byte, so naturally constrained to 255
+            sample.strength = 100 * ((int) data.getByte(8) & 0xFF) / MAX_STRENGTH;
+            // Convert fish depth to metres
             sample.fishDepth = ft2m * b2f(data.getByte(9), data.getByte(10));
-
-            // Fish strength is in a nibble, so in the range 0-15. Just return it as a number
-            sample.fishStrength = (short) ((int) data.getByte(11) & 0xF);
-            sample.battery = (byte) ((data.getByte(11) >> 4) & 0xF);
+            // Fish strength is in a nibble, so constrained to the range 0-15. Convert to a percentage.
+            sample.fishStrength = 100 * ((int) data.getByte(11) & 0xF) / MAX_FISH_STRENGTH;
+            // Observed max battery strength is 6. Scale to an integer percentage
+            sample.battery = (byte) (100 * ((data.getByte(11) >> 4) & 0xF) / MAX_BATTERY);
+            // Convert temperature to sensible celcius
             sample.temperature = (b2f(data.getByte(12), data.getByte(13)) - 32.0f) * 5.0f / 9.0f;
 
             // data.getByte(14), data.getByte(15), data.getByte(16) always 0
-            if (data.getByte(14) != 0) Log.d(TAG, "Mysterious 14 = " + data.getByte(14));
-            if (data.getByte(15) != 0) Log.d(TAG, "Mysterious 15 = " + data.getByte(15));
-            if (data.getByte(16) != 0) Log.d(TAG, "Mysterious 16 = " + data.getByte(16));
+            if (data.getByte(14) != 0) Log.d(TAG, "Mysterious[14] " + report(data));
+            if (data.getByte(15) != 0) Log.d(TAG, "Mysterious[15] " + report(data));
+            if (data.getByte(16) != 0) Log.d(TAG, "Mysterious[16] " + report(data));
             // data.getByte(17) is a checksum of data.getByte(0)..data.getByte(16)
 
             /*String mess = Integer.toString(sz);
@@ -473,6 +485,12 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
 
             // Tell the timeout we're OK
             mSampleReceived = true;
+
+            long now = System.currentTimeMillis();
+            double samplingRate = 1000.0 / (now - mLastSampleTime);
+            mRawSampleRate = ((mRawSampleRate * mTotalSamplesReceived) + samplingRate) / (mTotalSamplesReceived + 1);
+            mTotalSamplesReceived++;
+            mLastSampleTime = now;
         }
     }
 }

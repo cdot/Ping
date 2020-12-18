@@ -65,31 +65,40 @@ public class MainActivity extends AppCompatActivity {
     private static final int REQUEST_PERMISSIONS = 2;
     private static final int REQUEST_CHOOSE_FILE = 3;
 
+    public static String ACTION_RECONFIGURE = TAG + ".reconfigure";
+
     MainActivityBinding mBinding; // view binding
+    private Settings mPrefs; // access to shared preferences
+    // Service used to log samples
+    private LoggingService mLoggingService = null;
     BroadcastReceiver mBroadcastReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();
             if (SonarSampler.ACTION_BT_STATE.equals(action)) {
                 int state = intent.getIntExtra(SonarSampler.EXTRA_STATE, SonarSampler.BT_STATE_DISCONNECTED);
-                Log.d(TAG, "Received bluetooth state change " + state);
                 if (state == SonarSampler.BT_STATE_READY)
-                    configureSampler();
+                    sendBroadcast(new Intent(ACTION_RECONFIGURE));
                 BluetoothDevice device = intent.getParcelableExtra(SonarSampler.EXTRA_DEVICE);
                 int reason = intent.getIntExtra(SonarSampler.EXTRA_REASON, ConnectionObserver.REASON_UNKNOWN);
                 updateSonarStateDisplay(state, reason, device);
+            } else if (ACTION_RECONFIGURE.equals(action)) {
+                Log.d(TAG, "Received ACTION_RECONFIGURE");
+                if (mLoggingService != null) {
+                    mLoggingService.configure(
+                            mPrefs.getInt(Settings.PREF_SENSITIVITY),
+                            mPrefs.getInt(Settings.PREF_NOISE),
+                            mPrefs.getInt(Settings.PREF_RANGE),
+                            mPrefs.getInt(Settings.PREF_MIN_DEPTH_CHANGE) / 1000f,
+                            mPrefs.getInt(Settings.PREF_MIN_POS_CHANGE) / 1000f,
+                            mPrefs.getInt(Settings.PREF_SAMPLER_TIMEOUT),
+                            mPrefs.getInt(Settings.PREF_MAX_SAMPLES));
+                }
             }
         }
     };
-    private Settings mPrefs; // access to shared preferences
-
-    // Service used to log samples
-    private LoggingService mLoggingService = null;
     // Tracks the bound state of the service. Only meaningful if mLoggingService != null
     private boolean mLoggingServiceBound = false;
-    // true when configuration must be re-sent to the logging service
-    private boolean mMustConfigureSampler = true;
-
     // Monitors the state of the connection to the location service.
     private final ServiceConnection mLoggingServiceConnection = new ServiceConnection() {
 
@@ -113,6 +122,8 @@ public class MainActivity extends AppCompatActivity {
             mLoggingServiceBound = false;
         }
     };
+    // true when configuration must be re-sent to the logging service
+    private boolean mMustConfigureSampler = true;
 
     // Lifecycle management
 
@@ -121,7 +132,7 @@ public class MainActivity extends AppCompatActivity {
         String dev = (device == null) ? r.getString(R.string.default_device_name) : device.getName();
         mBinding.deviceNameTV.setText(dev);
         String rationale = reason < 0 ? "" : r.getStringArray(R.array.bt_reason)[reason];
-        String sta = String.format(r.getStringArray(R.array.bt_status)[state], rationale);
+        String sta = String.format(r.getStringArray(R.array.bt_state)[state], rationale);
         mBinding.connectionStatusTV.setText(sta);
         Log.d(TAG, "Bluetooth state: " + sta + " " + dev);
     }
@@ -163,6 +174,7 @@ public class MainActivity extends AppCompatActivity {
         mPrefs = new Settings(this);
         IntentFilter inf = new IntentFilter();
         inf.addAction(SonarSampler.ACTION_BT_STATE);
+        inf.addAction(MainActivity.ACTION_RECONFIGURE);
         registerReceiver(mBroadcastReceiver, inf);
     }
 
@@ -355,7 +367,7 @@ public class MainActivity extends AppCompatActivity {
     public void onBackPressed() {
         // The only place we can be coming back from is the Settings screen
         Log.d(TAG, "onBackPressed");
-        configureSampler();
+        sendBroadcast(new Intent(ACTION_RECONFIGURE));
         super.onBackPressed();
     }
 
@@ -367,22 +379,7 @@ public class MainActivity extends AppCompatActivity {
      */
     synchronized void onSettingChanged(String key, Object newVal) {
         Log.d(TAG, "onSettingChanged " + key + "=" + newVal);
-        mMustConfigureSampler = true;
-    }
-
-    // Send configuration information to the logging service (and hence to the sonar device)
-    synchronized void configureSampler() {
-        if (mMustConfigureSampler && mLoggingService != null) {
-            mLoggingService.configure(
-                    mPrefs.getInt(Settings.PREF_SENSITIVITY),
-                    mPrefs.getInt(Settings.PREF_NOISE),
-                    mPrefs.getInt(Settings.PREF_RANGE),
-                    mPrefs.getInt(Settings.PREF_MIN_DEPTH_CHANGE) / 1000f,
-                    mPrefs.getInt(Settings.PREF_MIN_POS_CHANGE) / 1000f,
-                    mPrefs.getInt(Settings.PREF_SAMPLER_TIMEOUT),
-                    mPrefs.getInt(Settings.PREF_MAX_SAMPLES));
-            mMustConfigureSampler = false;
-        }
+        sendBroadcast(new Intent(ACTION_RECONFIGURE));
     }
 
     public void writeGPX() {

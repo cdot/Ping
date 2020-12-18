@@ -16,7 +16,7 @@
     </string-array>
 
     <!-- Order must match BT_STATE values -->
-    <string-array name="bt_status">
+    <string-array name="bt_state">
         <item>Disconnected%1$s</item>
         <item>Connecting</item>
         <item>Connected</item>
@@ -61,8 +61,8 @@
         <item>3</item>
     </string-array>
     <string name="notification_launch">Open Ping</string>
-    <string name="notification_stop">Stop logging</string>
-    <string name="notification_title">Ping at %1$s</string>
+    <string name="notification_stop">Stop sampling</string>
+    <string name="notification_title">Ping %1$s %2$s</string>
 
     <string name="OK">OK</string>
 
@@ -88,13 +88,13 @@
 
     <!-- See Ping.RANGE_* -->
     <string-array name="range_options">
-        <item>3m</item>
+        <item>3m</item> <!-- 0 -->
         <item>6m</item>
         <item>9m</item>
         <item>18m</item>
         <item>24m</item>
         <item>36m</item>
-        <item>Auto</item>
+        <item>Auto</item> <!-- 6 -->
     </string-array>
     <string-array name="range_values">
         <item>0</item>
@@ -111,18 +111,21 @@
     <string name="service_description">Background service for Ping</string>
     <string name="start_recording">Start recording</string>
 
-    <string name="val_battery">Battery: %1$d</string>
+    <string name="val_battery">Battery %1$d%%</string>
     <string name="val_cache_usage">Used %1$.1f%%</string>
     <string name="val_depth">Depth %1$.2gm</string>
     <string name="val_fish_depth">Fish Depth: %1$.2gm</string>
-    <string name="val_fish_strength">Fish Strength: %1$d</string>
+    <string name="val_fish_strength">Fish Strength %1$d%%</string>
     <string name="val_latitude">Latitude: %1$.5g</string>
     <string name="val_longitude">Longitude: %1$.5g</string>
     <string name="val_sample_count">Count: %1$d</string>
     <string name="val_sample_rate">Rate: %1$.2gHz</string>
-    <string name="val_strength">Strength: %1$d</string>
+    <string name="val_strength">Strength %1$d%%</string>
     <string name="val_temperature">Temperature: %1$.2g°C</string>
     <string name="default_device_name">Unspecified Bluetooth Device</string>
     <string name="write_gpx_failed">Could not write GPX file</string>
     <string name="write_gpx_OK">GPX data written</string>
+    <string name="menuitem_write_gpx">GPX</string>
+    <string name="zoom_in">Zoom In</string>
+    <string name="zoom_out">Zoom Out</string>
 </resources>

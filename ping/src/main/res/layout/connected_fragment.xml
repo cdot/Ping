@@ -192,17 +192,30 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
         android:layout_height="0dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="1.0"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/infoPaneL" />
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/recordFAB"
+        android:id="@+id/zoomInFAB"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_margin="16dp"
-        android:contentDescription="@string/start_recording"
-        android:src="@android:drawable/ic_media_play"
+        android:contentDescription="@string/zoom_in"
+        android:src="@drawable/ic_zoom_in"
+        app:fabSize="mini"
         app:layout_constraintTop_toTopOf="@id/sonarV"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/zoomOutFAB"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="16dp"
+        android:contentDescription="@string/zoom_out"
+        app:fabSize="mini"
+        android:src="@drawable/ic_zoom_out"
+        app:layout_constraintTop_toBottomOf="@id/zoomInFAB"
         app:layout_constraintStart_toStartOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

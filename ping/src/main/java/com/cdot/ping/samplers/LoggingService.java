@@ -29,6 +29,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.res.AssetFileDescriptor;
 import android.content.res.Configuration;
+import android.content.res.Resources;
 import android.location.Location;
 import android.media.AudioAttributes;
 import android.net.Uri;
@@ -39,6 +40,8 @@ import android.util.Log;
 
 import androidx.core.app.NotificationCompat;
 
+import com.cdot.location.GPX;
+import com.cdot.location.LocationSampler;
 import com.cdot.ping.MainActivity;
 import com.cdot.ping.R;
 
@@ -72,21 +75,13 @@ import javax.xml.transform.stream.StreamResult;
  * Substantially based on https://github.com/android/location-samples
  */
 public class LoggingService extends Service implements LocationSampler.SampleListener {
-    private static final String TAG = LoggingService.class.getSimpleName();
-
     protected static final String CLASS_NAME = LoggingService.class.getCanonicalName();
-
     public static final String ACTION_SAMPLE = CLASS_NAME + ".action_sample";
-
     public static final String EXTRA_SAMPLE_DATA = CLASS_NAME + ".sample_data";
-
     // Extra to tell us if we arrived in onStartCommand from the Notification
     protected static final String EXTRA_STARTED_FROM_NOTIFICATION =
             CLASS_NAME + ".started_from_notification";
-
-    // Name of sample cache file. Always stored in getExternalFilesDir()
-    public static String CACHEFILE_NAME = "ping.log";
-
+    private static final String TAG = LoggingService.class.getSimpleName();
     /**
      * The identifier for the notification displayed for the foreground service.
      * "If a notification with the same id has already been posted by your application and has
@@ -95,24 +90,18 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
      */
     private static final int NOTIFICATION_1D = 0xC0FEFE;
     private static final String CHANNEL_ID = "Ping_Channel" + TAG;
-
     /**
-     * Service binder type
+     * The desired interval for location updates. Inexact. Updates may be more or less frequent.
+     * For Ping, every 500ms should be plenty.
      */
-    public class LoggingServiceBinder extends Binder {
-        public LoggingService getService() {
-            return LoggingService.this;
-        }
-    }
-
+    private static final long LOCATION_UPDATE_INTERVAL = 500;
+    // Name of sample cache file. Always stored in getExternalFilesDir()
+    public static String CACHEFILE_NAME = "ping.log";
     private final IBinder mBinder = new LoggingServiceBinder();
-
     /**
      * Public to allow access to device control methods
      */
     public SonarSampler mSonarSampler;
-    private LocationSampler mLocationSampler;
-
     /**
      * Used to check whether the bound activity has really gone away and not unbound as part of an
      * orientation change. We create a foreground service notification only if the former takes
@@ -120,27 +109,29 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
      */
     protected boolean mJustAConfigurationChange = false;
     protected NotificationManager mNotificationManager;
+    private LocationSampler mLocationSampler;
     // Set to true to keep this service running even when all clients are unbound
     // and logging is disabled.
     private boolean mKeepAlive = true;
-    private double mAverageSamplingRate = 0; // rolling average sampling rate
+    private double mLoggedSampleRate = 0; // rolling average sampling rate
     private long mTotalSamplesLogged = 0;
     private long mLastSampleTime = System.currentTimeMillis();
-    private CircularSampleLog mCache;
+    private SampleCache mCache;
+    private NotificationCompat.Builder mNotificationBuilder;
 
     @Override // Service
     public void onCreate() {
         Log.d(TAG, "onCreate");
 
         mSonarSampler = new SonarSampler(this);
-        mLocationSampler = new LocationSampler(this, this);
+        mLocationSampler = new LocationSampler(this, this, LOCATION_UPDATE_INTERVAL);
 
         mNotificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         try {
-            mCache = new CircularSampleLog(new File(getExternalFilesDir(null), CACHEFILE_NAME));
+            mCache = new SampleCache(new File(getExternalFilesDir(null), CACHEFILE_NAME), false);
         } catch (FileNotFoundException fnfe) {
             try {
-                mCache = new CircularSampleLog(new File(getExternalFilesDir(null), CACHEFILE_NAME), 1024);
+                mCache = new SampleCache(new File(getExternalFilesDir(null), CACHEFILE_NAME), 1024);
             } catch (IOException ioe) {
                 Log.e(TAG, "Problem creating log file " + ioe);
             }
@@ -170,6 +161,7 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
 
     /**
      * Set to true to stop the service from suiciding when the last client unbinds
+     *
      * @param on true to stop 切腹
      */
     public void setKeepAlive(boolean on) {
@@ -266,11 +258,24 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
         // The PendingIntent to launch activity.
         PendingIntent activityPendingIntent = PendingIntent.getActivity(this, 0,
                 new Intent(this, MainActivity.class), 0);
+        Resources r = getResources();
 
-        StringBuilder text = new StringBuilder();
-        text.append(mSonarSampler.getNotificationStateText(getResources())).append("\n");
+        String rationale = mSonarSampler.mBluetoothStateReason < 0 ? "" : r.getStringArray(R.array.bt_reason)[mSonarSampler.mBluetoothStateReason];
+        String state = String.format(r.getStringArray(R.array.bt_state)[mSonarSampler.getConnectionState()], rationale);
 
-        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
+        String title = getString(R.string.notification_title, DateFormat.getDateTimeInstance().format(new Date()), state);
+        StringBuilder samText = new StringBuilder();
+        Sample sam = mSonarSampler.mLastLoggedSample;
+        if (sam == null)
+            samText.append(r.getString(R.string.depth_unknown));
+        else
+            samText.append(r.getString(R.string.val_depth, sam.depth));
+        samText.append(" ")
+                .append(r.getString(R.string.val_latitude, sam.latitude))
+                .append(" ")
+                .append(r.getString(R.string.val_longitude, sam.longitude));
+
+        mNotificationBuilder = new NotificationCompat.Builder(this, CHANNEL_ID)
                 // Actions are typically displayed by the system as a button adjacent to the notification content.
 
                 // This will restore the activity
@@ -279,16 +284,16 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
                 // This will stop the service
                 .addAction(R.drawable.ic_cancel, getString(R.string.notification_stop), servicePendingIntent)
 
+                .setContentTitle(title)
+                .setContentText(samText)
                 .setOngoing(true)
-                .setPriority(Notification.PRIORITY_HIGH)
+                .setPriority(Notification.PRIORITY_DEFAULT)
                 .setSmallIcon(R.drawable.ic_notification)
-                .setContentTitle(getString(R.string.notification_title, DateFormat.getDateTimeInstance().format(new Date())))
-                .setContentText(text)
+                .setOnlyAlertOnce(true)
                 .setWhen(System.currentTimeMillis());
 
-        return builder.build();
+        return mNotificationBuilder.build();
     }
-
 
     // Returns true if this is currently a foreground service.
     private boolean isRunningInForeground() {
@@ -311,24 +316,23 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
         // "real" device has a sample rate around 12Hz
         long now = System.currentTimeMillis();
         double samplingRate = 1000.0 / (now - mLastSampleTime);
-        mAverageSamplingRate = ((mAverageSamplingRate * mTotalSamplesLogged) + samplingRate) / (mTotalSamplesLogged + 1);
+        mLoggedSampleRate = ((mLoggedSampleRate * mTotalSamplesLogged) + samplingRate) / (mTotalSamplesLogged + 1);
         mTotalSamplesLogged++;
 
         mLastSampleTime = now;
 
         if (mCache != null) {
             try {
-                mCache.writeSample(sample);
+                mCache.add(sample);
             } catch (IOException ioe) {
                 Log.e(TAG, "logSample " + ioe);
             }
         }
 
         // Update notification content if running as a foreground service.
-        if (isRunningInForeground())
-            // Nobody listening
+        if (isRunningInForeground()) {
             mNotificationManager.notify(NOTIFICATION_1D, getNotification());
-        else {
+        } else {
             //Log.d(TAG, "Broadcasting sample");
             Intent intent = new Intent(ACTION_SAMPLE);
             intent.putExtra(EXTRA_SAMPLE_DATA, sample);
@@ -361,17 +365,19 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
     /**
      * Write GPX XML for all cached samples to the given Uri. All samples are written, whether they
      * has already been written or not.
+     *
      * @param uri the uri to create the GPX document at
      */
     public void writeGPX(Uri uri) throws IOException {
-        Document gpxDocument = GPX.openDocument(getContentResolver(), uri);
+        Document gpxDocument = GPX.openDocument(getContentResolver(), uri, getResources().getString(R.string.app_name));
 
         // Create new trkseg element for this trace
         Element gpxTrk = (Element) gpxDocument.getElementsByTagNameNS(GPX.NS_GPX, "trk").item(0);
         Element gpxTrkseg = gpxDocument.createElementNS(GPX.NS_GPX, "trkseg");
         gpxTrk.appendChild(gpxTrkseg);
 
-        Sample[] snap = mCache.snapshotSamples();
+        Sample[] snap = new Sample[mCache.getUsedSamples()];
+        mCache.snapshot(snap, 0, snap.length);
         for (Sample s : snap)
             gpxTrkseg.appendChild(s.toGPX(gpxDocument));
 
@@ -391,15 +397,26 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
     }
 
     /**
-     * Get the current average sampling rate, in Hz
+     * Get the current average logged sampling rate, in Hz
+     *
      * @return the sample rate
      */
-    public double getAverageSamplingRate() {
-        return mAverageSamplingRate;
+    public double getLoggedSampleRate() {
+        return mLoggedSampleRate;
+    }
+
+    /**
+     * Get the current average raw sampling rate, in Hz
+     *
+     * @return the sample rate
+     */
+    public double getRawSampleRate() {
+        return mSonarSampler.mRawSampleRate;
     }
 
     /**
      * Get the total number of samples logged in all time
+     *
      * @return samples seen
      */
     public long getSamplesLogged() {
@@ -408,9 +425,19 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
 
     /**
      * Get cache usage as a percentage of the available capacity
+     *
      * @return a percentage
      */
     public float getCacheUsage() {
         return 100.0f * mCache.getUsedSamples() / mCache.getCapacitySamples();
+    }
+
+    /**
+     * Service binder type
+     */
+    public class LoggingServiceBinder extends Binder {
+        public LoggingService getService() {
+            return LoggingService.this;
+        }
     }
 }

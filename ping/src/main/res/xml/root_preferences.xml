@@ -19,35 +19,42 @@ Note that if the code ever sets a negative min the same problem will arise.
         android:summary="@string/help_autoconnect"
         android:title="@string/pref_autoconnect" />
 
-    <com.cdot.ping.android.SliderPreference android:key="samplerTimeout"
+    <com.cdot.preference.SliderPreference
+        android:key="samplerTimeout"
         android:summary="@string/help_samplerTimeout"
         android:title="@string/pref_sampler_timeout" />
 
-    <com.cdot.ping.android.SliderPreference android:key="sensitivity"
+    <com.cdot.preference.SliderPreference
+        android:key="sensitivity"
         android:summary="@string/help_sensitivity"
         android:title="@string/pref_sensitivity" />
 
-    <com.cdot.ping.android.IntListPreference android:key="noise"
+    <com.cdot.preference.IntListPreference
+        android:key="noise"
         android:entries="@array/noise_options"
         android:entryValues="@array/noise_values"
         android:summary="@string/help_noise"
         android:title="@string/pref_noise" />
 
-    <com.cdot.ping.android.IntListPreference android:key="range"
+    <com.cdot.preference.IntListPreference
+        android:key="range"
         android:entries="@array/range_options"
         android:entryValues="@array/range_values"
         android:summary="@string/help_range"
         android:title="@string/pref_range" />
 
-    <com.cdot.ping.android.SliderPreference android:key="minimumDepthChange"
+    <com.cdot.preference.SliderPreference
+        android:key="minimumDepthChange"
         android:summary="@string/help_minimumDepthChange"
         android:title="@string/pref_depth_delta" />
 
-    <com.cdot.ping.android.SliderPreference android:key="minimumPositionChange"
+    <com.cdot.preference.SliderPreference
+        android:key="minimumPositionChange"
         android:summary="@string/help_minimumPositionChange"
         android:title="@string/pref_pos_delta" />
 
-    <com.cdot.ping.android.SliderPreference android:key="maxSamples"
+    <com.cdot.preference.SliderPreference
+        android:key="maxSamples"
         android:summary="@string/help_maxSamples"
         android:title="@string/pref_max_samples" />
 

@@ -1,4 +1,4 @@
-package com.cdot.ping.android;
+package com.cdot.preference;
 
 import android.content.Context;
 import android.content.res.TypedArray;

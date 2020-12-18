@@ -24,7 +24,6 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.content.SharedPreferences;
 import android.content.res.Resources;
 import android.os.Bundle;
 import android.util.Log;
@@ -42,48 +41,56 @@ import androidx.fragment.app.FragmentTransaction;
 import com.cdot.ping.databinding.ConnectedFragmentBinding;
 import com.cdot.ping.samplers.LoggingService;
 import com.cdot.ping.samplers.Sample;
-import com.cdot.ping.samplers.SonarSampler;
-
-import no.nordicsemi.android.ble.observer.ConnectionObserver;
 
 /**
- * Fragment that handles user interaction when a device is connected.
+ * Fragment that displays incoming samples when a device is connected. Visually it is made up of a
+ * pane of textual information and a sonar view. These are updated by threads, kept separate so
+ * they can have different update schedules.
  */
-public class ConnectedFragment extends Fragment implements SharedPreferences.OnSharedPreferenceChangeListener {
+public class ConnectedFragment extends Fragment {
     private static final String TAG = ConnectedFragment.class.getSimpleName();
-    private ConnectedFragmentBinding mBinding;
+
     private final IntentFilter mIntentFilter;
+    private ConnectedFragmentBinding mBinding;
     // Handle broadcasts from the service
     private boolean mReceiverRegistered = false;
     private Sample mLastSample = new Sample();
     // Used to calculate the incoming sample rate
-    private Boolean mHaveNewSamples = false; // display update
-    private final BroadcastReceiver mBroadcastReceiver = new BroadcastReceiver() {
+    private Boolean mHaveNewSamples = false; // display update required?
 
+    private final BroadcastReceiver mBroadcastReceiver = new BroadcastReceiver() {
+        @Override
         public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();
             if (LoggingService.ACTION_SAMPLE.equals(action)) {
-                onSonarSample((Sample) intent.getParcelableExtra(LoggingService.EXTRA_SAMPLE_DATA));
-            } else if (SonarSampler.ACTION_BT_STATE.equals(action)) {
+                onSonarSample(intent.getParcelableExtra(LoggingService.EXTRA_SAMPLE_DATA));
+            } /*the ACTION_BT_STATE is reported in the MainActivity, there is no reason to do this
+                here, if we do our best to disconnect/reconnect in the service.
+              else if (SonarSampler.ACTION_BT_STATE.equals(action)) {
                 int state = intent.getIntExtra(SonarSampler.EXTRA_STATE, SonarSampler.BT_STATE_DISCONNECTED);
                 int reason = intent.getIntExtra(SonarSampler.EXTRA_REASON, -1);
-                if (state == SonarSampler.BT_STATE_READY)
-                    getMainActivity().configureSampler();
-                else if (state == SonarSampler.BT_STATE_CONNECT_FAILED
+                if (state == SonarSampler.BT_STATE_CONNECT_FAILED
                         || state == SonarSampler.BT_STATE_DISCONNECTED && reason == ConnectionObserver.REASON_LINK_LOSS) {
-                    // Try to find a device; autoconnect true so will connect to the first compatible it finds
+                    // Try to find a device; if autoconnect true, will connect to the first compatible it finds, which is
+                    // hopefully the same device (it should be, if it's paired)
                     FragmentTransaction tx = getParentFragmentManager().beginTransaction();
                     tx.replace(R.id.fragmentContainerL, new DiscoveryFragment(true), TAG).commit();
                 }
+            }*/ else if (MainActivity.ACTION_RECONFIGURE.equals(action)) {
+                Log.d(TAG, "Received ACTION_RECONFIGURE");
+                mBinding.sonarV.resetScale();
             }
         }
     };
+    // Thread used to update the text components of the display. Done this way to keep the work off
+    // the main thread.
     private Thread mDisplayThread;
 
     public ConnectedFragment() {
         mIntentFilter = new IntentFilter();
         //mIntentFilter.addAction(SonarSamplerTwo.ACTION_BT_STATE);
         mIntentFilter.addAction(LoggingService.ACTION_SAMPLE);
+        mIntentFilter.addAction(MainActivity.ACTION_RECONFIGURE);
     }
 
     private MainActivity getMainActivity() {
@@ -134,14 +141,6 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
         super.onSaveInstanceState(bits);
         if (getLoggingService() != null && getLoggingService().mSonarSampler != null && getLoggingService().mSonarSampler.getBluetoothDevice() != null)
             bits.putString("device", getLoggingService().mSonarSampler.getBluetoothDevice().getAddress());
-        if (mBinding != null)
-            mBinding.sonarV.onSaveInstanceState(bits);
-    }
-
-    @Override // SharedPreferences.OnSharedPreferenceChangeListener
-    public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
-        /*if (mReceiverRegistered)
-            updatePreferencesDisplay();*/
     }
 
     // Fragment lifecycle
@@ -151,6 +150,7 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
     public void onCreate(Bundle savedInstanceState) {
         Log.d(TAG, "onCreate savedInstanceState is " + savedInstanceState);
         super.onCreate(savedInstanceState);
+
         if (savedInstanceState != null) {
             String da = savedInstanceState.getString("device");
             if (da != null) {
@@ -161,11 +161,10 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
             }
         }
 
-        Settings prefs = new Settings(getMainActivity());
         // May be coming back from Settings service, make sure KeepAlive is set in service
         if (getLoggingService() != null)
             getLoggingService().setKeepAlive(false);
-        prefs.registerOnSharedPreferenceChangeListener(this);
+
         registerBroadcastReceiver();
     }
 
@@ -175,9 +174,8 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
         setHasOptionsMenu(true);
         mBinding = ConnectedFragmentBinding.inflate(inflater, container, false);
 
-        mBinding.recordFAB.setOnClickListener(view -> getMainActivity().writeGPX());
-
-        mBinding.sonarV.onRestoreInstanceState(savedInstanceState);
+        mBinding.zoomInFAB.setOnClickListener(view -> mBinding.sonarV.zoom(1.5f));
+        mBinding.zoomOutFAB.setOnClickListener(view -> mBinding.sonarV.zoom(0.75f));
 
         return mBinding.connectedFragmentL;
     }
@@ -192,6 +190,7 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
         // Force a display update when returning from SettingsFragment
         mHaveNewSamples = true;
         mDisplayThread.start();
+        getActivity().sendBroadcast(new Intent(MainActivity.ACTION_RECONFIGURE));
     }
 
     @Override // Fragment
@@ -228,10 +227,14 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
             tx.replace(R.id.fragmentContainerL, new SettingsFragment(), SettingsFragment.TAG);
             tx.addToBackStack(null);
             tx.commit();
+        } else if (item.getItemId() == R.id.menu_write_gpx) {
+            getMainActivity().writeGPX();
         }
+
         return super.onOptionsItemSelected(item);
     }
 
+    // Keep the work of redisplay off the main thread
     private class DisplayThread extends Thread {
         DisplayThread() {
             super(new Runnable() {
@@ -254,7 +257,7 @@ public class ConnectedFragment extends Fragment implements SharedPreferences.OnS
                             LoggingService svc = getLoggingService();
                             if (svc != null) {
                                 //mBinding.logTimeTV.setText(r.getString(R.string.val_logging_time, formatDeltaTime(svc.getLoggingTime())));
-                                mBinding.logRateTV.setText(r.getString(R.string.val_sample_rate, svc.getAverageSamplingRate()));
+                                mBinding.logRateTV.setText(r.getString(R.string.val_sample_rate, svc.getRawSampleRate()));
                                 mBinding.logCountTV.setText(r.getString(R.string.val_sample_count, svc.getSamplesLogged()));
                                 mBinding.cacheUsedTV.setText(r.getString(R.string.val_cache_usage, svc.getCacheUsage()));
                             } else {

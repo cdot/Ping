@@ -74,6 +74,7 @@ public class Settings {
     public static final int SAMPLER_TIMEOUT_MAX = 10 * 60 * 1000; // 10 minutes in ms
     public static final String PREF_DEVICE = "device";
     public static final String PREF_AUTOCONNECT = "autoconnect";
+    public static final String PREF_ZOOM_LEVEL = "zoom";
     private static final String TAG = Settings.class.getSimpleName();
     // Default values for integer preferences
     private static final HashMap<String, Integer> intDefaults = new HashMap<String, Integer>() {
@@ -94,6 +95,15 @@ public class Settings {
             put(PREF_AUTOCONNECT, true);
         }
     };
+
+    // Default values for float preferences
+    private static final HashMap<String, Float> floatDefaults = new HashMap<String, Float>() {
+        {
+            put(PREF_ZOOM_LEVEL, 1.0f);
+        }
+    };
+
+    static final int[] RANGES = new int[]{3, 6, 9, 18, 24, 36, 36};
 
     // Handle to shared preferences
     private final SharedPreferences mPrefs;
@@ -124,6 +134,21 @@ public class Settings {
         } catch (ClassCastException cce) {
             mPrefs.edit().remove(pref).apply();
             return intDefaults.get(pref);
+        }
+    }
+
+    /**
+     * Get the current value of a float preference.
+     *
+     * @param pref key
+     * @return value of preference
+     */
+    public float getFloat(String pref) {
+        try {
+            return mPrefs.getFloat(pref, floatDefaults.get(pref));
+        } catch (ClassCastException cce) {
+            mPrefs.edit().remove(pref).apply();
+            return floatDefaults.get(pref);
         }
     }
 
@@ -184,6 +209,18 @@ public class Settings {
     public void put(String key, int value) {
         SharedPreferences.Editor edit = mPrefs.edit();
         edit.putInt(key, value);
+        edit.apply();
+    }
+
+    /**
+     * Set the value of a float preference
+     *
+     * @param key   pref key
+     * @param value new value
+     */
+    public void put(String key, float value) {
+        SharedPreferences.Editor edit = mPrefs.edit();
+        edit.putFloat(key, value);
         edit.apply();
     }
 

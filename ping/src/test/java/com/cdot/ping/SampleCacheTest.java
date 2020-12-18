@@ -1,6 +1,6 @@
 package com.cdot.ping;
 
-import com.cdot.ping.samplers.CircularSampleLog;
+import com.cdot.ping.samplers.SampleCache;
 import com.cdot.ping.samplers.Sample;
 
 import org.junit.Before;
@@ -11,7 +11,7 @@ import java.io.IOException;
 
 import static org.junit.Assert.assertEquals;
 
-public class CircularSampleLogTest {
+public class SampleCacheTest {
 
     private static final String logfile = "samples.log";
     
@@ -22,18 +22,18 @@ public class CircularSampleLogTest {
 
     @Test
     public void simple() throws IOException {
-        CircularSampleLog simple = new CircularSampleLog(new File(logfile), 2);
+        SampleCache simple = new SampleCache(new File(logfile), 2);
         assertEquals(2, simple.getCapacitySamples());
         assertEquals(0, simple.getUsedSamples());
-        simple.writeSample(new Sample(0, 1, -2, 10, 5));
-        simple.writeSample(new Sample(1000, 2, -3, 15, 7));
+        simple.add(new Sample(0, 1, -2, 10, 5));
+        simple.add(new Sample(1000, 2, -3, 15, 7));
         assertEquals(2, simple.getCapacitySamples());
         assertEquals(2, simple.getUsedSamples());
-        simple.writeSample(new Sample(2000, 3, -2, 10, 5));
-        simple.writeSample(new Sample(3000, 4, -3, 109, 7));
+        simple.add(new Sample(2000, 3, -2, 10, 5));
+        simple.add(new Sample(3000, 4, -3, 109, 7));
         assertEquals(2, simple.getCapacitySamples());
         assertEquals(2, simple.getUsedSamples());
-        Sample[] ss = simple.readSamples(2);
+        Sample[] ss = simple.removeSamples(2);
 
         assertEquals(2000, ss[0].time);
         assertEquals(3, ss[0].latitude, 0);
@@ -53,14 +53,14 @@ public class CircularSampleLogTest {
 
     @Test
     public void reopen() throws IOException {
-        CircularSampleLog simple = new CircularSampleLog(new File(logfile), 2);
-        simple.writeSample(new Sample(1000, 1, 2, 10, 5));
-        simple.writeSample(new Sample(2000, 2, -2, 10, 5));
+        SampleCache simple = new SampleCache(new File(logfile), 2);
+        simple.add(new Sample(1000, 1, 2, 10, 5));
+        simple.add(new Sample(2000, 2, -2, 10, 5));
         simple.close();
-        simple = new CircularSampleLog(new File(logfile));
+        simple = new SampleCache(new File(logfile), false);
         assertEquals(2, simple.getCapacitySamples());
         assertEquals(2, simple.getUsedSamples());
-        Sample ss = simple.readSample();
+        Sample ss = simple.removeSample();
         assertEquals(1, ss.latitude, 0);
         assertEquals(2, ss.longitude, 0);
         assertEquals(2, simple.getCapacitySamples());
@@ -69,14 +69,14 @@ public class CircularSampleLogTest {
 
     @Test
     public void snapshotSamples() throws IOException {
-        CircularSampleLog simple = new CircularSampleLog(new File(logfile), 20);
-        simple.writeSample(new Sample(10000, 1, -2, 10, 5));
-        simple.writeSample(new Sample(11000, 2, -3, 15, 7));
-        simple.writeSample(new Sample(12000, 3, -2, 10, 5));
-        simple.writeSample(new Sample(13000, 4, -2, 10, 5));
-        Sample[] ss = simple.snapshotSamples();
+        SampleCache simple = new SampleCache(new File(logfile), 20);
+        simple.add(new Sample(10000, 1, -2, 10, 5));
+        simple.add(new Sample(11000, 2, -3, 15, 7));
+        simple.add(new Sample(12000, 3, -2, 10, 5));
+        simple.add(new Sample(13000, 4, -2, 10, 5));
+        Sample[] ss = new Sample[4];
+        simple.snapshot(ss, 0, 4);
         assertEquals(4, simple.getUsedSamples());
-        assertEquals(4, ss.length);
         assertEquals(1, ss[0].latitude, 0);
         assertEquals(-2, ss[0].longitude, 0);
         assertEquals(10, ss[0].depth, 0);

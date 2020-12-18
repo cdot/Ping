@@ -18,24 +18,27 @@
  */
 package com.cdot.ping.samplers;
 
+import com.cdot.utils.ConcurrentFileByteFIFO;
+
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.File;
 import java.io.IOException;
+import java.nio.BufferUnderflowException;
 
 /**
  * A circular sample log using a CircularByteLog to store in a disk file.
  */
-public class CircularSampleLog extends CircularByteLog {
+public class SampleCache extends ConcurrentFileByteFIFO {
 
     /**
      * Construct a new sample log. The log file may not pre-exist.
      *
      * @param file    file to store the log in
-     * @param maxSize maximum size of the log, in samples
+     * @param maxSize initial maximum size of the log, in samples. Can be changed using #setCapacitySamples
      * @throws IOException if the file already exists, or there's problem writing it
      */
-    public CircularSampleLog(File file, int maxSize) throws IOException {
+    public SampleCache(File file, int maxSize) throws IOException {
         super(file, maxSize * Sample.BYTES);
     }
 
@@ -43,10 +46,11 @@ public class CircularSampleLog extends CircularByteLog {
      * Open an existing sample log
      *
      * @param file file containing the log
+     * @param readOnly if true, file will be opened for read, otherwise for read-write
      * @throws IOException if the log doesn't exist, or there's a problem reading it
      */
-    public CircularSampleLog(File file) throws IOException {
-        super(file);
+    public SampleCache(File file, boolean readOnly) throws IOException {
+        super(file, readOnly);
     }
 
     /**
@@ -69,7 +73,7 @@ public class CircularSampleLog extends CircularByteLog {
 
     /**
      * Set the maximum capacity of the log. If this capacity is would be exceeded, old samples are
-     * discarded to make space.
+     * discarded to make space. Cannot be used in readOnly mode.
      *
      * @param nsamples new capacity
      * @throws IOException if there's a problem with the log file
@@ -79,22 +83,33 @@ public class CircularSampleLog extends CircularByteLog {
     }
 
     /**
-     * Adds a sample to the log
+     * Adds a sample to the log. Cannot be used in readOnly mode.
      *
      * @throws IOException if there's a problem with the log file
      */
-    public void writeSample(Sample sample) throws IOException {
-        writeBytes(sample.toByteArray());
+    public void add(Sample sample) throws IOException {
+        add(sample.toByteArray());
     }
 
     /**
-     * Read (and remove) the oldest samples from the buffer
+     * Adds a bunch of samples to the log. Cannot be used in readOnly mode
      *
-     * @return the samples removed
      * @throws IOException if there's a problem with the log file
      */
-    public Sample[] readSamples(int len) throws IOException {
-        byte[] buff = readBytes(len * Sample.BYTES);
+    public void add(Sample[] samples) throws IOException {
+        for (Sample s : samples)
+            add(s);
+    }
+
+    /**
+     * Read (and remove) the oldest samples from the buffer. Cannot be used in readOnly mode.
+     * @param len the number of samples to read
+     * @return the samples removed, oldest first
+     * @throws IOException if there's a problem with the log file, or a buffer underflow
+     */
+    public Sample[] removeSamples(int len) throws IOException {
+        byte[] buff = new byte[len * Sample.BYTES];
+        remove(buff, 0, buff.length);
         DataInputStream dis = new DataInputStream(new ByteArrayInputStream(buff));
         Sample[] samples = new Sample[len];
         for (int i = 0; i < len; i++)
@@ -103,37 +118,34 @@ public class CircularSampleLog extends CircularByteLog {
     }
 
     /**
-     * Read (and remove) the oldest sample from the buffer
+     * Read (and remove) the oldest sample from the buffer. Cannot be used in readOnly mode.
      *
      * @return the sample removed
      * @throws IOException if there's a problem with the log file
      */
-    public Sample readSample() throws IOException {
-        return Sample.fromByteArray(readBytes(Sample.BYTES), 0);
+    public Sample removeSample() throws IOException {
+        byte[] buff = new byte[Sample.BYTES];
+        if (remove(buff, 0, Sample.BYTES) < Sample.BYTES)
+            throw new BufferUnderflowException();
+        return Sample.fromByteArray(buff, 0);
     }
 
     /**
-     * Adds a bunch of samples to the log
-     *
-     * @throws IOException if there's a problem with the log file
-     */
-    public void writeSamples(Sample[] samples) throws IOException {
-        for (Sample s : samples)
-            writeSample(s);
-    }
-
-    /**
-     * Snapshot the current state of the log.
-     * @return an array of all the samples currently in the log
+     * Snapshot the current state of the log. This is the only way to retrieve buffer contents in
+     * readonly mode.
+     * @param buf buffer to fill with samples
+     * @param pos position in buf to start writing
+     * @param len maximum number of samples to return
+     * @return the number of samples read
      * @throws IOException if there's a problem accessing the underlying file
      */
-    public Sample[] snapshotSamples() throws IOException {
-        byte[] bytes = super.snapshotBytes();
-        int nSamples = bytes.length / Sample.BYTES;
+    public int snapshot(Sample[] buf, int pos, int len) throws IOException {
+        byte[] bytes = new byte[len * Sample.BYTES];
+        int r = super.snapshot(bytes, 0, bytes.length);
+        int nSamples = r / Sample.BYTES;
         DataInputStream dis = new DataInputStream(new ByteArrayInputStream(bytes));
-        Sample[] snap = new Sample[nSamples];
         for (int i = 0; i < nSamples; i++)
-            snap[i] = Sample.fromDataStream(dis);
-        return snap;
+            buf[i] = Sample.fromDataStream(dis);
+        return r;
     }
 }

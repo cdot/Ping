@@ -18,11 +18,7 @@
  */
 package com.cdot.ping;
 
-import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
-import android.bluetooth.le.BluetoothLeScanner;
-import android.bluetooth.le.ScanCallback;
-import android.bluetooth.le.ScanResult;
 import android.os.Bundle;
 import android.os.ParcelUuid;
 import android.util.Log;
@@ -43,24 +39,92 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import no.nordicsemi.android.support.v18.scanner.BluetoothLeScannerCompat;
+import no.nordicsemi.android.support.v18.scanner.ScanCallback;
+import no.nordicsemi.android.support.v18.scanner.ScanFilter;
+import no.nordicsemi.android.support.v18.scanner.ScanResult;
+import no.nordicsemi.android.support.v18.scanner.ScanSettings;
+
 /**
- * Displays a list of available bluetooth devices and allows the user to select one.
+ * Displays a list of discovered bluetooth devices and allows the user to select one.
  */
 public class DiscoveryFragment extends Fragment {
     public static final String TAG = DiscoveryFragment.class.getSimpleName();
+
+    private class ScanBack extends ScanCallback {
+
+        // Callback when scan could not be started.
+        @Override
+        public void onScanFailed(int errorCode) {
+            switch (errorCode) {
+                case ScanCallback.SCAN_FAILED_ALREADY_STARTED:
+                    Log.d(TAG, "Scan failed, already started");
+                    return;
+                case ScanCallback.SCAN_FAILED_APPLICATION_REGISTRATION_FAILED:
+                    Log.d(TAG, "Scan failed, app registration failed");
+                    break;
+                case ScanCallback.SCAN_FAILED_FEATURE_UNSUPPORTED:
+                    Log.d(TAG, "Scan failed, unsupported");
+                    break;
+                case ScanCallback.SCAN_FAILED_INTERNAL_ERROR:
+                    Log.d(TAG, "Scan failed, internal error");
+                    break;
+            }
+            if (mBLEScanner != null) { // Try again
+                Log.d(TAG, "Starting BLE scan again");
+                mIgnoreScanResults = false;
+                mBLEScanner.startScan(/*mFilters, mScannerSettings, */mScanCallback);
+            }
+        }
+
+        // Callback when a BLE advertisement has been found.
+        @Override
+        public void onScanResult(final int callbackType, @NonNull final ScanResult result) {
+            if (mIgnoreScanResults)
+                return;
+
+            BluetoothDevice device = result.getDevice();
+            // Bond states: BOND_NONE=10, BOND_BONDING=11, BOND_BONDED=12
+            // This means _paired_ and NOT _bonded_; see https://piratecomm.wordpress.com/2014/01/19/ble-pairing-vs-bonding/
+            Log.d(TAG, "onScanResult " + device.getAddress() + " " + device.getName() + " pairing state " + device.getBondState());
+            // DIY filtering, because the system code doesn't work (see above)
+            List<ParcelUuid> uuids = result.getScanRecord().getServiceUuids();
+            if (uuids != null && uuids.contains(new ParcelUuid(SonarSampler.SERVICE_UUID))) {
+                if (mAutoConnect) {
+                    // First device that offers the service we want. Fingers crossed!
+                    getMainActivity().switchToConnectedFragment(device);
+                    return;
+                }
+                if (!mDeviceList.contains(device)) {
+                    Log.d(TAG, " Found device " + device.getAddress() + " " + device.getName());
+                    mDeviceList.add(device);
+                    updateDisplay();
+                }
+            }
+        }
+    }
+
     boolean mIgnoreScanResults = false; // used during error handling
     private final List<BluetoothDevice> mDeviceList = new ArrayList<>();
     private List<Map<String, Object>> mDeviceViewItems;
     private DiscoveryFragmentBinding mBinding;
-    private BluetoothLeScanner mBLEScanner = null;
+    private BluetoothLeScannerCompat mBLEScanner = null;
     // Automatically connect to the first compatible device found
     private boolean mAutoConnect;
+    ScanSettings mScannerSettings;
+    List<ScanFilter> mFilters;
+    ScanBack mScanCallback;
 
     // No-arguments constructor needed when waking app from sleep
     public DiscoveryFragment() {
-        this(false);
+        // The autoconnect we pass here may be overridden by a value in the savedInstanceState
+        this(true);
     }
 
+    /**
+     *
+     * @param autoconnect
+     */
     DiscoveryFragment(boolean autoconnect) {
         mAutoConnect = autoconnect;
     }
@@ -89,20 +153,24 @@ public class DiscoveryFragment extends Fragment {
 
         mBinding.devicesLV.setOnItemClickListener(clickListener);
 
-        // LE discovery. ScanFilter just doesn't work. A scan without filtering finds the device, a scan with
-        // filtering never invokes the callback.
-        BluetoothAdapter bta = BluetoothAdapter.getDefaultAdapter();
-
         mIgnoreScanResults = false;
-        // mBLEScanner is a singleton in the adapter; once it has been found once, there's no point
-        // in re-finding it
-        mBLEScanner = bta.getBluetoothLeScanner();
+
+        mScannerSettings = new ScanSettings.Builder()
+                .setLegacy(false)
+                .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+                .setReportDelay(1000)
+                .setUseHardwareBatchingIfSupported(true)
+                .build();
+        mFilters = new ArrayList<>();
+        mFilters.add(new ScanFilter.Builder().setServiceUuid(new ParcelUuid(SonarSampler.SERVICE_UUID)).build());
+        mBLEScanner = BluetoothLeScannerCompat.getScanner();
 
         // Note that scanning with filters just doesn't work, so we have to filter manually.
         // Scanning continues ad infinitum. Can't see any obvious way to remove a device from the
         // scan list.
         Log.d(TAG, "Starting BLE scan");
-        mBLEScanner.startScan(new ScanBack("FIRST"));
+        mScanCallback = new ScanBack();
+        mBLEScanner.startScan(/*mFilters, mScannerSettings, */mScanCallback);
         updateDisplay();
 
         return mBinding.discoveryF;
@@ -115,8 +183,8 @@ public class DiscoveryFragment extends Fragment {
         if (mBLEScanner != null) {
             Log.d(TAG, "stopping BLE scanner");
             mIgnoreScanResults = true;
-            mBLEScanner.stopScan(new ScanBack("DEAD"));
-            mBLEScanner.flushPendingScanResults(new ScanBack("FLUSH"));
+            mBLEScanner.stopScan(mScanCallback);
+            //mBLEScanner.flushPendingScanResults(mScanCallback);
             mBLEScanner = null;
         }
     }
@@ -149,66 +217,5 @@ public class DiscoveryFragment extends Fragment {
                         R.id.deviceAddressTV, R.id.deviceNameTV
                 }));
         mBinding.devicesLV.setStackFromBottom(false);
-    }
-
-    private class ScanBack extends ScanCallback {
-        String mId;
-
-        ScanBack(String id) {
-            mId = id;
-        }
-
-        // Callback when scan could not be started.
-        public void onScanFailed(int errorCode) {
-            switch (errorCode) {
-                case ScanCallback.SCAN_FAILED_ALREADY_STARTED:
-                    Log.d(TAG, mId + "Scan failed, already started");
-                    return;
-                case ScanCallback.SCAN_FAILED_APPLICATION_REGISTRATION_FAILED:
-                    Log.d(TAG, mId + "Scan failed, app registration failed");
-                    break;
-                case ScanCallback.SCAN_FAILED_FEATURE_UNSUPPORTED:
-                    Log.d(TAG, mId + "Scan failed, unsupported");
-                    break;
-                case ScanCallback.SCAN_FAILED_INTERNAL_ERROR:
-                    Log.d(TAG, mId + "Scan failed, internal error");
-                    break;
-            }
-            if (mBLEScanner != null) { // Try again
-                Log.d(TAG, mId + "Starting BLE scan again");
-                mIgnoreScanResults = false;
-                mBLEScanner.startScan(new ScanBack("RESTART"));
-            }
-        }
-
-        public void onBatchScanResults(List<ScanResult> results) {
-            // Callback when batch results are delivered.
-            throw new Error("NEVER CALLED");
-        }
-
-        // Callback when a BLE advertisement has been found.
-        public void onScanResult(int callbackType, ScanResult result) {
-            if (mIgnoreScanResults)
-                return;
-
-            BluetoothDevice device = result.getDevice();
-            // Bond states: BOND_NONE=10, BOND_BONDING=11, BOND_BONDED=12
-            // This means _paired_ and NOT _bonded_; see https://piratecomm.wordpress.com/2014/01/19/ble-pairing-vs-bonding/
-            Log.d(TAG, "onScanResult " + device.getAddress() + " " + device.getName() + " pairing state " + device.getBondState());
-            // DIY filtering, because the system code doesn't work (see above)
-            List<ParcelUuid> uuids = result.getScanRecord().getServiceUuids();
-            if (uuids != null && uuids.contains(new ParcelUuid(SonarSampler.SERVICE_UUID))) {
-                if (mAutoConnect) {
-                    // First device that offers the service we want. Fingers crossed!
-                    getMainActivity().switchToConnectedFragment(device);
-                    return;
-                }
-                if (!mDeviceList.contains(device)) {
-                    Log.d(TAG, mId + " Found device " + device.getAddress() + " " + device.getName());
-                    mDeviceList.add(device);
-                    updateDisplay();
-                }
-            }
-        }
     }
 }
