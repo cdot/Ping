@@ -135,7 +135,7 @@ public class SettingsFragment extends PreferenceFragmentCompat {
             else if (bytes < Settings.GIGABYTE)
                 sbytes = String.format("%.02fMB", bytes / Settings.MEGABYTE);
             else
-                sbytes =String.format("%.02fGB", bytes / Settings.GIGABYTE);
+                sbytes = String.format("%.02fGB", bytes / Settings.GIGABYTE);
             return sams + "=" + sbytes;
         });
         slider.initialise(Settings.MAX_SAMPLES_MIN, Settings.MAX_SAMPLES_MAX, prefs.getInt(Settings.PREF_MAX_SAMPLES));

@@ -109,6 +109,7 @@ public class SonarBluetooth implements ConnectionObserver {
     // Sampling statistics
     private long mLastSampleTime;
     private long mTotalSamplesReceived;
+
     SonarBluetooth(LoggingService service, BTImplementation impl) {
         mService = service;
         mImplementation = impl;

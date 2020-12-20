@@ -28,9 +28,9 @@ import androidx.preference.ListPreference;
  * ListPreference insists on.
  */
 public class IntListPreference extends ListPreference {
-    private LabelRewriter mLabelRewriter = null;
     // String used to separate the preference current value from the description in the summary
     private static final String VALUE_SEPARATOR = "\n";
+    private LabelRewriter mLabelRewriter = null;
 
     public IntListPreference(Context context, AttributeSet attrs, int defStyleAttr, int defStyleRes) {
         super(context, attrs, defStyleAttr, defStyleRes);

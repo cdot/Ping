@@ -75,6 +75,7 @@ public class Settings {
     public static final String PREF_DEVICE = "device";
     public static final String PREF_AUTOCONNECT = "autoconnect";
     public static final String PREF_ZOOM_LEVEL = "zoom";
+    static final int[] RANGES = new int[]{3, 6, 9, 18, 24, 36, 36};
     private static final String TAG = Settings.class.getSimpleName();
     // Default values for integer preferences
     private static final HashMap<String, Integer> intDefaults = new HashMap<String, Integer>() {
@@ -88,23 +89,18 @@ public class Settings {
             put(PREF_SAMPLER_TIMEOUT, 0); // never
         }
     };
-
     // Default values for integer preferences
     private static final HashMap<String, Boolean> booleanDefaults = new HashMap<String, Boolean>() {
         {
             put(PREF_AUTOCONNECT, true);
         }
     };
-
     // Default values for float preferences
     private static final HashMap<String, Float> floatDefaults = new HashMap<String, Float>() {
         {
             put(PREF_ZOOM_LEVEL, 1.0f);
         }
     };
-
-    static final int[] RANGES = new int[]{3, 6, 9, 18, 24, 36, 36};
-
     // Handle to shared preferences
     private final SharedPreferences mPrefs;
 

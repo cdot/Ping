@@ -45,7 +45,7 @@ public class SampleCache extends ConcurrentFileByteFIFO {
     /**
      * Open an existing sample log
      *
-     * @param file file containing the log
+     * @param file     file containing the log
      * @param readOnly if true, file will be opened for read, otherwise for read-write
      * @throws IOException if the log doesn't exist, or there's a problem reading it
      */
@@ -63,15 +63,6 @@ public class SampleCache extends ConcurrentFileByteFIFO {
     }
 
     /**
-     * Get the used size of the log
-     *
-     * @return the used in samples
-     */
-    public int getUsedSamples() {
-        return getUsedBytes() / Sample.BYTES;
-    }
-
-    /**
      * Set the maximum capacity of the log. If this capacity is would be exceeded, old samples are
      * discarded to make space. Cannot be used in readOnly mode.
      *
@@ -80,6 +71,15 @@ public class SampleCache extends ConcurrentFileByteFIFO {
      */
     public void setCapacitySamples(int nsamples) throws IOException {
         setCapacityBytes(nsamples * Sample.BYTES);
+    }
+
+    /**
+     * Get the used size of the log
+     *
+     * @return the used in samples
+     */
+    public int getUsedSamples() {
+        return getUsedBytes() / Sample.BYTES;
     }
 
     /**
@@ -103,6 +103,7 @@ public class SampleCache extends ConcurrentFileByteFIFO {
 
     /**
      * Read (and remove) the oldest samples from the buffer. Cannot be used in readOnly mode.
+     *
      * @param len the number of samples to read
      * @return the samples removed, oldest first
      * @throws IOException if there's a problem with the log file, or a buffer underflow
@@ -133,6 +134,7 @@ public class SampleCache extends ConcurrentFileByteFIFO {
     /**
      * Snapshot the current state of the log. This is the only way to retrieve buffer contents in
      * readonly mode.
+     *
      * @param buf buffer to fill with samples
      * @param pos position in buf to start writing
      * @param len maximum number of samples to return

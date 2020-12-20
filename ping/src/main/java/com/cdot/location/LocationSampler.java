@@ -36,26 +36,16 @@ import com.google.android.gms.tasks.Task;
 /**
  * Simplified interface to Android location data. Users must have already determined that they have
  * the necessary permissions
- *     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
- *     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+ * <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+ * <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
  */
 public class LocationSampler {
     public static final String TAG = LocationSampler.class.getSimpleName();
-
-    /**
-     * Implement this interface to listen to location samples
-     */
-    public interface SampleListener {
-        void onLocationSample(Location loc);
-    }
-
     // Provides access to the Fused Location Provider API.
-    private FusedLocationProviderClient mFusedLocationClient;
-
+    private final FusedLocationProviderClient mFusedLocationClient;
     // Callback for changes in location coming from location services
-    private LocationCallback mLocationCallback;
-
-    private SampleListener mListener;
+    private final LocationCallback mLocationCallback;
+    private final SampleListener mListener;
 
     public LocationSampler(Context cxt, SampleListener listener, long desiredUpdateInterval) {
         mListener = listener;
@@ -103,5 +93,12 @@ public class LocationSampler {
         } catch (SecurityException unlikely) {
             Log.e(TAG, "Lost location permission. Could not remove updates. " + unlikely);
         }
+    }
+
+    /**
+     * Implement this interface to listen to location samples
+     */
+    public interface SampleListener {
+        void onLocationSample(Location loc);
     }
 }

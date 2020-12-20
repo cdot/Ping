@@ -35,12 +35,11 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 
 public class GPX {
-    private static final String TAG = GPX.class.getSimpleName();
-
     // GPX
     public static final SimpleDateFormat ISO_DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
     // Namespaces
     public static final String NS_GPX = "http://www.topografix.com/GPX/1/1";
+    private static final String TAG = GPX.class.getSimpleName();
     //xmlns:xsi=http://www.w3.org/2001/XMLSchema-instance
     //xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd
 

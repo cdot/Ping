@@ -276,6 +276,7 @@ public class ConcurrentFileByteFIFO {
     /**
      * Non-destructive read. Does not alter the buffer contents. This is the only way to retrieve
      * buffer contents when it has been opened readOnly.
+     *
      * @param buf byte buffer to fill with bytes
      * @param pos position in buf to start writing
      * @param len maximum number of bytes to return

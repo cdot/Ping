@@ -49,9 +49,6 @@ import static java.lang.Thread.interrupted;
 public class SonarView extends View {
 
     private static final String TAG = SonarView.class.getSimpleName();
-
-    Context mContext;
-
     // Dimensions of the drawing bitmap. The drawing bitmap just has to be big enough that when it is
     // scaled to the sreen it looks OK.
     private static final int BITMAP_HEIGHT = 1920; // reasonable guesstimate of the max height of the screen
@@ -66,7 +63,6 @@ public class SonarView extends View {
     private final Paint mFishPaint;   // fish bars. Scaled and centred like mDepthPaint
     private final Shader mFishShader;
     private final Matrix mFishMat = new Matrix(); // used to transform the fish gradient
-
     // The bitmap we actually draw to
     private final Bitmap mOffscreenBitmap;
     // Canvas that we use to draw to mOffscreenBitmap
@@ -77,6 +73,7 @@ public class SonarView extends View {
     private final Rect mScreenRect;
     private final Settings mSettings;
     private final ConcurrentLinkedQueue<Sample> mSampleQueue = new ConcurrentLinkedQueue<>();
+    Context mContext;
     private Thread mRenderThread;
 
     // Sample bar width in backing-bitmap pixels
@@ -258,7 +255,7 @@ public class SonarView extends View {
      */
     void resetScale() {
         mMaxDepth = Settings.RANGES[mSettings.getInt(Settings.PREF_RANGE)];
-        int nf = (int)(BITMAP_WIDTH * mSettings.getFloat(Settings.PREF_ZOOM_LEVEL)) / BITMAP_WIDTH;
+        int nf = (int) (BITMAP_WIDTH * mSettings.getFloat(Settings.PREF_ZOOM_LEVEL)) / BITMAP_WIDTH;
         mSampleWidthPx = (nf < 1) ? 1 : nf;
         redrawAll();
     }

@@ -41,15 +41,14 @@ import no.nordicsemi.android.ble.data.Data;
  */
 public class SonarClassic implements SonarBluetooth.BTImplementation {
     public static final String TAG = SonarClassic.class.getSimpleName();
-
+    // SPP = serial port profile
+    public static final UUID SPP_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
     LoggingService mService;
     SonarBluetooth mSC;
     BluetoothSocket mBTSocket;
     ConnectedThread mConnectedThread;
     BluetoothDevice mDevice;
     int mConnectionState = SonarBluetooth.BT_STATE_DISCONNECTED;
-    // SPP = serial port profile
-    public static final UUID SPP_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
 
     public SonarClassic(@NonNull final LoggingService service) {
         mService = service;
@@ -177,7 +176,7 @@ public class SonarClassic implements SonarBluetooth.BTImplementation {
 
     private class ConnectRequest extends MyRequest {
         ConnectRequest(BluetoothDevice device) {
-           super(device);
+            super(device);
         }
 
         public void enqueue() {
@@ -185,7 +184,7 @@ public class SonarClassic implements SonarBluetooth.BTImplementation {
             try {
                 mBTSocket = mDevice.createRfcommSocketToServiceRecord(SPP_UUID);
                 Log.d(TAG, "Socket created");
-           } catch (IOException e) {
+            } catch (IOException e) {
                 Log.e(TAG, "Socket create failed " + e);
                 if (mFailCallback != null)
                     mFailCallback.onRequestFailed(mDevice, SonarBluetooth.BT_STATE_DISCONNECTED);
@@ -228,8 +227,8 @@ public class SonarClassic implements SonarBluetooth.BTImplementation {
                 if (mDevice == null)
                     if (mFailCallback != null)
                         mFailCallback.onRequestFailed(mDevice, SonarBluetooth.BT_STATE_DISCONNECTED);
-                else if (mSuccessCallback != null)
-                    mSuccessCallback.onRequestCompleted(mDevice);
+                    else if (mSuccessCallback != null)
+                        mSuccessCallback.onRequestCompleted(mDevice);
             } catch (IOException e) {
                 Log.e(TAG, "Socket close failed " + e);
                 if (mFailCallback != null)

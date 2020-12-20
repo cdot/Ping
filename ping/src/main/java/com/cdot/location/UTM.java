@@ -53,6 +53,58 @@ public class UTM {
     private static final double SM_B = 6356752.314;
 
     private static final double UTM_SCALE_FACTOR = 0.9996;
+    public double northing, easting;
+    public boolean southern;
+    public int zone;
+
+    /**
+     * Convert a lat/long into a UTM coordinate latitude,longitude
+     * can be passed as {lat,lon} in the first parameter.
+     *
+     * @param lat       latitude decimal degrees
+     * @param lon       longitude decimal degrees
+     * @param forceZone Optional, override computed zone (if in range 1..60)
+     */
+    public UTM(double lat, double lon, int forceZone) {
+        if (lat > 84 || lat < -80)
+            throw new IllegalArgumentException("latitude -80<=" + lat + "<=84");
+
+        if (lon > 180 || lon < -180)
+            throw new IllegalArgumentException("longitude -180<=" + lon + "<=180");
+
+        if (lon == 180)
+            lon = -180; // special case
+
+        zone = (forceZone >= 1 && forceZone <= 60) ? forceZone : latLonToZone(lat, lon);
+        southern = (lat < 0);
+
+        double meridian = centralUTMMeridian(zone);
+        double[] tm = latLonToTransverseMercator(deg2rad(lat), deg2rad(lon), meridian);
+        double[] utm = transverseMercatorToUTM(tm);
+        northing = (southern && utm[0] < 0) ? -utm[0] : utm[0];
+        easting = utm[1];
+    }
+
+    public UTM(double lat, double lon) {
+        this(lat, lon, 0);
+    }
+
+    public UTM(double north, double east, UTM template) {
+        this(template);
+        northing = north;
+        easting = east;
+    }
+
+    public UTM(UTM u) {
+        northing = u.northing;
+        easting = u.easting;
+        zone = u.zone;
+        southern = u.southern;
+    }
+
+    public UTM(Location loc) {
+        this(loc.getLatitude(), loc.getLongitude());
+    }
 
     /**
      * Converts degrees to radians.
@@ -350,13 +402,9 @@ public class UTM {
         };
     }
 
-    public double northing, easting;
-    public boolean southern;
-    public int zone;
-
     // Adjust easting and northing for UTM system.
     private static double[] transverseMercatorToUTM(double[] tm) {
-        return new double[] {
+        return new double[]{
                 tm[0] * UTM_SCALE_FACTOR, tm[1] * UTM_SCALE_FACTOR + 500000
         };
     }
@@ -364,7 +412,7 @@ public class UTM {
     /**
      * Converts x and y coordinates in the Universal Transverse Mercator
      * projection to a latitude/longitude pair.
-    *
+     *
      * @return lat/lon of the point, as [lat, lon] degrees
      */
     public double[] toLATLON() {
@@ -405,6 +453,7 @@ public class UTM {
 
     /**
      * Get an Android Location for this point.
+     *
      * @return a Location object
      */
     public Location toLocation() {
@@ -414,55 +463,6 @@ public class UTM {
         loc.setLongitude(ll[1]);
         loc.setAccuracy(0.1f);
         return loc;
-    }
-
-    /**
-     * Convert a lat/long into a UTM coordinate latitude,longitude
-     * can be passed as {lat,lon} in the first parameter.
-     *
-     * @param lat       latitude decimal degrees
-     * @param lon       longitude decimal degrees
-     * @param forceZone Optional, override computed zone (if in range 1..60)
-     */
-    public UTM(double lat, double lon, int forceZone) {
-        if (lat > 84 || lat < -80)
-            throw new IllegalArgumentException("latitude -80<=" + lat + "<=84");
-
-        if (lon > 180 || lon < -180)
-            throw new IllegalArgumentException("longitude -180<=" + lon + "<=180");
-
-        if (lon == 180)
-            lon = -180; // special case
-
-        zone = (forceZone >= 1 && forceZone <= 60) ? forceZone : latLonToZone(lat, lon);
-        southern = (lat < 0);
-
-        double meridian = centralUTMMeridian(zone);
-        double[] tm = latLonToTransverseMercator(deg2rad(lat), deg2rad(lon), meridian);
-        double[] utm = transverseMercatorToUTM(tm);
-        northing = (southern && utm[0] < 0) ? -utm[0] : utm[0];
-        easting = utm[1];
-    }
-
-    public UTM(double lat, double lon) {
-        this(lat, lon, 0);
-    }
-
-    public UTM(double north, double east, UTM template) {
-        this(template);
-        northing = north;
-        easting = east;
-    }
-
-    public UTM(UTM u) {
-        northing = u.northing;
-        easting = u.easting;
-        zone = u.zone;
-        southern = u.southern;
-    }
-
-    public UTM(Location loc) {
-        this(loc.getLatitude(), loc.getLongitude());
     }
 
     public String toString() {

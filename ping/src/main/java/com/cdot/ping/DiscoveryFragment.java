@@ -50,71 +50,16 @@ import no.nordicsemi.android.support.v18.scanner.ScanSettings;
  */
 public class DiscoveryFragment extends Fragment {
     public static final String TAG = DiscoveryFragment.class.getSimpleName();
-
-    private class ScanBack extends ScanCallback {
-
-        // Callback when scan could not be started.
-        @Override
-        public void onScanFailed(int errorCode) {
-            switch (errorCode) {
-                case ScanCallback.SCAN_FAILED_ALREADY_STARTED:
-                    Log.d(TAG, "Scan failed, already started");
-                    return;
-                case ScanCallback.SCAN_FAILED_APPLICATION_REGISTRATION_FAILED:
-                    Log.d(TAG, "Scan failed, app registration failed");
-                    break;
-                case ScanCallback.SCAN_FAILED_FEATURE_UNSUPPORTED:
-                    Log.d(TAG, "Scan failed, unsupported");
-                    break;
-                case ScanCallback.SCAN_FAILED_INTERNAL_ERROR:
-                    Log.d(TAG, "Scan failed, internal error");
-                    break;
-            }
-            if (mBLEScanner != null) { // Try again
-                Log.d(TAG, "Starting BLE scan again");
-                mIgnoreScanResults = false;
-                mBLEScanner.startScan(/*mFilters, mScannerSettings, */mScanCallback);
-            }
-        }
-
-        // Callback when a BLE advertisement has been found.
-        @Override
-        public void onScanResult(final int callbackType, @NonNull final ScanResult result) {
-            if (mIgnoreScanResults)
-                return;
-
-            BluetoothDevice device = result.getDevice();
-            // Bond states: BOND_NONE=10, BOND_BONDING=11, BOND_BONDED=12
-            // This means _paired_ and NOT _bonded_; see https://piratecomm.wordpress.com/2014/01/19/ble-pairing-vs-bonding/
-            Log.d(TAG, "onScanResult " + device.getAddress() + " " + device.getName() + " pairing state " + device.getBondState());
-            // DIY filtering, because the system code doesn't work (see above)
-            List<ParcelUuid> uuids = result.getScanRecord().getServiceUuids();
-            if (uuids != null && uuids.contains(new ParcelUuid(SonarBluetooth.SERVICE_UUID))) {
-                if (mAutoConnect) {
-                    // First device that offers the service we want. Fingers crossed!
-                    getMainActivity().switchToConnectedFragment(device);
-                    return;
-                }
-                if (!mDeviceList.contains(device)) {
-                    Log.d(TAG, " Found device " + device.getAddress() + " " + device.getName());
-                    mDeviceList.add(device);
-                    updateDisplay();
-                }
-            }
-        }
-    }
-
-    boolean mIgnoreScanResults = false; // used during error handling
     private final List<BluetoothDevice> mDeviceList = new ArrayList<>();
+    boolean mIgnoreScanResults = false; // used during error handling
+    ScanSettings mScannerSettings;
+    List<ScanFilter> mFilters;
+    ScanBack mScanCallback;
     private List<Map<String, Object>> mDeviceViewItems;
     private DiscoveryFragmentBinding mBinding;
     private BluetoothLeScannerCompat mBLEScanner = null;
     // Automatically connect to the first compatible device found
     private boolean mAutoConnect;
-    ScanSettings mScannerSettings;
-    List<ScanFilter> mFilters;
-    ScanBack mScanCallback;
-
     // No-arguments constructor needed when waking app from sleep
     public DiscoveryFragment() {
         // The autoconnect we pass here may be overridden by a value in the savedInstanceState
@@ -122,19 +67,18 @@ public class DiscoveryFragment extends Fragment {
     }
 
     /**
-     *
      * @param autoconnect
      */
     DiscoveryFragment(boolean autoconnect) {
         mAutoConnect = autoconnect;
     }
 
-    // Fragment lifecycle
-    // see https://developer.android.com/guide/fragments/lifecycle
-
     private MainActivity getMainActivity() {
         return ((MainActivity) getActivity());
     }
+
+    // Fragment lifecycle
+    // see https://developer.android.com/guide/fragments/lifecycle
 
     @Override // Fragment
     public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
@@ -217,5 +161,58 @@ public class DiscoveryFragment extends Fragment {
                         R.id.deviceAddressTV, R.id.deviceNameTV
                 }));
         mBinding.devicesLV.setStackFromBottom(false);
+    }
+
+    private class ScanBack extends ScanCallback {
+
+        // Callback when scan could not be started.
+        @Override
+        public void onScanFailed(int errorCode) {
+            switch (errorCode) {
+                case ScanCallback.SCAN_FAILED_ALREADY_STARTED:
+                    Log.d(TAG, "Scan failed, already started");
+                    return;
+                case ScanCallback.SCAN_FAILED_APPLICATION_REGISTRATION_FAILED:
+                    Log.d(TAG, "Scan failed, app registration failed");
+                    break;
+                case ScanCallback.SCAN_FAILED_FEATURE_UNSUPPORTED:
+                    Log.d(TAG, "Scan failed, unsupported");
+                    break;
+                case ScanCallback.SCAN_FAILED_INTERNAL_ERROR:
+                    Log.d(TAG, "Scan failed, internal error");
+                    break;
+            }
+            if (mBLEScanner != null) { // Try again
+                Log.d(TAG, "Starting BLE scan again");
+                mIgnoreScanResults = false;
+                mBLEScanner.startScan(/*mFilters, mScannerSettings, */mScanCallback);
+            }
+        }
+
+        // Callback when a BLE advertisement has been found.
+        @Override
+        public void onScanResult(final int callbackType, @NonNull final ScanResult result) {
+            if (mIgnoreScanResults)
+                return;
+
+            BluetoothDevice device = result.getDevice();
+            // Bond states: BOND_NONE=10, BOND_BONDING=11, BOND_BONDED=12
+            // This means _paired_ and NOT _bonded_; see https://piratecomm.wordpress.com/2014/01/19/ble-pairing-vs-bonding/
+            Log.d(TAG, "onScanResult " + device.getAddress() + " " + device.getName() + " pairing state " + device.getBondState());
+            // DIY filtering, because the system code doesn't work (see above)
+            List<ParcelUuid> uuids = result.getScanRecord().getServiceUuids();
+            if (uuids != null && uuids.contains(new ParcelUuid(SonarBluetooth.SERVICE_UUID))) {
+                if (mAutoConnect) {
+                    // First device that offers the service we want. Fingers crossed!
+                    getMainActivity().switchToConnectedFragment(device);
+                    return;
+                }
+                if (!mDeviceList.contains(device)) {
+                    Log.d(TAG, " Found device " + device.getAddress() + " " + device.getName());
+                    mDeviceList.add(device);
+                    updateDisplay();
+                }
+            }
+        }
     }
 }

@@ -123,7 +123,7 @@ public class MainActivity extends AppCompatActivity {
         }
     };
     // true when configuration must be re-sent to the logging service
-    private boolean mMustConfigureSampler = true;
+    private final boolean mMustConfigureSampler = true;
 
     // Lifecycle management
 
