@@ -19,14 +19,13 @@
 package com.cdot.ping.samplers;
 
 import android.bluetooth.BluetoothDevice;
-import android.bluetooth.BluetoothGatt;
-import android.bluetooth.BluetoothGattCharacteristic;
-import android.bluetooth.BluetoothGattService;
 import android.content.Intent;
 import android.location.Location;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
+
+import com.cdot.ping.R;
 
 import java.nio.ByteBuffer;
 import java.util.Date;
@@ -34,17 +33,18 @@ import java.util.Timer;
 import java.util.TimerTask;
 import java.util.UUID;
 
-import no.nordicsemi.android.ble.BleManager;
-import no.nordicsemi.android.ble.RequestQueue;
+import no.nordicsemi.android.ble.callback.FailCallback;
+import no.nordicsemi.android.ble.callback.SuccessCallback;
 import no.nordicsemi.android.ble.callback.profile.ProfileDataCallback;
 import no.nordicsemi.android.ble.data.Data;
 import no.nordicsemi.android.ble.observer.ConnectionObserver;
 
 /**
- * Interface to Bluetooth LE FishFinder devices. Supports Erchang
+ * Bluetooth sample handlers
+ * Isolates the sonar handling from the Bluetooth implementation (SonarBLE or SonarClassic)
  */
-public class SonarSampler extends BleManager implements ConnectionObserver {
-    public static final String TAG = SonarSampler.class.getSimpleName();
+public class SonarBluetooth implements ConnectionObserver {
+    public static final String TAG = SonarBluetooth.class.getSimpleName();
 
     // Bluetooth state, set by the ConnectionObserver callbacks. These values are used to
     // index a resource array.
@@ -55,44 +55,43 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
     public static final int BT_STATE_DISCONNECTING = 4;
     public static final int BT_STATE_CONNECT_FAILED = 5;
 
+    // UUIDs
     public static final UUID SERVICE_UUID = UUID.fromString("0000fff0-0000-1000-8000-00805f9b34fb");
-    // Minimum depth change between recorded samples
-    public static final float MINIMUM_DELTA_DEPTH_DEFAULT = 0.5f; // metres
-    private static final int MAX_BATTERY = 6;
-    private static final int MAX_FISH_STRENGTH = 15;
-    // Limits on strength, used for converting to percentages
-    private static final int MAX_STRENGTH = 255;
-    static final UUID SAMPLE_CHARACTERISTIC_UUID = UUID.fromString("0000fff1-0000-1000-8000-00805f9b34fb");
-    static final UUID CONFIGURE_CHARACTERISTIC_UUID = UUID.fromString("0000fff2-0000-1000-8000-00805f9b34fb");
-    // Never fired by a real device, this picks up locations from PingTest
-    static final UUID LOCATION_CHARACTERISTIC_UUID = UUID.fromString("0000fff3-0000-1000-8000-00805f9b34fb");
-    private static final String CLASS_NAME = SonarSampler.class.getCanonicalName();
+    public static final UUID SAMPLE_CHARACTERISTIC_UUID = UUID.fromString("0000fff1-0000-1000-8000-00805f9b34fb");
+    public static final UUID CONFIGURE_CHARACTERISTIC_UUID = UUID.fromString("0000fff2-0000-1000-8000-00805f9b34fb");
     // Messages sent by the service
+    static final String CLASS_NAME = SonarBLE.class.getCanonicalName();
     public static final String ACTION_BT_STATE = CLASS_NAME + ".action_bt_state";
     // Message extras
     public static final String EXTRA_DEVICE = CLASS_NAME + ".device";
     public static final String EXTRA_STATE = CLASS_NAME + ".state";
     public static final String EXTRA_REASON = CLASS_NAME + ".reason";
-
+    // Minimum depth change between recorded samples
+    static final float MINIMUM_DELTA_DEPTH_DEFAULT = 0.5f; // metres
+    // Never fired by a real device, this picks up locations from PingTest
+    static final UUID LOCATION_CHARACTERISTIC_UUID = UUID.fromString("0000fff3-0000-1000-8000-00805f9b34fb");
     // ID bytes in every packet sent TO or received FROM the sonar unit
-    private static final byte ID0 = (byte) 'S'; // guessing "S for Sonar"
-    private static final byte ID1 = (byte) 'F'; // maybe "F for FishFinder"
-
+    static final byte ID0 = (byte) 'S'; // guessing "S for Sonar"
+    static final byte ID1 = (byte) 'F'; // maybe "F for FishFinder"
     // Commands sent TO the sonar unit
-    private static final byte COMMAND_CONFIGURE = 1;
-
+    static final byte COMMAND_CONFIGURE = 1;
     // feet to metres. Bloody Americans, wake up and join the 20th Century!
-    private static final float ft2m = 0.3048f;
-
-    private static final float MIN_DELTA_TEMPERATURE = 1.0f; // degrees C
-    // The logging service we're sampling for
-    protected LoggingService mService;
-    // Will be set true on startup and when logging is turned on
-    protected boolean mMustLogNextSample = true;
-    // Client characteristics
-    private BluetoothGattCharacteristic mSampleCharacteristic, mConfigureCharacteristic, mLocationCharacteristic;
-    private float mMinDeltaDepth = MINIMUM_DELTA_DEPTH_DEFAULT;
+    static final float ft2m = 0.3048f;
+    static final float MIN_DELTA_TEMPERATURE = 1.0f; // degrees C
+    // Bluetooth connection parameters
+    static final int BT_CONNECT_TIMEOUT = 2000;
+    static final int BT_CONNECT_RETRIES = 3;
+    static final int BT_CONNECT_RETRY_DELAY = 500;
     Sample mLastLoggedSample = null;
+    double mRawSampleRate;
+    int mBluetoothState = SonarBluetooth.BT_STATE_DISCONNECTED;
+    int mBluetoothStateReason = ConnectionObserver.REASON_UNKNOWN;
+    // The logging service we're sampling for
+    LoggingService mService;
+    // Will be set true on startup and when logging is turned on
+    boolean mMustLogNextSample = true;
+    BTImplementation mImplementation;
+    private float mMinDeltaDepth = SonarBluetooth.MINIMUM_DELTA_DEPTH_DEFAULT;
     // Set true if a location packet is received from PingTest - after it is set true, no more samples
     // will be accepted from LocationService
     private boolean mLocationsFromPingTest = false;
@@ -102,24 +101,18 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
     private Location mLastLoggedLocation = mCurrentLocation;
     // Min location change before a sample update will be fired
     private float mMinDeltaPos = 1; //m
-
     // Activity timeout
     private Timer mTimeoutTimer = null;
     private boolean mSampleReceived = true; // has a sample been seen since last timeout check?
     private int mSampleTimeout = 0; // must get another sample within this timeout, or we'll disconnect
     private boolean mTimedOut = false;
-
     // Sampling statistics
     private long mLastSampleTime;
     private long mTotalSamplesReceived;
-    double mRawSampleRate;
-
-    int mBluetoothState = BT_STATE_DISCONNECTED;
-    int mBluetoothStateReason = REASON_UNKNOWN;
-
-    public SonarSampler(@NonNull final LoggingService service) {
-        super(service);
-        this.mService = service;
+    SonarBluetooth(LoggingService service, BTImplementation impl) {
+        mService = service;
+        mImplementation = impl;
+        impl.setCommon(this);
     }
 
     // Convert a double encoded in two bytes as realpart/fracpart to a double
@@ -128,28 +121,39 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
         return ((float) r + (float) f / 100.0f);
     }
 
-    // Handle log messages coming from BLEManager
-    @Override // BLEManager
-    public void log(final int priority, @NonNull final String message) {
-        if (priority == Log.INFO)
-            return;
-        Log.println(priority, TAG, message);
+    public void connect(BluetoothDevice device) {
+        Log.d(TAG, "Initiating connect request " + device.getName());
+        resetSampleRate();
+        mImplementation.connectToDevice(device)
+                .done(dev -> Log.d(TAG, "Connection to " + device.getName() + " done"))
+                .fail((dev, e) -> Log.e(TAG, "Connection to " + device.getName() + " failed " + e))
+                .enqueue();
     }
 
-    /**
-     * Location being set from LocationSampler (view LoggingService)
-     *
-     * @param loc location to set
-     */
-    void setLocation(Location loc) {
-        if (!mLocationsFromPingTest)
-            mCurrentLocation = loc;
+    public void disconnect() {
+        mImplementation.disconnectFromDevice()
+                .done(device -> Log.d(TAG, "Disconnected from " + device.getName()))
+                .enqueue();
     }
 
-    @NonNull
-    @Override // BLEManager
-    protected BleManagerGattCallback getGattCallback() {
-        return new SonarGattCallback();
+    public void close() {
+        mImplementation.close();
+        mImplementation = null;
+    }
+
+    public int getConnectionState() {
+        return mImplementation.getConnectionState();
+    }
+
+    public BluetoothDevice getBluetoothDevice() {
+        return mImplementation.getBluetoothDevice();
+    }
+
+    void resetSampleRate() {
+        mLastSampleTime = System.currentTimeMillis();
+        mRawSampleRate = 0;
+        mTotalSamplesReceived = 0;
+        mTimedOut = false;
     }
 
     private void broadcastStateChange(int state, int reason) {
@@ -159,34 +163,34 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
     }
 
     void broadcastStatus() {
-        Intent intent = new Intent(ACTION_BT_STATE);
-        intent.putExtra(EXTRA_STATE, mBluetoothState);
-        intent.putExtra(EXTRA_DEVICE, getBluetoothDevice());
-        intent.putExtra(EXTRA_REASON, mBluetoothStateReason);
+        Intent intent = new Intent(SonarBluetooth.ACTION_BT_STATE);
+        intent.putExtra(SonarBluetooth.EXTRA_STATE, mBluetoothState);
+        intent.putExtra(SonarBluetooth.EXTRA_DEVICE, mImplementation.getBluetoothDevice());
+        intent.putExtra(SonarBluetooth.EXTRA_REASON, mBluetoothStateReason);
         mService.sendBroadcast(intent);
     }
 
     private void broadcastStateChange(int state) {
-        broadcastStateChange(state,  REASON_UNKNOWN);
+        broadcastStateChange(state, REASON_UNKNOWN);
     }
 
     @Override // ConnectionObserver
     public void onDeviceConnecting(@NonNull BluetoothDevice device) {
         Log.d(TAG, "onDeviceConnecting");
-        broadcastStateChange(BT_STATE_CONNECTING);
+        broadcastStateChange(SonarBluetooth.BT_STATE_CONNECTING);
     }
 
     @Override // ConnectionObserver
     public void onDeviceConnected(@NonNull BluetoothDevice device) {
         Log.d(TAG, "onDeviceConnected");
-        broadcastStateChange(BT_STATE_CONNECTED);
+        broadcastStateChange(SonarBluetooth.BT_STATE_CONNECTED);
     }
 
     @Override // ConnectionObserver
     public void onDeviceFailedToConnect(@NonNull BluetoothDevice device, int reason) {
         Log.d(TAG, "onDeviceFailedToConnect");
         cancelTimeout();
-        broadcastStateChange(BT_STATE_CONNECT_FAILED, reason);
+        broadcastStateChange(SonarBluetooth.BT_STATE_CONNECT_FAILED, reason);
     }
 
     @Override // ConnectionObserver
@@ -194,7 +198,8 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
         Log.d(TAG, "onDeviceReady");
         startTimeout();
         resetSampleRate();
-        broadcastStateChange(BT_STATE_READY);
+        mService.playSound(R.raw.ping);
+        broadcastStateChange(SonarBluetooth.BT_STATE_READY);
     }
 
     @Override // ConnectionObserver
@@ -205,7 +210,7 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
         // of reconnection.
         Log.d(TAG, "onDeviceDisconnecting " + mTimedOut);
         cancelTimeout();
-        broadcastStateChange(BT_STATE_DISCONNECTING);
+        broadcastStateChange(SonarBluetooth.BT_STATE_DISCONNECTING);
     }
 
     @Override // ConnectionObserver
@@ -214,9 +219,10 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
         cancelTimeout();
         // ConnectionObserver.REASON_TIMEOUT really means a connect timeout. Overloading it here
         // to also mean "device has gone quiet"
-        broadcastStateChange(BT_STATE_DISCONNECTED,
+        broadcastStateChange(SonarBluetooth.BT_STATE_DISCONNECTED,
                 mTimedOut ? ConnectionObserver.REASON_TIMEOUT : ConnectionObserver.REASON_UNKNOWN);
-        // TODO: initiate a reconnection attempt
+        mService.playSound(R.raw.boom);
+        connect(device);
     }
 
     // Disconnect timeout. If we don't get another sample within a timeout period, disconnect.
@@ -230,9 +236,15 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
             @Override
             public void run() {
                 if (!mSampleReceived) {
-                    Log.d(TAG, "Sample collection timed out");
+                    Log.d(TAG, "Sample collection timed out, trying disconnect-reconnect");
                     mTimedOut = true;
-                    disconnect().enqueue();
+                    // Try to disconnect and reconnect
+                    mImplementation.disconnectFromDevice()
+                            .done((BluetoothDevice device) -> {
+                                connect(device);
+                            })
+                            .fail((dev, state) -> Log.e(TAG, "Disconnect failed " + state))
+                            .enqueue();
                 }
                 mSampleReceived = false;
             }
@@ -247,6 +259,16 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
     }
 
     /**
+     * Location being set from LocationSampler (view LoggingService)
+     *
+     * @param loc location to set
+     */
+    void setLocation(Location loc) {
+        if (!mLocationsFromPingTest)
+            mCurrentLocation = loc;
+    }
+
+    /**
      * Configuration. The first three parameters are sent to the sonar device, the others configure
      * this module.
      *
@@ -258,7 +280,7 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
      * @param sampleTimeout timeout waiting for a sample before we abandon the connection and try a different device. 0 means never.
      */
     void configure(int sensitivity, int noise, int range, float minDeltaDepth, float minDeltaPos, int sampleTimeout) {
-        log(Log.DEBUG, "configure(" + sensitivity + "," + noise + "," + range + "," + minDeltaDepth + ")");
+        Log.d(TAG, "configure(" + sensitivity + "," + noise + "," + range + "," + minDeltaDepth + ")");
         mMinDeltaDepth = minDeltaDepth;
         mMinDeltaPos = minDeltaPos;
 
@@ -268,8 +290,8 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
         // reverse-engineered by sniffing packets sent by the official FishFinder software
         byte[] data = new byte[]{
                 // http://ww1.microchip.com/downloads/en/DeviceDoc/50002466B.pdf
-                ID0, ID1, // 0, 1
-                0, 0, COMMAND_CONFIGURE, // 2, 3, 4
+                SonarBluetooth.ID0, SonarBluetooth.ID1, // 0, 1
+                0, 0, SonarBluetooth.COMMAND_CONFIGURE, // 2, 3, 4
                 3, // 5 size
                 (byte) sensitivity, (byte) noise, (byte) range, // 6, 7, 8
                 0, 0, 0 // 9 checksum, 10, 11 might do more, not experimented.
@@ -281,120 +303,47 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
         }
         data[9] = (byte) (sum & 255);
 
-        writeCharacteristic(mConfigureCharacteristic, data)
-                .done(device -> Log.d(TAG, "Configuration sent to " + device.getName()))
-                .enqueue();
+        mImplementation.sendConfiguration(data);
 
         resetSampleRate();
         startTimeout();
     }
 
-    private void resetSampleRate() {
-        mLastSampleTime = System.currentTimeMillis();
-        mRawSampleRate = 0;
-        mTotalSamplesReceived = 1;
+    ProfileDataCallback getSonarHandler() {
+        return new SonarHandler();
     }
 
-    // Connect to a sonar device
-    public void connectToDevice(BluetoothDevice device) {
-        mTimedOut = false;
-        setConnectionObserver(this);
-        Log.d(TAG, "Initiating connect request " + device.getName());
-        connect(device)
-                .timeout(5000)
-                .useAutoConnect(true)
-                .retry(3, 500)
-                .done(dev -> Log.i(TAG, "Device connection to " + device.getName() + " done"))
-                .enqueue();
+    ProfileDataCallback getLocationHandler() {
+        return new LocationHandler();
     }
 
-    // Monitoring the connection to the sonar device
-    private class SonarGattCallback extends BleManagerGattCallback {
+    interface Request {
+        Request done(@NonNull final SuccessCallback callback);
 
-        // This method will be called when the device is connected and services are discovered.
-        // You need to obtain references to the characteristics and descriptors that you will use.
-        // Return true if all required services are found, false otherwise.
-        @Override // BleManagerGattCallback
-        public boolean isRequiredServiceSupported(@NonNull final BluetoothGatt gatt) {
-            final BluetoothGattService service = gatt.getService(SERVICE_UUID);
-            if (service == null)
-                return false;
+        Request fail(@NonNull final FailCallback callback);
 
-            mSampleCharacteristic = service.getCharacteristic(SAMPLE_CHARACTERISTIC_UUID);
-            if (mSampleCharacteristic == null) {
-                Log.e(TAG, "No sample characteristic");
-                return false;
-            }
-
-            mConfigureCharacteristic = service.getCharacteristic(CONFIGURE_CHARACTERISTIC_UUID);
-            if (mConfigureCharacteristic == null) {
-                Log.e(TAG, "No configure characteristic");
-                return false;
-            }
-
-            // Validate properties
-            if ((mSampleCharacteristic.getProperties() & BluetoothGattCharacteristic.PROPERTY_NOTIFY) == 0) {
-                Log.e(TAG, "Can't get sample notifications");
-                return false;
-            }
-
-            if ((mConfigureCharacteristic.getProperties() & BluetoothGattCharacteristic.PROPERTY_WRITE) == 0) {
-                Log.e(TAG, "Can't write configurations");
-                return false;
-            }
-
-            mConfigureCharacteristic.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);
-
-            mLocationCharacteristic = service.getCharacteristic(LOCATION_CHARACTERISTIC_UUID);
-            if (mLocationCharacteristic != null && (mLocationCharacteristic.getProperties() & BluetoothGattCharacteristic.PROPERTY_NOTIFY) == 0) {
-                Log.e(TAG, "Can't get location notifications");
-                mLocationCharacteristic = null;
-            }
-
-            // all required services have been found
-            return true;
-        }
-
-        @Override // BleManagerGattCallback
-        protected void initialize() {
-            Log.d(TAG, "Connecting SampleHandler");
-            RequestQueue q = beginAtomicRequestQueue()
-                    .add(enableNotifications(mSampleCharacteristic));
-            if (mLocationCharacteristic != null) {
-                q.add(enableNotifications(mLocationCharacteristic));
-                setNotificationCallback(mLocationCharacteristic).with(new LocationHandler());
-            }
-            q.done(device -> log(Log.INFO, "Notification enabled"))
-                    .enqueue();
-            setNotificationCallback(mSampleCharacteristic).with(new SampleHandler());
-        }
-
-        @Override // BleManagerGattCallback
-        protected void onDeviceDisconnected() {
-            Log.d(TAG, "Device disconnected");
-            mSampleCharacteristic = null;
-            mConfigureCharacteristic = null;
-        }
+        void enqueue();
     }
 
-    // Handler for test location received from PingTest. With a real device this should never fire.
-    private class LocationHandler implements ProfileDataCallback {
-        @Override
-        public void onDataReceived(@NonNull BluetoothDevice device, @NonNull Data data) {
-            ByteBuffer byteBuffer = ByteBuffer.allocate(Double.BYTES);
-            byteBuffer.put(data.getValue(), 0, Double.BYTES);
-            byteBuffer.flip();
-            mCurrentLocation.setLatitude(byteBuffer.getDouble());
-            byteBuffer.clear();
-            byteBuffer.put(data.getValue(), Double.BYTES, Double.BYTES);
-            byteBuffer.flip();
-            mCurrentLocation.setLongitude(byteBuffer.getDouble());
-            mLocationsFromPingTest = true;
-        }
+    // Interface to the code that handles the actual device connection
+    interface BTImplementation {
+        void sendConfiguration(byte[] data);
+
+        Request connectToDevice(BluetoothDevice device);
+
+        Request disconnectFromDevice();
+
+        void setCommon(SonarBluetooth o);
+
+        BluetoothDevice getBluetoothDevice();
+
+        int getConnectionState();
+
+        void close();
     }
 
     // Handler for sample notifications coming from the sonar device
-    private class SampleHandler implements ProfileDataCallback {
+    class SonarHandler implements ProfileDataCallback {
 
         private String report(Data data) {
             String mess = "Packet " + data.size();
@@ -441,13 +390,19 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
             // Convert fish depth to metres. We set a negative depth to flag when the device is out of water
             sample.depth = isDry ? -0.01f : ft2m * b2f(data.getByte(6), data.getByte(7));
             // Data is coming from a byte, so naturally constrained to 255
-            sample.strength = 100 * ((int) data.getByte(8) & 0xFF) / MAX_STRENGTH;
+            // Erchang SW: 30-40, "large weed", 40-50 "medium weed", and 50-60 "small weed". Any
+            // value outside these ranges is "no weed". By setting MAX_STRENGTH to 256, we are
+            // mapping these to: 11%-15%, 16%-19%, 20%-24%. Whether these percentages are pre-scaled
+            // to the depth is unknown, but doesn't really matter for our purposes.
+            sample.strength = 100 * ((int) data.getByte(8) & 0xFF) / 256;
             // Convert fish depth to metres
             sample.fishDepth = ft2m * b2f(data.getByte(9), data.getByte(10));
-            // Fish strength is in a nibble, so constrained to the range 0-15. Convert to a percentage.
-            sample.fishStrength = 100 * ((int) data.getByte(11) & 0xF) / MAX_FISH_STRENGTH;
-            // Observed max battery strength is 6. Scale to an integer percentage
-            sample.battery = (byte) (100 * ((data.getByte(11) >> 4) & 0xF) / MAX_BATTERY);
+            // Fish strength is in a nibble, so constrained to the range 0-15. Erchang interprets
+            // this as  0 "no fish", 1 "small fish", 2 "medium fish", 3 "large fish or shoal".
+            // Any other value is interpreted as "small fish".
+            sample.fishStrength = 100 * ((int) data.getByte(11) & 0xF) / 16;
+            // Max battery strength is 6. Scale to an integer percentage
+            sample.battery = (byte) (100 * ((data.getByte(11) >> 4) & 0xF) / 6);
             // Convert temperature to sensible celcius
             sample.temperature = (b2f(data.getByte(12), data.getByte(13)) - 32.0f) * 5.0f / 9.0f;
 
@@ -487,10 +442,28 @@ public class SonarSampler extends BleManager implements ConnectionObserver {
             mSampleReceived = true;
 
             long now = System.currentTimeMillis();
-            double samplingRate = 1000.0 / (now - mLastSampleTime);
-            mRawSampleRate = ((mRawSampleRate * mTotalSamplesReceived) + samplingRate) / (mTotalSamplesReceived + 1);
-            mTotalSamplesReceived++;
-            mLastSampleTime = now;
+            if (now > mLastSampleTime) {
+                double samplingRate = 1000.0 / (now - mLastSampleTime);
+                mRawSampleRate = ((mRawSampleRate * mTotalSamplesReceived) + samplingRate) / (mTotalSamplesReceived + 1);
+                mTotalSamplesReceived++;
+                mLastSampleTime = now;
+            }
+        }
+    }
+
+    // Handler for test location received from PingTest. With a real device this should never fire.
+    class LocationHandler implements ProfileDataCallback {
+        @Override
+        public void onDataReceived(@NonNull BluetoothDevice device, @NonNull Data data) {
+            ByteBuffer byteBuffer = ByteBuffer.allocate(Double.BYTES);
+            byteBuffer.put(data.getValue(), 0, Double.BYTES);
+            byteBuffer.flip();
+            mCurrentLocation.setLatitude(byteBuffer.getDouble());
+            byteBuffer.clear();
+            byteBuffer.put(data.getValue(), Double.BYTES, Double.BYTES);
+            byteBuffer.flip();
+            mCurrentLocation.setLongitude(byteBuffer.getDouble());
+            mLocationsFromPingTest = true;
         }
     }
 }

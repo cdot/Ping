@@ -20,7 +20,7 @@
         <item>Disconnected%1$s</item>
         <item>Connecting</item>
         <item>Connected</item>
-        <item>Ready</item>
+        <item>Sampling</item>
         <item>Disconnecting%1$s</item>
         <item>Connect failed%1$s</item>
     </string-array>

@@ -45,7 +45,7 @@ import androidx.fragment.app.FragmentTransaction;
 
 import com.cdot.ping.databinding.MainActivityBinding;
 import com.cdot.ping.samplers.LoggingService;
-import com.cdot.ping.samplers.SonarSampler;
+import com.cdot.ping.samplers.SonarBluetooth;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -75,12 +75,12 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();
-            if (SonarSampler.ACTION_BT_STATE.equals(action)) {
-                int state = intent.getIntExtra(SonarSampler.EXTRA_STATE, SonarSampler.BT_STATE_DISCONNECTED);
-                if (state == SonarSampler.BT_STATE_READY)
+            if (SonarBluetooth.ACTION_BT_STATE.equals(action)) {
+                int state = intent.getIntExtra(SonarBluetooth.EXTRA_STATE, SonarBluetooth.BT_STATE_DISCONNECTED);
+                if (state == SonarBluetooth.BT_STATE_READY)
                     sendBroadcast(new Intent(ACTION_RECONFIGURE));
-                BluetoothDevice device = intent.getParcelableExtra(SonarSampler.EXTRA_DEVICE);
-                int reason = intent.getIntExtra(SonarSampler.EXTRA_REASON, ConnectionObserver.REASON_UNKNOWN);
+                BluetoothDevice device = intent.getParcelableExtra(SonarBluetooth.EXTRA_DEVICE);
+                int reason = intent.getIntExtra(SonarBluetooth.EXTRA_REASON, ConnectionObserver.REASON_UNKNOWN);
                 updateSonarStateDisplay(state, reason, device);
             } else if (ACTION_RECONFIGURE.equals(action)) {
                 Log.d(TAG, "Received ACTION_RECONFIGURE");
@@ -162,7 +162,7 @@ public class MainActivity extends AppCompatActivity {
         super.onStart();
 
         // Not connected to anything yet
-        updateSonarStateDisplay(SonarSampler.BT_STATE_DISCONNECTED, ConnectionObserver.REASON_UNKNOWN, null);
+        updateSonarStateDisplay(SonarBluetooth.BT_STATE_DISCONNECTED, ConnectionObserver.REASON_UNKNOWN, null);
 
         Log.d(TAG, "onStart binding LoggingService");
 
@@ -173,7 +173,7 @@ public class MainActivity extends AppCompatActivity {
 
         mPrefs = new Settings(this);
         IntentFilter inf = new IntentFilter();
-        inf.addAction(SonarSampler.ACTION_BT_STATE);
+        inf.addAction(SonarBluetooth.ACTION_BT_STATE);
         inf.addAction(MainActivity.ACTION_RECONFIGURE);
         registerReceiver(mBroadcastReceiver, inf);
     }
@@ -298,8 +298,8 @@ public class MainActivity extends AppCompatActivity {
         }
 
         // We know the logging service is bound, and it may already be sampling. If so,
-        if (mLoggingService.mSonarSampler != null && mLoggingService.mSonarSampler.getBluetoothDevice() != null) {
-            Log.d(TAG, "Already connected to " + mLoggingService.mSonarSampler.getBluetoothDevice().getName());
+        if (mLoggingService.mSonarSampler != null && mLoggingService.getConnectedDevice() != null) {
+            Log.d(TAG, "Already connected to " + mLoggingService.getConnectedDevice().getName());
             switchToConnectedFragment();
             return;
         }
@@ -319,7 +319,7 @@ public class MainActivity extends AppCompatActivity {
                     Parcelable[] uuids = device.getUuids();
                     if (uuids != null) {
                         for (Parcelable p : uuids) {
-                            if (SonarSampler.SERVICE_UUID.toString().equals(p.toString())) {
+                            if (SonarBluetooth.SERVICE_UUID.toString().equals(p.toString())) {
                                 Log.i(TAG, "opening paired device " + device.getName());
                                 switchToConnectedFragment(device);
                                 return;
@@ -359,7 +359,7 @@ public class MainActivity extends AppCompatActivity {
      * @param device device to connect to
      */
     void switchToConnectedFragment(BluetoothDevice device) {
-        mLoggingService.mSonarSampler.connectToDevice(device);
+        mLoggingService.mSonarSampler.connect(device);
         switchToConnectedFragment();
     }
 

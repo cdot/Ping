@@ -32,7 +32,7 @@ import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
 
 import com.cdot.ping.databinding.DiscoveryFragmentBinding;
-import com.cdot.ping.samplers.SonarSampler;
+import com.cdot.ping.samplers.SonarBluetooth;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -89,7 +89,7 @@ public class DiscoveryFragment extends Fragment {
             Log.d(TAG, "onScanResult " + device.getAddress() + " " + device.getName() + " pairing state " + device.getBondState());
             // DIY filtering, because the system code doesn't work (see above)
             List<ParcelUuid> uuids = result.getScanRecord().getServiceUuids();
-            if (uuids != null && uuids.contains(new ParcelUuid(SonarSampler.SERVICE_UUID))) {
+            if (uuids != null && uuids.contains(new ParcelUuid(SonarBluetooth.SERVICE_UUID))) {
                 if (mAutoConnect) {
                     // First device that offers the service we want. Fingers crossed!
                     getMainActivity().switchToConnectedFragment(device);
@@ -162,7 +162,7 @@ public class DiscoveryFragment extends Fragment {
                 .setUseHardwareBatchingIfSupported(true)
                 .build();
         mFilters = new ArrayList<>();
-        mFilters.add(new ScanFilter.Builder().setServiceUuid(new ParcelUuid(SonarSampler.SERVICE_UUID)).build());
+        mFilters.add(new ScanFilter.Builder().setServiceUuid(new ParcelUuid(SonarBluetooth.SERVICE_UUID)).build());
         mBLEScanner = BluetoothLeScannerCompat.getScanner();
 
         // Note that scanning with filters just doesn't work, so we have to filter manually.

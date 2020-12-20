@@ -24,6 +24,7 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.bluetooth.BluetoothDevice;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
@@ -32,6 +33,7 @@ import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.location.Location;
 import android.media.AudioAttributes;
+import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Binder;
 import android.os.Build;
@@ -101,7 +103,7 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
     /**
      * Public to allow access to device control methods
      */
-    public SonarSampler mSonarSampler;
+    public SonarBluetooth mSonarSampler;
     /**
      * Used to check whether the bound activity has really gone away and not unbound as part of an
      * orientation change. We create a foreground service notification only if the former takes
@@ -117,13 +119,13 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
     private long mTotalSamplesLogged = 0;
     private long mLastSampleTime = System.currentTimeMillis();
     private SampleCache mCache;
-    private NotificationCompat.Builder mNotificationBuilder;
 
     @Override // Service
     public void onCreate() {
         Log.d(TAG, "onCreate");
 
-        mSonarSampler = new SonarSampler(this);
+//        mSonarSampler = new SonarBluetooth(this, new SonarBLE(this));
+        mSonarSampler = new SonarBluetooth(this, new SonarClassic(this));
         mLocationSampler = new LocationSampler(this, this, LOCATION_UPDATE_INTERVAL);
 
         mNotificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
@@ -226,6 +228,7 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
         } else if (mKeepAlive) {
             Log.d(TAG, "Starting foreground service");
             startForeground(NOTIFICATION_1D, getNotification());
+            playSound(R.raw.whoop);
         } else {
             // Service no longer required
             Log.d(TAG, "All unbound");
@@ -237,11 +240,29 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
         return true; // Ensures onRebind() is called when a client re-binds.
     }
 
+    void playSound(int sound) {
+        Uri soundUri = Uri.parse(ContentResolver.SCHEME_ANDROID_RESOURCE + "://" + getApplicationContext().getPackageName() + "/" + sound);
+        MediaPlayer mp = new MediaPlayer();
+        try {
+            mp.setDataSource(this, soundUri);
+            mp.prepare();
+            mp.start();
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to play sound " + e);
+        }
+    }
+
     @Override // Service
     public void onDestroy() {
         Log.d(TAG, "onDestroy");
         mSonarSampler.close();
         mLocationSampler.stopSampling();
+    }
+
+    public BluetoothDevice getConnectedDevice() {
+        if (mSonarSampler == null)
+            return null;
+        return mSonarSampler.getBluetoothDevice();
     }
 
     // Returns the {@link NotificationCompat} displayed in the notification drawers.
@@ -275,9 +296,7 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
                 .append(" ")
                 .append(r.getString(R.string.val_longitude, sam.longitude));
 
-        mNotificationBuilder = new NotificationCompat.Builder(this, CHANNEL_ID)
-                // Actions are typically displayed by the system as a button adjacent to the notification content.
-
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
                 // This will restore the activity
                 .addAction(R.drawable.ic_launcher, getString(R.string.notification_launch), activityPendingIntent)
 
@@ -292,7 +311,7 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
                 .setOnlyAlertOnce(true)
                 .setWhen(System.currentTimeMillis());
 
-        return mNotificationBuilder.build();
+        return builder.build();
     }
 
     // Returns true if this is currently a foreground service.
@@ -313,12 +332,13 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
 
     // Called from SonarSampler
     void logSample(Sample sample) {
-        // "real" device has a sample rate around 12Hz
+        // "real" device has a sample rate around 8Hz
         long now = System.currentTimeMillis();
-        double samplingRate = 1000.0 / (now - mLastSampleTime);
-        mLoggedSampleRate = ((mLoggedSampleRate * mTotalSamplesLogged) + samplingRate) / (mTotalSamplesLogged + 1);
-        mTotalSamplesLogged++;
-
+        if (now > mLastSampleTime) {
+            double samplingRate = 1000.0 / (now - mLastSampleTime);
+            mLoggedSampleRate = ((mLoggedSampleRate * mTotalSamplesLogged) + samplingRate) / (mTotalSamplesLogged + 1);
+            mTotalSamplesLogged++;
+        }
         mLastSampleTime = now;
 
         if (mCache != null) {

@@ -58,17 +58,17 @@ public class Sample implements Parcelable {
 
     public static String NS_PING = "http://cdot.github.io/Ping/GPX"; // Ping namespace
 
-    public long time;
-    public double latitude;
-    public double longitude;
-    public float depth;
-    public int strength; // Range 0..255
+    public long time; // epoch ms
+    public double latitude; // degrees
+    public double longitude; // debgrees
+    public float depth; // m
+    public int strength; // %
 
     // Remaining fileds are not serialised
-    public float temperature;
-    public float fishDepth;
-    public int fishStrength; // Range 0..15
-    public byte battery; // Range 0..6
+    public float temperature; // C
+    public float fishDepth; // m
+    public int fishStrength; // %
+    public byte battery; // %
 
     public Sample() {
         time = System.currentTimeMillis();

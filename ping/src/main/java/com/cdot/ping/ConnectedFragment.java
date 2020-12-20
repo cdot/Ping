@@ -64,19 +64,7 @@ public class ConnectedFragment extends Fragment {
             String action = intent.getAction();
             if (LoggingService.ACTION_SAMPLE.equals(action)) {
                 onSonarSample(intent.getParcelableExtra(LoggingService.EXTRA_SAMPLE_DATA));
-            } /*the ACTION_BT_STATE is reported in the MainActivity, there is no reason to do this
-                here, if we do our best to disconnect/reconnect in the service.
-              else if (SonarSampler.ACTION_BT_STATE.equals(action)) {
-                int state = intent.getIntExtra(SonarSampler.EXTRA_STATE, SonarSampler.BT_STATE_DISCONNECTED);
-                int reason = intent.getIntExtra(SonarSampler.EXTRA_REASON, -1);
-                if (state == SonarSampler.BT_STATE_CONNECT_FAILED
-                        || state == SonarSampler.BT_STATE_DISCONNECTED && reason == ConnectionObserver.REASON_LINK_LOSS) {
-                    // Try to find a device; if autoconnect true, will connect to the first compatible it finds, which is
-                    // hopefully the same device (it should be, if it's paired)
-                    FragmentTransaction tx = getParentFragmentManager().beginTransaction();
-                    tx.replace(R.id.fragmentContainerL, new DiscoveryFragment(true), TAG).commit();
-                }
-            }*/ else if (MainActivity.ACTION_RECONFIGURE.equals(action)) {
+            } else if (MainActivity.ACTION_RECONFIGURE.equals(action)) {
                 Log.d(TAG, "Received ACTION_RECONFIGURE");
                 mBinding.sonarV.resetScale();
             }
@@ -139,8 +127,8 @@ public class ConnectedFragment extends Fragment {
     public void onSaveInstanceState(@NonNull Bundle bits) {
         Log.d(TAG, "onSaveInstanceState");
         super.onSaveInstanceState(bits);
-        if (getLoggingService() != null && getLoggingService().mSonarSampler != null && getLoggingService().mSonarSampler.getBluetoothDevice() != null)
-            bits.putString("device", getLoggingService().mSonarSampler.getBluetoothDevice().getAddress());
+        if (getLoggingService() != null && getLoggingService().getConnectedDevice() != null)
+            bits.putString("device", getLoggingService().getConnectedDevice().getAddress());
     }
 
     // Fragment lifecycle
@@ -157,7 +145,7 @@ public class ConnectedFragment extends Fragment {
                 BluetoothAdapter bta = BluetoothAdapter.getDefaultAdapter();
                 BluetoothDevice bd = bta.getRemoteDevice(da);
                 if (bd != null && getLoggingService() != null)
-                    getLoggingService().mSonarSampler.connectToDevice(bd);
+                    getLoggingService().mSonarSampler.connect(bd);
             }
         }
 
@@ -268,10 +256,11 @@ public class ConnectedFragment extends Fragment {
 
                             mHaveNewSamples = false;
                         }
-                    }
-                    try {
-                        Thread.sleep(500);
-                    } catch (InterruptedException ignore) {
+
+                        try {
+                            Thread.sleep(500);
+                        } catch (InterruptedException ignore) {
+                        }
                     }
                 }
             });
