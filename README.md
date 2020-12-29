@@ -5,11 +5,11 @@ Low-cost sonar, using an Erchang Fish Finder.
 <img src="Screenshot_20201229-120351.png" alt="screenshot" width="250"/> <img src="Device.png" alt="device" width="250"/>
 
 ## Usage
-To install, click on the (Releases)[https://github.com/cdot/Mr-Lister/releases] link on the 
+To install, click on the [Releases](https://github.com/cdot/Ping/releases) link on the 
 right of the screen to see the binary releases. Download the APK file to your device and open it to install. Android
 must be configured to allow installation from Unknown Sources.
 
-(Read this to find out more about what Google considers as 'Unknown')[https://www.androidcentral.com/unknown-sources]
+[Read this to find out more about what Google considers as 'Unknown'](https://www.androidcentral.com/unknown-sources)
 
 When you start the app it will scan for a compatible sonar device (you can shortcut this process
 by pairing your device with the sonar, but it isn't essential). When it finds a compatible device
@@ -26,7 +26,7 @@ Android notifications drawer.
 ## Background & Technical Detail
 
 This work was in support of a project to build a bathygraphic map of a
-sites used by SCUBA divers from (our dive club)[http://harfordscuba.co.uk].
+sites used by SCUBA divers from [our dive club](http://harfordscuba.co.uk).
  
 Previously surveying had been done using a GPS tracker attached to a buoy, while a diver
 below noted times and depths below the buoy on a slate. This is a slow and
@@ -40,8 +40,8 @@ continuous depth information, while the phone provided the location as
 the buoy moves through the water.
 
 So I purchased one of the cheapest of these devices from Ebay, an
-Erchang device that normally uses the ("Erchang Fish Helper" software
-freely available from Google Play)[https://play.google.com/store/apps/details?id=com.fish.fishhint].
+Erchang device that normally uses the ["Erchang Fish Helper" software
+freely available from Google Play](https://play.google.com/store/apps/details?id=com.fish.fishhint).
 
 I had hoped the software might provide a loggable depth trace, but it
 proved to be quite specific to the needs of the angling community. So
