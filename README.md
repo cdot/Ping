@@ -18,6 +18,9 @@ Settings are explained in the settings screen. The GPX button is used to save th
 file of your choice. This file can be loaded into GPS software, or used in my "Surveying" project
 to build a 3D map of the bottom.
 
+Note that the service will survive even after the app is killed. You have to terminate the service from the
+Android notifications drawer.
+
 ## Background & Technical Detail
 
 This work was in support of a project to build a bathygraphic map of a
