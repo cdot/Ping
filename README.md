@@ -2,7 +2,7 @@
 
 Low-cost sonar, using an Erchang Fish Finder.
 
-<img src="Screenshot_20201229-120351.png" alt="screenshot" width="250"/>
+<img src="Screenshot_20201229-120351.png" alt="screenshot" width="250"/> <img src="Device.png" alt="device" width="250"/>
 
 ## Usage
 To install, click on the (Releases)[https://github.com/cdot/Mr-Lister/releases] link on the 
