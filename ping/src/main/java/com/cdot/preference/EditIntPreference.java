@@ -34,14 +34,21 @@ public class EditIntPreference extends EditTextPreference {
             setTitle(mTitleRewriter.rewrite(getTitle().toString(), value));
     }
 
+    // optional title rewriter, to show the value in the preference title
     public void setTitleRewriter(TitleRewriter lw) {
         mTitleRewriter = lw;
+    }
+
+    @Override
+    protected void onSetInitialValue(Object defaultValue) {
+        int val = getPersistedInt(defaultValue == null ? 0 : (int) defaultValue);
+        setText(String.valueOf(val));
     }
 
     public void initialise(int min, int max, int val) {
         final int mMin = min;
         final int mMax = max;
-        super.setText(String.valueOf(val));
+        setText(String.valueOf(val));
         setOnPreferenceChangeListener(new OnPreferenceChangeListener() {
             @Override
             public boolean onPreferenceChange(Preference preference, Object newValue) {

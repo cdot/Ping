@@ -22,6 +22,8 @@ package com.cdot.location;
 import android.location.Location;
 import android.location.LocationManager;
 
+import androidx.annotation.NonNull;
+
 public class UTM {
 
     /**
@@ -465,6 +467,7 @@ public class UTM {
         return loc;
     }
 
+    @NonNull
     public String toString() {
         return zone + " " + Math.floor(easting) + " " + Math.floor(northing) + (southern ? "S" : "N");
     }

@@ -388,10 +388,6 @@ public class MainActivity extends AppCompatActivity {
         intent.setType("application/gpx+xml");
         intent.putExtra(Intent.EXTRA_TITLE, getResources().getString(R.string.help_sampleFile));
 
-        // Tell the logging service to keep running even though all clients have apparently unbound
-        // during the switch to the file chooser activity
-        mLoggingService.setKeepAlive(true);
-
         startActivityForResult(intent, REQUEST_CHOOSE_FILE);
     }
 }

@@ -18,6 +18,8 @@
  */
 package com.cdot.location;
 
+import androidx.annotation.NonNull;
+
 public class LatLong {
     public double latitude, longitude;
 
@@ -26,6 +28,7 @@ public class LatLong {
         return (v < 0) ? -v + "°" + neg : v + "°" + pos;
     }
 
+    @NonNull
     public String toString() {
         return dRound(latitude, "N", "S") + " " + dRound(longitude, "E", "W");
 

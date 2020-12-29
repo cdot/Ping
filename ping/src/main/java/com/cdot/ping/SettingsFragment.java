@@ -130,46 +130,36 @@ public class SettingsFragment extends PreferenceFragmentCompat {
         inter.setOnPreferenceChangeListener(sul);
         inter.setTitleRewriter(new TitleRewriter() {
             public String rewriteValue(Object o) {
-                int value = Integer.parseInt(o.toString());
+                float value = Integer.parseInt(o.toString());
                 float bytes = value * Sample.BYTES;
                 String sams, sbytes;
                 if (value < 1000)
-                    sams = Integer.toString(value);
+                    sams = String.format("%d", (int)value);
                 else if (value < 1000000)
-                    sams = String.format("%.02gk", value / 1000.0);
+                    sams = String.format("%.2fk", value / 1000.0f);
                 else if (value < 1000000000)
-                    sams = String.format("%.02gM", value / 1000000.0);
+                    sams = String.format("%.2fM", value / 1000000.0f);
                 else
-                    sams = String.format("%.02gG", value / 1000000000.0);
+                    sams = String.format("%.2fG", value / 1000000000.0f);
                 if (bytes < Settings.MEGABYTE)
-                    sbytes = String.format("%.02fKB", bytes / Settings.KILOBYTE);
+                    sbytes = String.format("%.2fKB", bytes / Settings.KILOBYTE);
                 else if (bytes < Settings.GIGABYTE)
-                    sbytes = String.format("%.02fMB", bytes / Settings.MEGABYTE);
+                    sbytes = String.format("%.2fMB", bytes / Settings.MEGABYTE);
                 else
-                    sbytes = String.format("%.02fGB", bytes / Settings.GIGABYTE);
+                    sbytes = String.format("%.2fGB", bytes / Settings.GIGABYTE);
                 return sams + "=" + sbytes;
             }
         });
         inter.initialise(Settings.MAX_SAMPLES_MIN, Settings.MAX_SAMPLES_MAX, prefs.getInt(Settings.PREF_MAX_SAMPLES));
 
-        slider = findPreference(Settings.PREF_SAMPLER_TIMEOUT);
-        slider.setOnPreferenceChangeListener(sul);
-        slider.setTitleRewriter(new TitleRewriter() {
+        inter = findPreference(Settings.PREF_SAMPLER_TIMEOUT);
+        inter.setOnPreferenceChangeListener(sul);
+        inter.setTitleRewriter(new TitleRewriter() {
             public String rewriteValue(Object value) {
                 int timeout = Integer.parseInt(value.toString());
-                int h = timeout / (1000 * 60 * 60);
-                timeout %= 1000 * 60 * 60;
-                int m = timeout / (1000 * 60);
-                timeout %= 1000 * 60;
-                float s = timeout / 1000f;
-                if (h > 0)
-                    return String.format("%dh%02dm%.02fs", h, m, s);
-                else if (m > 0)
-                    return String.format("%dm%02.02fs", m, s);
-                else
-                    return String.format("%.02fs", s);
+                return String.format("%ds", timeout);
             }
         });
-        slider.initialise(Settings.SAMPLER_TIMEOUT_MIN, Settings.SAMPLER_TIMEOUT_MAX, prefs.getInt(Settings.PREF_SAMPLER_TIMEOUT));
+        inter.initialise(Settings.SAMPLER_TIMEOUT_MIN, Settings.SAMPLER_TIMEOUT_MAX, prefs.getInt(Settings.PREF_SAMPLER_TIMEOUT));
     }
 }

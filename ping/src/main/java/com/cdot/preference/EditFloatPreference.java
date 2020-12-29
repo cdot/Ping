@@ -41,10 +41,16 @@ public class EditFloatPreference extends EditTextPreference {
         mTitleRewriter = lw;
     }
 
+    @Override
+    protected void onSetInitialValue(Object defaultValue) {
+        float val = getPersistedFloat(defaultValue == null ? 0 : (float) defaultValue);
+        setText(String.valueOf(val));
+    }
+
     public void initialise(float min, float max, float val) {
         final float mMin = min;
         final float mMax = max;
-        super.setText(String.valueOf(val));
+        setText(String.valueOf(val));
         setOnPreferenceChangeListener(new OnPreferenceChangeListener() {
             @Override
             public boolean onPreferenceChange(Preference preference, Object newValue) {

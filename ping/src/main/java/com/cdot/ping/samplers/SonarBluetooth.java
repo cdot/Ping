@@ -134,7 +134,7 @@ public class SonarBluetooth implements ConnectionObserver {
 
     public void disconnect() {
         mImplementation.disconnectFromDevice()
-                .done(device -> Log.d(TAG, "Disconnected from " + device.getName()))
+                .done(device -> Log.d(TAG, "Disconnected from " + (device != null ? device.getName() : "null")))
                 .enqueue();
     }
 
@@ -347,77 +347,74 @@ public class SonarBluetooth implements ConnectionObserver {
     // Handler for sample notifications coming from the sonar device
     class SonarHandler implements ProfileDataCallback {
 
-        private String report(Data data) {
-            String mess = "Packet " + data.size();
-            for (int i = 0; i < data.size(); i++)
-                mess += (i == 0 ? "[" : ",") + ((int) data.getByte(i) & 0xFF);
-            return mess + "]";
+        private String report(byte[] bytes) {
+            StringBuilder mess = new StringBuilder("Packet ");
+            for (int i = 0; i < bytes.length; i++)
+                mess.append((i == 0 ? "[" : ",") + ((int) bytes[i] & 0xFF));
+            return mess.append("]").toString();
         }
 
         @Override // ProfileDataCallback
         public void onDataReceived(@NonNull final BluetoothDevice device, @NonNull final Data data) {
-            int sz = data.size();
-            byte id0 = data.getByte(0);
-            byte id1 = data.getByte(1);
-            if (sz != 18 || id0 != ID0 || id1 != ID1) {
-                Log.e(TAG, "Bad signature " + report(data));
+            byte[] bytes = data.getValue();
+            byte id0 = bytes[0];
+            byte id1 = bytes[1];
+            if (bytes.length != 18 || id0 != ID0 || id1 != ID1) {
+                Log.e(TAG, "Bad signature " + report(bytes));
                 //onInvalidDataReceived(device, data);
                 return;
             }
 
             int checksum = 0;
             for (int i = 0; i < 17; i++)
-                checksum = (checksum + data.getByte(i)) & 0xFF;
-            int packcs = (int) data.getByte(17) & 0xFF;
+                checksum = (checksum + bytes[i]) & 0xFF;
+            int packcs = (int) bytes[17] & 0xFF;
             if (packcs != checksum) {
                 // It's ok to ignore this, we will see the trace in the debug but otherwise
                 // it won't stop us
-                Log.e(TAG, "Bad checksum " + packcs + " != " + checksum + " " + report(data));
+                Log.e(TAG, "Bad checksum " + packcs + " != " + checksum + " " + report(bytes));
                 return;
             }
 
             Sample sample = new Sample();
 
-            // data.getByte(2), data.getByte(3) unknown, always seem to be 0
-            if (data.getByte(2) != 0) Log.d(TAG, "Mysterious[2] " + report(data));
-            if (data.getByte(3) != 0) Log.d(TAG, "Mysterious[3] " + report(data));
+            // bytes[2], bytes[3] unknown, always seem to be 0
+            if (bytes[2] != 0) Log.d(TAG, "Mysterious[2] " + report(bytes));
+            if (bytes[3] != 0) Log.d(TAG, "Mysterious[3] " + report(bytes));
 
-            if ((data.getByte(4) & 0xF7) != 0) Log.d(TAG, "Mysterious[4] " + report(data));
+            if ((bytes[4] & 0xF7) != 0) Log.d(TAG, "Mysterious[4] " + report(bytes));
 
             sample.time = new Date().getTime();
-            boolean isDry = (data.getByte(4) & 0x8) != 0;
+            boolean isDry = (bytes[4] & 0x8) != 0;
 
-            // data.getByte(5) unknown, seems to be always 9 (1001)
-            if (data.getByte(5) != 9) Log.d(TAG, "Mysterious[5] " + report(data));
+            // bytes[5] unknown, seems to be always 9 (1001)
+            if (bytes[5] != 9) Log.d(TAG, "Mysterious[5] " + report(bytes));
             // Convert fish depth to metres. We set a negative depth to flag when the device is out of water
-            sample.depth = isDry ? -0.01f : ft2m * b2f(data.getByte(6), data.getByte(7));
+            sample.depth = isDry ? -0.01f : ft2m * b2f(bytes[6], bytes[7]);
             // Data is coming from a byte, so naturally constrained to 255
             // Erchang SW: 30-40, "large weed", 40-50 "medium weed", and 50-60 "small weed". Any
             // value outside these ranges is "no weed". By setting MAX_STRENGTH to 256, we are
             // mapping these to: 11%-15%, 16%-19%, 20%-24%. Whether these percentages are pre-scaled
             // to the depth is unknown, but doesn't really matter for our purposes.
-            sample.strength = 100 * ((int) data.getByte(8) & 0xFF) / 256;
+            sample.strength = 100 * ((int) bytes[8] & 0xFF) / 256;
             // Convert fish depth to metres
-            sample.fishDepth = ft2m * b2f(data.getByte(9), data.getByte(10));
+            sample.fishDepth = ft2m * b2f(bytes[9], bytes[10]);
             // Fish strength is in a nibble, so constrained to the range 0-15. Erchang interprets
             // this as  0 "no fish", 1 "small fish", 2 "medium fish", 3 "large fish or shoal".
             // Any other value is interpreted as "small fish".
-            sample.fishStrength = 100 * ((int) data.getByte(11) & 0xF) / 16;
+            sample.fishStrength = 100 * ((int) bytes[11] & 0xF) / 16;
             // Max battery strength is 6. Scale to an integer percentage
-            sample.battery = (byte) (100 * ((data.getByte(11) >> 4) & 0xF) / 6);
+            sample.battery = (byte) (100 * ((bytes[11] >> 4) & 0xF) / 6);
             // Convert temperature to sensible celcius
-            sample.temperature = (b2f(data.getByte(12), data.getByte(13)) - 32.0f) * 5.0f / 9.0f;
+            sample.temperature = (b2f(bytes[12], bytes[13]) - 32.0f) * 5.0f / 9.0f;
 
-            // data.getByte(14), data.getByte(15), data.getByte(16) always 0
-            if (data.getByte(14) != 0) Log.d(TAG, "Mysterious[14] " + report(data));
-            if (data.getByte(15) != 0) Log.d(TAG, "Mysterious[15] " + report(data));
-            if (data.getByte(16) != 0) Log.d(TAG, "Mysterious[16] " + report(data));
-            // data.getByte(17) is a checksum of data.getByte(0)..data.getByte(16)
+            // bytes[14], bytes[15], bytes[16] always 0
+            if (bytes[14] != 0) Log.d(TAG, "Mysterious[14] " + report(bytes));
+            if (bytes[15] != 0) Log.d(TAG, "Mysterious[15] " + report(bytes));
+            if (bytes[16] != 0) Log.d(TAG, "Mysterious[16] " + report(bytes));
+            // bytes[17] is a checksum of bytes[0]..bytes[16]
 
-            /*String mess = Integer.toString(sz);
-            for (int i = 0; i < sz; i++)
-                mess += (i == 0 ? "[" : ",") + ((int) data.getByte(i) & 0xFF);
-            Log.d(TAG, mess + "]");*/
+            //Log.d(TAG, report(data));
 
             sample.latitude = mCurrentLocation.getLatitude();
             sample.longitude = mCurrentLocation.getLongitude();

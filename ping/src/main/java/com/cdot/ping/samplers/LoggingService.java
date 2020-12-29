@@ -112,9 +112,11 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
     protected boolean mJustAConfigurationChange = false;
     protected NotificationManager mNotificationManager;
     private LocationSampler mLocationSampler;
-    // Set to true to keep this service running even when all clients are unbound
-    // and logging is disabled.
-    private boolean mKeepAlive = true;
+    // True to keep this service running even when all clients are unbound
+    // and logging is disabled. If it is false, the service will die whenever all clients unbind,
+    // which includes when switching to an activity that doesn't bind the service, such as
+    // Settings
+    private static final boolean KEEP_ALIVE = true;
     private double mLoggedSampleRate = 0; // rolling average sampling rate
     private long mTotalSamplesLogged = 0;
     private long mLastSampleTime = System.currentTimeMillis();
@@ -125,7 +127,7 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
         Log.d(TAG, "onCreate");
 
 //        mSonarSampler = new SonarBluetooth(this, new SonarBLE(this));
-        mSonarSampler = new SonarBluetooth(this, new SonarClassic(this));
+        mSonarSampler = new SonarBluetooth(this, new SonarBLE(this));
         mLocationSampler = new LocationSampler(this, this, LOCATION_UPDATE_INTERVAL);
 
         mNotificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
@@ -159,15 +161,6 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
             // Set the Notification Channel for the Notification Manager.
             mNotificationManager.createNotificationChannel(channel);
         }
-    }
-
-    /**
-     * Set to true to stop the service from suiciding when the last client unbinds
-     *
-     * @param on true to stop 切腹
-     */
-    public void setKeepAlive(boolean on) {
-        mKeepAlive = true;//on;
     }
 
     @Override // Service
@@ -225,12 +218,14 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
 
         if (mJustAConfigurationChange) {
             Log.d(TAG, "Unbinding due to a configuration change");
-        } else if (mKeepAlive) {
+        } else if (KEEP_ALIVE) {
             Log.d(TAG, "Starting foreground service");
             startForeground(NOTIFICATION_1D, getNotification());
             playSound(R.raw.whoop);
         } else {
-            // Service no longer required
+            // Service no longer required. Given KEEP_ALIVE=true, this is unreachable.
+            // Keeping the code around in case it's ever wanted again e.g. to shut down the service
+            // when the app quits.
             Log.d(TAG, "All unbound");
             mSonarSampler.disconnect();
             mLocationSampler.stopSampling();
@@ -289,12 +284,13 @@ public class LoggingService extends Service implements LocationSampler.SampleLis
         Sample sam = mSonarSampler.mLastLoggedSample;
         if (sam == null)
             samText.append(r.getString(R.string.depth_unknown));
-        else
+        else {
             samText.append(r.getString(R.string.val_depth, sam.depth));
-        samText.append(" ")
-                .append(r.getString(R.string.val_latitude, sam.latitude))
-                .append(" ")
-                .append(r.getString(R.string.val_longitude, sam.longitude));
+            samText.append(" ")
+                    .append(r.getString(R.string.val_latitude, sam.latitude))
+                    .append(" ")
+                    .append(r.getString(R.string.val_longitude, sam.longitude));
+        }
 
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
                 // This will restore the activity

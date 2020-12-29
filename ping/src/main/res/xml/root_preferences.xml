@@ -29,12 +29,6 @@ Note that if the code ever sets a negative min the same problem will arise.
         android:title="@string/sampling">
 
         <com.cdot.preference.EditFloatPreference
-            android:key="samplerTimeout"
-            android:summary="@string/help_samplerTimeout"
-            android:inputType="number|numberDecimal"
-            android:title="@string/pref_sampler_timeout" />
-
-        <com.cdot.preference.EditFloatPreference
             android:key="minimumPositionChange"
             android:summary="@string/help_minimumPositionChange"
             android:inputType="number|numberDecimal"
@@ -51,6 +45,12 @@ Note that if the code ever sets a negative min the same problem will arise.
             android:summary="@string/help_maxSamples"
             android:inputType="number"
             android:title="@string/pref_max_samples" />
+
+        <com.cdot.preference.EditIntPreference
+            android:key="samplerTimeout"
+            android:summary="@string/help_samplerTimeout"
+            android:inputType="number"
+            android:title="@string/pref_sampler_timeout" />
 
     </androidx.preference.PreferenceCategory>
 
