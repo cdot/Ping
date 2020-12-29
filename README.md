@@ -2,6 +2,8 @@
 
 Low-cost sonar, using an Erchang Fish Finder.
 
+<img src="Screenshot_20201229-120351.png" alt="screenshot" width="250"/>
+
 ## Usage
 To install, click on the (Releases)[https://github.com/cdot/Mr-Lister/releases] link on the 
 right of the screen to see the binary releases. Download the APK file to your device and open it to install. Android
