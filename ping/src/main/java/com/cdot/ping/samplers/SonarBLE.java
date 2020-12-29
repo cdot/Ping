@@ -162,8 +162,11 @@ public class SonarBLE extends BleManager implements SonarBluetooth.BTImplementat
         @Override // BleManagerGattCallback
         protected void initialize() {
             RequestQueue q = beginAtomicRequestQueue()
-                    .add(enableNotifications(mSampleCharacteristic));
-            setNotificationCallback(mSampleCharacteristic)
+                    //.add(enableNotifications(mSampleCharacteristic));
+                    .add(enableIndications(mSampleCharacteristic));
+            //setNotificationCallback(mSampleCharacteristic)
+            //        .with(mSonarHandler);
+            setIndicationCallback(mSampleCharacteristic)
                     .with(mSonarHandler);
             if (mLocationCharacteristic != null) {
                 setNotificationCallback(mLocationCharacteristic)

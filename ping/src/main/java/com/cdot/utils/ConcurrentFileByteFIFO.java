@@ -148,7 +148,6 @@ public class ConcurrentFileByteFIFO {
         mRAF.read(buf, pos, left);
         mReadPos = mod(mReadPos + left);
         if (left < nBytes) {
-            assert mReadPos == 0;
             pos += left;
             go_to(0);
             mRAF.read(buf, pos, nBytes - left);
@@ -165,10 +164,8 @@ public class ConcurrentFileByteFIFO {
         int nBytes = Math.min(mUsed, len);
         int left = Math.min(nBytes, mCapacity - mReadPos);
         mReadPos = mod(mReadPos + left);
-        if (left < nBytes) {
-            assert mReadPos == 0;
+        if (left < nBytes)
             mReadPos = left;
-        }
         mUsed -= nBytes;
         return nBytes;
     }

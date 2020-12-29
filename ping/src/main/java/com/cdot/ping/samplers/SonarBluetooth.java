@@ -25,6 +25,7 @@ import android.util.Log;
 
 import androidx.annotation.NonNull;
 
+import com.cdot.ping.BuildConfig;
 import com.cdot.ping.R;
 
 import java.nio.ByteBuffer;
@@ -430,6 +431,23 @@ public class SonarBluetooth implements ConnectionObserver {
                     || Math.abs(sample.depth - mLastLoggedSample.depth) >= mMinDeltaDepth
                     // if we've moved further than the current location accuracy or the target min delta
                     || (mLastLoggedLocation.distanceTo(mCurrentLocation) > mMinDeltaPos)) {
+
+                if (BuildConfig.DEBUG && false) {
+                    StringBuilder reason = new StringBuilder();
+                    reason.append("Logging sample because ");
+                    if (mMustLogNextSample)
+                        reason.append("I must");
+                    else {
+                        if (sample.battery != mLastLoggedSample.battery) reason.append("Battery, ");
+                        if (Math.abs(sample.temperature - mLastLoggedSample.temperature) >= MIN_DELTA_TEMPERATURE)
+                            reason.append("Temperature, ");
+                        if (Math.abs(sample.depth - mLastLoggedSample.depth) >= mMinDeltaDepth)
+                            reason.append("Depth, ");
+                        if (mLastLoggedLocation.distanceTo(mCurrentLocation) > mMinDeltaPos)
+                            reason.append("Location ").append(mLastLoggedLocation.distanceTo(mCurrentLocation));
+                    }
+                    Log.d(TAG, reason.toString());
+                }
 
                 mMustLogNextSample = false;
                 mLastLoggedSample = sample;

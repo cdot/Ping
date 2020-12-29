@@ -74,7 +74,7 @@ public class SliderPreference extends Preference {
             return mSeekBar.onKeyDown(keyCode, event);
         }
     };
-    private LabelRewriter mLabelRewriter = null;
+    private TitleRewriter mTitleRewriter = null;
     /**
      * Listener reacting to the {@link SeekBar} changing value by the user
      */
@@ -252,16 +252,16 @@ public class SliderPreference extends Preference {
         }
     }
 
-    public void setLabelRewriter(LabelRewriter lw) {
-        mLabelRewriter = lw;
+    public void setTitleRewriter(TitleRewriter lw) {
+        mTitleRewriter = lw;
     }
 
     @SuppressWarnings("WeakerAccess") /* synthetic access */
     public void updateLabelValue(int value) {
         if (mSeekBarValueTextView == null)
             return;
-        if (mLabelRewriter != null)
-            mSeekBarValueTextView.setText(mLabelRewriter.rewrite(value));
+        if (mTitleRewriter != null)
+            mSeekBarValueTextView.setText(mTitleRewriter.rewrite(mSeekBarValueTextView.getText().toString(), value));
         else
             mSeekBarValueTextView.setText(String.valueOf(value));
     }

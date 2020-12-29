@@ -31,9 +31,9 @@
     <string name="device">Device</string>
 
     <string name="help_autoconnect">Automatically connect to the first compatible device found. Otherwise wait for you to select a device.</string>
-    <string name="help_bt_address">FF:FF:FF:FF:FF:FF</string>
-    <string name="help_change_device">Connect to a different device</string>
-    <string name="help_maxSamples">Maximum number of samples to save before overwriting older samples. The number after = is the amount of memory required.</string>
+    <string name="help_bt_address">C0:41:D0:19:20:20</string>
+    <string name="help_changeDevice">Connect to a different device</string>
+    <string name="help_maxSamples">Maximum number of log to save before overwriting older samples. The number after = is the amount of memory required.</string>
     <string name="help_minimumDepthChange">The minimum depth difference that must be seen before a sample will be recorded, in metres</string>
     <string name="help_minimumPositionChange">The minimum horizontal distance that must be moved before a sample will be recorded, in metres</string>
     <string name="help_no_bluetooth">No bluetooth support on this device</string>
@@ -128,4 +128,7 @@
     <string name="menuitem_write_gpx">GPX</string>
     <string name="zoom_in">Zoom In</string>
     <string name="zoom_out">Zoom Out</string>
+    <string name="connected_device">Connected Device</string>
+    <string name="sampling">Sampling</string>
+    <string name="device_configuration">Device Configuration</string>
 </resources>

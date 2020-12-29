@@ -18,6 +18,15 @@
  */
 package com.cdot.preference;
 
-public interface LabelRewriter {
-    String rewrite(int value);
+public abstract class TitleRewriter {
+    // String used to separate the preference current value from the description in the summary
+    private static final String VALUE_SEPARATOR = "\n";
+
+    public abstract String rewriteValue(Object value);
+
+    public String rewrite(String title, Object value) {
+        int end = title.indexOf(TitleRewriter.VALUE_SEPARATOR);
+        if (end >= 0) title = title.substring(0, end);
+        return title + VALUE_SEPARATOR + "(" + rewriteValue(value) + ")";
+    }
 }
